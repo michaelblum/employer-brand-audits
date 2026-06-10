@@ -62,6 +62,17 @@ There is no "free edit" mode. The user selects a node and makes a request in nat
 
 The conversational wizard (skill asking questions in sequence) ships in V1. The visual diagram-with-blanks render ships in V1.1 — it's a new renderer over the same data, not a migration. Getting the schema right in V1 is what makes V1.1 easy.
 
+## Intent-addressable steps
+
+Each step's `description` field captures *what* the step is trying to achieve, not *how*. Descriptions are agent-refined from raw user input during intake — precise, unambiguous, written in terms of intent rather than implementation. This serves two purposes:
+
+1. **Human-readable**: shown in the diagram as the plain-English label for each step
+2. **Healing context**: when a step fails at runtime (stale selector, redesigned page, changed DOM), the agent receives the error + the description + current page state and can re-derive a working approach without human intervention. If it cannot heal, `status: blocked` surfaces the issue clearly.
+
+This pattern is called **intent-addressable automation**: the *what* is durable, the *how* is replaceable.
+
+Note on diagram hierarchy: steps support nesting via `parent_step_ids`. The visual treatment (tree, accordion, side panel) is a V1.1 renderer decision — do not design it until real pipeline data exists to inform the layout.
+
 ## What this is not
 
 - Not a workflow engine (the pipeline is Python code, not a data-driven interpreter)
