@@ -77,7 +77,11 @@ A manifest is one JSON file per audit (`manifest.json` in the audit directory). 
   "created_at": "2026-06-10T14:05:00Z",
   "produced_by_step_id": "l1-screenshot-capture",
   "parent_ids": ["l0-urls"],
-  "params": { "url": "https://careers.acme.com", "drive_file_id": "1AbC..." },
+  "card": {
+    "summary": "ACME careers hero — diverse employees, warm photography, modern layout",
+    "tags": { "content_type": "image", "theme": ["culture", "belonging"], "imagery_kind": "people-photography", "talent_segment_hint": "all", "source": "careers.acme.com" }
+  },
+  "params": { "url": "https://careers.acme.com", "public_url": "https://raw.githubusercontent.com/<org>/eba-audit-assets/main/acme-2026-06-11/l1-acme-hero_acme-com_01.jpg" },
   "file_path": "artifacts/l1-careers-main-screenshot.png"
 }
 ```
@@ -91,7 +95,8 @@ A manifest is one JSON file per audit (`manifest.json` in the audit directory). 
 | `created_at` | ISO 8601 | |
 | `produced_by_step_id` | string | The single step that created this artifact. |
 | `parent_ids[]` | string[] | **Artifact ids only** — the upstream artifacts this one was derived from. This is the provenance chain. |
-| `params` | object | Free-form. Holds the source URL, the Drive `fileId` (recorded after upload via the connected Drive MCP), crop rects, etc. |
+| `card` | object | Lens-neutral eager index (ADR-007): `summary` (≤~250-word NL essence) + `tags`. Mirrored to the Drive file description; echoed in the filename. The routing/grouping/lookup layer. |
+| `params` | object | Free-form. Holds the source URL, the public clip URL (`raw.githubusercontent.com`, recorded after `publish_image` — ADR-006), crop rects, etc. |
 | `file_path` | string | Relative to the audit directory. |
 
 ### The two-relationship rule (resolves ADR-001's ambiguity)

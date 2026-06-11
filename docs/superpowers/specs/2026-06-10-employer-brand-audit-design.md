@@ -109,17 +109,22 @@ Recipe types:
 **Input:** L1 text + screenshot artifacts for a given URL.  
 **Process:** The **orchestrating skill performs the assessment inline** — it holds the page **markdown** (full fidelity, for content) and the small **analysis rendition** of the screenshot (for visual language) from L1, plus the KILOS reference schema from its `references/` directory. Content factors (benefits, DEI, progression, etc.) are read from the markdown; visual-language factors (tone, layout, imagery, modernity) are judged from the image. The prompt instructs: *judge visual language only from the image; the page text is provided separately; do not read or transcribe text from the image* — which is exactly why the analysis rendition can be aggressively downscaled (see [ADR-006](../../decisions/ADR-006-report-image-hosting.md)). It assesses each of the 29 KILOS factors across 5 pillars (K1–K5, I1–I6, L1–L7, O1–O6, S1–S5), emits a structured JSON object, then calls Python MCP `save_artifact` with `validate_schema: "kilos-l2"` to validate and persist it. (No MCP tool calls Claude — see the credentials table above.)
 
-Per-factor output:
+**Eager pass = card + map** (see [ADR-007](../../decisions/ADR-007-eager-extraction-lazy-reinference.md)). The same per-source pass emits two *separate* outputs: a lens-**neutral** `card` and the lens-**specific** `kilos_map`. The card is kept KILOS-agnostic so the durable substrate survives the tool outgrowing KILOS; the map is the swappable V1 lens. Both are eager — the raw artifacts stay **re-inferable** for later confluence analysis (L3/L5) that the eager fields can't answer.
+
+Per-factor output (in `kilos_map`):
 - `status`: `present` | `absent`
+- `salience`: `0–3` — 0 absent, 1 incidental/body, 2 prominent, 3 hero/headline. Feeds L3's weighted strength roll-up.
 - `evidence`: 1–2 quotes from page text, or image descriptions where text is absent
 - `source_url`: canonical URL
 - `snapshot_date`: ISO date
 
-Per-page output (in addition to factors):
+Per-source output (in addition to factors):
 - `tone`: `human` | `formal`
 - `layout`: `modern` | `dated`
 - `content_type`: `dynamic` | `static`
 - `talent_segment_specific`: `true` | `false` + supporting quote
+
+Per-artifact `card` (lens-neutral, every text/screenshot/crop artifact): `summary` (≤~250-word NL essence) + tags (`content_type`, `theme[]`, `imagery_kind`, `talent_segment_hint`, source title/SLD). Stored on the manifest artifact record, mirrored to the Drive file description, echoed in the filename. This is the routing/grouping/lookup index.
 
 Image crops: where evidence points to a specific visual element (e.g., a hero image, a benefits section), the preferred path is a direct `zoom` element crop (the L1 `element_clip` recipe) — high-res, CSS coordinates, no post-processing. When the element exists only inside an already-captured stitched full-page image, the skill calls Python MCP `crop_image` with the stitched image, a CSS rect, and `window.innerWidth` so Pillow applies the measured scale `S`; Pillow writes the crop PNG to disk.
 
@@ -128,9 +133,9 @@ Image crops: where evidence points to a specific visual element (e.g., a hero im
 ### L3 — Synthesis JSON with Provenance
 
 **Input:** All L2 KILOS analysis files for the company.  
-**Process:** The **skill synthesizes inline** — it reads all L2 JSONs (via the manifest) and reasons across them to produce:
+**Process:** The **skill synthesizes inline** — a *confluence re-inference* over the eager per-artifact fields (cards + `kilos_map`s + salience) read via the manifest, escalating to re-reading raw artifacts only when a comparison needs more than the fields hold (see [ADR-007](../../decisions/ADR-007-eager-extraction-lazy-reinference.md)). It produces:
 
-- **Factor strength** promoted from binary to `strong` | `present` | `absent` (recurrence + prominence rule below)
+- **Factor strength** — a weighted roll-up of per-source `salience` to `strong` | `present` | `absent` (rule below)
 - **Brand positioning statement** — one-sentence distillation of how the company presents itself as an employer
 - **Tone/layout/content** — modal values across all sources
 - **Strengths** (2–3) — factors where the company performs distinctively well, labeled `strength` or `differentiator`
@@ -187,10 +192,10 @@ KILOS reference data is stored in [`data/kilos-framework.json`](../../../data/ki
 
 **L2 assessment contract:** The skill assesses against: page markdown text + page screenshot (both already in context from L1) + the full `kilos-framework.json` from its `references/` directory (factors with descriptions and survey labels). For each factor it emits `present`/`absent` with 1–2 evidence items per present factor, plus tone/layout/content-type. The emitted JSON is validated against the `kilos-l2` schema by `save_artifact` before it is persisted. The analyst is the running agent — whichever model the user has selected for the Cowork session — not a pinned API model.
 
-**L3 strength promotion logic:**
-- `strong` — factor is `present` in 3+ sources, OR present in 1–2 sources with prominent evidence (headline-level copy, hero image)
-- `present` — factor is `present` in 1–2 sources with body-level evidence
-- `absent` — factor appears in no source
+**L3 strength promotion logic (weighted roll-up of per-source `salience`):**
+- `strong` — any source with `salience` ≥ 2 (prominent/hero), OR `present` (`salience` ≥ 1) in 3+ sources
+- `present` — `salience` ≥ 1 in 1–2 sources, none ≥ 2
+- `absent` — `salience` = 0 in every source
 
 ---
 
@@ -330,6 +335,8 @@ The governing rule (from the token-accounting finding): **image/large-file bytes
     └── l4-report-{company_slug}.html   ← references public clip URLs; itself private
 ```
 
+Filenames follow a meaningful convention (ADR-007): `l{layer}_{slug}_{sld}_{ordinal}.{ext}`, e.g. `l1_acme-benefits_acme-com_03.jpg` — the slug comes from the artifact's lens-neutral `card`. Each artifact's `card` is also mirrored to its Drive file description for Drive-native search; the manifest stays the source of truth.
+
 **Public — the image clips.** Non-sensitive public-web clips (archival renditions) are `git push`ed to a dedicated **public GitHub assets repo** by the Python server (`publish_image`), and the report embeds their `raw.githubusercontent.com` URLs. Clips are screenshots of public-facing pages; the *report* that interprets them is not public. Any image flagged sensitive skips GitHub and is base64-inlined into the private report instead.
 
 > **Dependency (confirmed):** Drive for Desktop is mandated on the org's managed machines, so the private-folder sync is a safe assumption. The connected Drive MCP remains read-only (KILOS source docs); it is not the artifact write path.
@@ -348,4 +355,4 @@ The governing rule (from the token-accounting finding): **image/large-file bytes
 | DOM/CSS-derived visual metadata (cheaper visual-language signal) | ADR-006 | V1.1 |
 | Sensitive-image hosting (base64 inline / GCS signed URLs) | ADR-006 | As scope expands |
 
-**Architecture decisions of record:** [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) (workflow graph as UI), [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) (manifest schema), [ADR-003](../../decisions/ADR-003-browser-layer.md) (browser layer), [ADR-004](../../decisions/ADR-004-layered-artifact-dag.md) (layered artifact DAG), [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md) (screenshot capture strategy), [ADR-006](../../decisions/ADR-006-report-image-hosting.md) (report image hosting & renditions).
+**Architecture decisions of record:** [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) (workflow graph as UI), [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) (manifest schema), [ADR-003](../../decisions/ADR-003-browser-layer.md) (browser layer), [ADR-004](../../decisions/ADR-004-layered-artifact-dag.md) (layered artifact DAG), [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md) (screenshot capture strategy), [ADR-006](../../decisions/ADR-006-report-image-hosting.md) (report image hosting & renditions), [ADR-007](../../decisions/ADR-007-eager-extraction-lazy-reinference.md) (eager extraction + lazy re-inference).
