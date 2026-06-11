@@ -4,6 +4,7 @@ Exposes stitch_images / crop_image / make_rendition over stdio. Tools take
 explicit file paths; audit/manifest coupling arrives in Plan 2.
 """
 import asyncio
+import json
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -97,10 +98,15 @@ async def _list_tools():
             for n, t in _TOOLS.items()]
 
 
+def _serialize(result):
+    """Serialize a tool result dict to MCP TextContent (preserves all fields, e.g. stitch's scale)."""
+    return [TextContent(type="text", text=json.dumps(result))]
+
+
 @app.call_tool()
 async def _call_tool(name, arguments):
     result = await handle_call_tool(name, arguments)
-    return [TextContent(type="text", text=result["output_path"])]
+    return _serialize(result)
 
 
 async def main():

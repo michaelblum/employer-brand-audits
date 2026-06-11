@@ -14,13 +14,16 @@ def stitch_with_overlap(tiles, viewport, output_path):
 
     viewport = {"inner_width", "inner_height", "client_height"} (CSS px).
     """
+    if not tiles:
+        raise ValueError("stitch_with_overlap: tiles is empty")
     ordered = sorted(tiles, key=lambda t: t["scroll_top"])
     scale = measure_scale(ordered[0]["path"], viewport["inner_width"], viewport["inner_height"])
     client_h = viewport["client_height"]
 
     pieces, prev_scroll, width = [], None, None
     for idx, t in enumerate(ordered):
-        img = Image.open(t["path"]).convert("RGB")
+        with Image.open(t["path"]) as raw:
+            img = raw.convert("RGB")
         if width is None:
             width = img.width
         if idx == 0:
