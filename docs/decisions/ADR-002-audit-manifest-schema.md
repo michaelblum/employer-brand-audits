@@ -9,7 +9,7 @@
 
 [ADR-001](ADR-001-workflow-graph-as-ui.md) established that the audit manifest's step graph is the single source of truth for every user-facing surface (intake, live ops, view/clone, bounded edit, guided tour). That ADR sketched a step node but left the full schema "forthcoming." This ADR pins it down, because the schema is what the pipeline writes, what every render mode reads, and what `save_artifact` validates against. Getting it consistent now is cheap; retrofitting it after code and reports depend on it is not.
 
-ADR-001's inline example had one loose detail: an artifact's `parent_ids` pointed at a *step* id (`["l0-url-discovery"]`). That conflated two different relationships. This ADR resolves it.
+There are two distinct "parent" relationships — step→step dependency and artifact→artifact provenance — and the early design-spec drafts blurred them by giving an *artifact* a `parent_ids` that pointed at a *step* id. This ADR separates the two explicitly so there is exactly one right way to express each. (ADR-001's own example is a step node using `parent_step_ids`, which is correct under the rule below.)
 
 ## Decision
 
@@ -100,7 +100,7 @@ A manifest is one JSON file per audit (`manifest.json` in the audit directory). 
 - **Artifact → artifact** provenance uses `parent_ids[]`, which references **artifact ids only**, never step ids.
 - The artifact-to-step link is the single `produced_by_step_id`, with `Step.artifact_ids[]` as its inverse.
 
-ADR-001's example (artifact `parent_ids: ["l0-url-discovery"]`, a step id) is **superseded** by this rule. The equivalent now is `produced_by_step_id` plus `parent_ids: ["l0-urls"]` (the artifact).
+The early-draft form (an artifact with `parent_ids: ["l0-url-discovery"]`, pointing at a step id) is **incorrect** under this rule and has been corrected in the design spec. The equivalent now is `produced_by_step_id: "l1-text-capture"` plus `parent_ids: ["l0-urls"]` (the upstream artifact).
 
 ## Consequences
 

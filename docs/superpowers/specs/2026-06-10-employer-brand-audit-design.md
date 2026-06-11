@@ -76,9 +76,13 @@ The pipeline is organized into layers. Each layer produces artifacts consumed by
 **Process:** For each URL, Claude in Chrome runs two capture passes:
 
 1. **Text pass:** `get_page_text` + DRAW `extractSimpleText` injected via `javascript_tool`. Output: clean markdown.
-2. **Screenshot pass:** DRAW `_waitForAnimations` + `_hideObscuringElements` injected via `javascript_tool` to settle the page, then the agent scrolls and captures viewport tiles using Claude in Chrome's `computer` screenshot with `save_to_disk` (each tile returns a local file path). The Python MCP `stitch_images` tool reads those tile paths from disk and writes a stitched full-page PNG (≤2000px height) — the Pillow port of `clipUtils.stitchImagesWithOverlap` with overlap correction.
+2. **Screenshot pass:** DRAW `_waitForAnimations` + `_hideObscuringElements` injected via `javascript_tool` to settle the page, then a full-page capture. The capture primitive is the **first implementation spike** (see below) — the planned approach is the agent scrolling and capturing viewport tiles via Claude in Chrome's `computer` screenshot with `save_to_disk` (each tile returns a local file path), then the Python MCP `stitch_images` tool reading those tiles from disk and writing a stitched full-page PNG (≤2000px height) — the Pillow port of `clipUtils.stitchImagesWithOverlap` with overlap correction.
 
-**Image handoff is disk-based, by design.** Tiles and stitched output move between Claude in Chrome and the Python server as **file paths on the local disk**, never as multi-MB base64 strings through the agent's tool channel. The agent passes path lists, not pixels. This is the single most important constraint on the L1→L2 image seam.
+**Image handoff is disk-based, by design** (firm constraint, independent of the capture primitive). Tiles and stitched output move between Claude in Chrome and the Python server as **file paths on the local disk**, never as multi-MB base64 strings through the agent's tool channel. The agent passes path lists, not pixels.
+
+> **Spike before building L1 capture.** Two unknowns must be checked empirically — capture one real page and look at the result:
+> 1. **Does `computer` screenshot capture page content only, or include browser/OS chrome** (tab strip, address bar, menubar)? DRAW's prior art worked because the extension used a page-only capture API (`captureVisibleTab`); if Claude in Chrome's `computer` action includes chrome, tiles must be cropped before stitching or the stitch is garbage.
+> 2. **Does Claude in Chrome offer a native full-page capture?** If so, the entire tile-and-stitch Pillow port may be unnecessary — capture once, hand one file to Python (or skip stitching entirely). Resolve this before porting `clipUtils`.
 
 **Capture recipes** are defined per source type in the workflow template. Each recipe captures intent, not implementation (e.g., "full-page scan of careers landing page, hiding chat widgets and cookie banners"). The agent can re-derive the approach from the intent description if the DOM changes (intent-addressable automation, per [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md)).
 
