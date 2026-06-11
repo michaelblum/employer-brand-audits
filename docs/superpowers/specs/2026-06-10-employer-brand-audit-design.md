@@ -20,13 +20,27 @@ Three components, each with a single clear responsibility:
 
 | Component | Role |
 |---|---|
-| **Cowork Skill** | Conversational orchestrator. Intake wizard, workflow routing, layer handoffs, report delivery. |
+| **Cowork Skill** | Conversational orchestrator **and analyst**. Intake wizard, workflow routing, layer handoffs, KILOS assessment (L2) and synthesis (L3) performed inline in the agent loop, Drive sync via the connected Drive MCP, report delivery. |
 | **Claude in Chrome** | Browser layer. URL discovery, text extraction, full-page screenshots, all in the user's real Chrome with real sessions/cookies. |
-| **Python MCP Server** | Heavy lifting. Image stitching/cropping, KILOS analysis, manifest management, Google Drive sync, L4 report generation. |
+| **Python MCP Server** | Mechanical utilities only. Image stitching/cropping (Pillow), manifest read/write, schema validation, L4 report templating (Jinja2). No model calls, no network credentials. |
+| **Connected Google Drive MCP** | Drive file operations (create/copy/read). Already authenticated in the Cowork session — reused, not re-provisioned. |
 
-**Why Claude in Chrome over Playwright/headless:** The target sites (Indeed, Glassdoor, LinkedIn, Kununu) actively detect headless automation. Claude in Chrome uses the user's real Chrome browser with their existing fingerprint and session cookies — indistinguishable from a legitimate user visit. No distribution problem (the extension is already installed). No captcha risk. See [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) and [Issue #1](https://github.com/michaelblum/employer-brand-audits/issues/1) (Playwright headless fallback, deferred to V1.1).
+**Why Claude in Chrome over Playwright/headless:** The target sites (Indeed, Glassdoor, LinkedIn, Kununu) actively detect headless automation. Claude in Chrome uses the user's real Chrome browser with their existing fingerprint and session cookies — indistinguishable from a legitimate user visit. No distribution problem (the extension is already installed). No captcha risk. See [ADR-003](../../decisions/ADR-003-browser-layer.md) and [Issue #1](https://github.com/michaelblum/employer-brand-audits/issues/1) (Playwright headless fallback, deferred to V1.1).
 
 **Why Python over Node:** Python ships with macOS. No binary compilation issues, no Node.js install requirement for non-developer users. Pillow handles image stitching natively.
+
+### Credentials and external access (zero-config premise)
+
+The architecture was chosen specifically to require **no API keys, no service accounts, and no per-user configuration**. This premise constrains where each responsibility lives:
+
+| Capability | Where it runs | Why not the Python MCP server |
+|---|---|---|
+| Browser automation | Claude in Chrome (host extension) | The server has no browser and no session cookies. |
+| KILOS analysis & synthesis (L2/L3) | The orchestrating skill, inline in the agent loop | A bundled MCP server is a separate process with **no inherited model access** — calling Claude would require its own API key and billing. MCP *sampling* (server-requests-host-completion) is host-dependent and historically unsupported in Cowork, and even where available it is pure indirection: the skill already holds the page text and screenshots in context. The analysis stays in the agent loop. |
+| Google Drive read/write | Connected Drive MCP | A service account would be a second, conflicting credential mechanism. The session already has an authenticated Drive MCP. |
+| Image processing, manifest, templating | Python MCP server | These are local, deterministic, credential-free — exactly what the server is for. |
+
+The Python MCP server is therefore a pure mechanical utility. If a future need requires it to call Claude or reach the network independently, that is a deliberate departure from this premise and warrants its own ADR.
 
 ---
 
@@ -62,7 +76,9 @@ The pipeline is organized into layers. Each layer produces artifacts consumed by
 **Process:** For each URL, Claude in Chrome runs two capture passes:
 
 1. **Text pass:** `get_page_text` + DRAW `extractSimpleText` injected via `javascript_tool`. Output: clean markdown.
-2. **Screenshot pass:** DRAW `scroll_active_element` + `_waitForAnimations` + `_hideObscuringElements` injected via `javascript_tool`, triggering the scroll-and-stitch pipeline (Pillow port of `clipUtils.stitchImagesWithOverlap`). Output: full-page PNG at ≤2000px height.
+2. **Screenshot pass:** DRAW `_waitForAnimations` + `_hideObscuringElements` injected via `javascript_tool` to settle the page, then the agent scrolls and captures viewport tiles using Claude in Chrome's `computer` screenshot with `save_to_disk` (each tile returns a local file path). The Python MCP `stitch_images` tool reads those tile paths from disk and writes a stitched full-page PNG (≤2000px height) — the Pillow port of `clipUtils.stitchImagesWithOverlap` with overlap correction.
+
+**Image handoff is disk-based, by design.** Tiles and stitched output move between Claude in Chrome and the Python server as **file paths on the local disk**, never as multi-MB base64 strings through the agent's tool channel. The agent passes path lists, not pixels. This is the single most important constraint on the L1→L2 image seam.
 
 **Capture recipes** are defined per source type in the workflow template. Each recipe captures intent, not implementation (e.g., "full-page scan of careers landing page, hiding chat widgets and cookie banners"). The agent can re-derive the approach from the intent description if the DOM changes (intent-addressable automation, per [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md)).
 
@@ -76,7 +92,7 @@ Additional recipe types:
 ### L2 — KILOS Analysis and Image Crops
 
 **Input:** L1 text + screenshot artifacts for a given URL.  
-**Process:** The Python MCP `run_kilos_analysis` tool calls Claude (claude-opus-4-8 or claude-sonnet-4-6) with the page text, page screenshot, and KILOS reference schema. The prompt asks the model to assess each of the 29 KILOS factors across 5 pillars (K1–K5, I1–I6, L1–L7, O1–O6, S1–S5).
+**Process:** The **orchestrating skill performs the assessment inline** — it already holds the page markdown and screenshot in context from L1, plus the KILOS reference schema from its `references/` directory. It assesses each of the 29 KILOS factors across 5 pillars (K1–K5, I1–I6, L1–L7, O1–O6, S1–S5) and emits a structured JSON object. It then calls Python MCP `save_artifact` with `validate_schema: "kilos-l2"`, which validates the object against the L2 schema and persists it. (No MCP tool calls Claude — see the credentials table above.)
 
 Per-factor output:
 - `status`: `present` | `absent`
@@ -90,31 +106,33 @@ Per-page output (in addition to factors):
 - `content_type`: `dynamic` | `static`
 - `talent_segment_specific`: `true` | `false` + supporting quote
 
-Image crops: where evidence points to a specific visual element (e.g., a hero image, a benefits section), the Python MCP `crop_image` tool extracts that region from the full-page screenshot.
+Image crops: where evidence points to a specific visual element (e.g., a hero image, a benefits section), the skill calls Python MCP `crop_image` with the screenshot path and a pixel rect; Pillow extracts the region and writes a crop PNG to disk.
 
 **Output:** `l2-{url_id}-kilos.json`, `l2-{url_id}-crop-{n}.png`
 
 ### L3 — Synthesis JSON with Provenance
 
 **Input:** All L2 KILOS analysis files for the company.  
-**Process:** Python MCP `synthesise_l3` aggregates across all sources:
+**Process:** The **skill synthesizes inline** — it reads all L2 JSONs (via the manifest) and reasons across them to produce:
 
-- **Factor strength** promoted from binary to `strong` | `present` | `absent` based on recurrence and prominence across sources
+- **Factor strength** promoted from binary to `strong` | `present` | `absent` (recurrence + prominence rule below)
 - **Brand positioning statement** — one-sentence distillation of how the company presents itself as an employer
 - **Tone/layout/content** — modal values across all sources
 - **Strengths** (2–3) — factors where the company performs distinctively well, labeled `strength` or `differentiator`
 - **Gaps** (2–3) — absent or underweight factors that represent an opportunity, labeled `opportunity` with a `gap_description`
 - **Talent segment coverage** — whether target talent segments are explicitly addressed
 
+Strength promotion and modal tone/layout are mechanical and could be precomputed, but the strengths/gaps narratives require judgment — so the whole L3 object is produced by the skill in one pass, then persisted via `save_artifact` with `validate_schema: "l3-synthesis"`.
+
 Every field in the L3 JSON carries `source_artifact_ids[]` and `source_url` for provenance. Citations in the L4 report link directly to the source URL with a snapshot date disclaimer.
 
 **Output:** `l3-synthesis.json`  
-**Synced to:** Google Drive (audit folder)
+**Synced to:** Google Drive (audit folder) via the connected Drive MCP
 
 ### L4 — HTML SPA Report
 
-**Input:** `l3-synthesis.json`, L2 crop images (Drive IDs), L1 screenshots (Drive IDs).  
-**Process:** Python MCP `generate_report` renders a Jinja2 template into a self-contained HTML file.
+**Input:** `l3-synthesis.json`, L2 crop images (Drive fileIds from the manifest), L1 screenshots (Drive fileIds from the manifest).  
+**Process:** Python MCP `generate_report` renders a Jinja2 template into a single-file HTML report (images referenced as remote Drive URLs, so the file carries no local asset dependencies).
 
 Report sections:
 1. **Cover** — company name, audit date, talent segment scope
@@ -131,7 +149,7 @@ Report visual design is V1 functional/minimal. See [Issue #3](https://github.com
 
 **Output:** `l4-report-{company_slug}.html`  
 **Synced to:** Google Drive (audit folder)  
-**Delivered:** Opened in Claude Code preview panel at end of run.
+**Delivered:** Opened in the Cowork preview panel at end of run.
 
 ### L5 — Comparative Meta-Analysis (future)
 
@@ -153,7 +171,7 @@ KILOS reference data is stored in [`data/kilos-framework.json`](../../../data/ki
 | **O — Opportunity** | O1 Skills Attainment, O2 Professional Expertise, O3 Challenge & Stretch, O4 Career Mobility, O5 Task Variety, O6 Career Progression |
 | **S — Status** | S1 Brand Name Recognition, S2 Industry Reputation, S3 Tools & Technologies, S4 Market Position, S5 Professional Reputation |
 
-**L2 prompt contract:** The model receives: page markdown text + page screenshot + the full `kilos-framework.json` (factors with descriptions and survey labels). It is asked to assess each factor as `present` or `absent`, provide 1–2 evidence items per present factor, and assess tone/layout/content-type. Output is validated against a JSON schema before being written to disk. Default model: `claude-sonnet-4-6`.
+**L2 assessment contract:** The skill assesses against: page markdown text + page screenshot (both already in context from L1) + the full `kilos-framework.json` from its `references/` directory (factors with descriptions and survey labels). For each factor it emits `present`/`absent` with 1–2 evidence items per present factor, plus tone/layout/content-type. The emitted JSON is validated against the `kilos-l2` schema by `save_artifact` before it is persisted. The analyst is the running agent — whichever model the user has selected for the Cowork session — not a pinned API model.
 
 **L3 strength promotion logic:**
 - `strong` — factor is `present` in 3+ sources, OR present in 1–2 sources with prominent evidence (headline-level copy, hero image)
@@ -164,26 +182,27 @@ KILOS reference data is stored in [`data/kilos-framework.json`](../../../data/ki
 
 ## Python MCP Tool Surface
 
-All tools are exposed via stdio MCP. The server lives at `mcp-server/server.py` inside the plugin.
+All tools are exposed via stdio MCP. The server lives at `mcp-server/server.py` inside the plugin. **Every tool is mechanical** — local file/image/template operations with no model calls and no network credentials. Inputs and outputs that reference images are **disk paths**, never base64.
 
 | Tool | Inputs | Outputs | Notes |
 |---|---|---|---|
 | `create_audit` | company_name, domain, template_id, talent_segment? | audit_id, manifest path | Creates audit directory + manifest |
 | `get_audit_status` | audit_id | step statuses, artifact counts | Read-only manifest query |
-| `save_artifact` | audit_id, layer, type, file_path, parent_ids[], params{} | artifact_id | Writes artifact record to manifest |
-| `stitch_images` | image_base64_list[], client_height, device_pixel_ratio | full_page_base64 | Pillow port of clipUtils.stitchImagesWithOverlap |
-| `crop_image` | full_page_base64, rect{x,y,w,h}, device_pixel_ratio | crop_base64 | Pillow port of clipUtils.cropToElement |
-| `upload_to_drive` | file_path, parent_folder_id, mime_type? | drive_file_id, view_url | Drive API via service account |
-| `run_kilos_analysis` | audit_id, url_id, text_path, screenshot_path | l2_artifact_id | Calls Claude API, writes l2-{url_id}-kilos.json |
-| `synthesise_l3` | audit_id | l3_artifact_id | Aggregates all L2 JSONs, writes l3-synthesis.json |
-| `generate_report` | audit_id | l4_artifact_id, report_path | Renders Jinja2 template, writes HTML |
-| `set_step_status` | audit_id, step_id, status, error? | — | Manifest step status update for live ops rendering |
+| `save_artifact` | audit_id, layer, type, source_path, parent_ids[], params{}, validate_schema? | artifact_id | Records artifact in manifest; moves/copies the file into the audit dir. If `validate_schema` is given (e.g. `kilos-l2`, `l3-synthesis`), validates the file against that JSON schema first and fails on mismatch. This is the write path for **all** agent-produced artifacts (L0–L3). |
+| `stitch_images` | audit_id, tile_paths[], client_height, device_pixel_ratio | output_path | Reads tile PNGs from disk, writes stitched full-page PNG. Pillow port of clipUtils.stitchImagesWithOverlap. |
+| `crop_image` | audit_id, source_path, rect{x,y,w,h}, device_pixel_ratio | output_path | Reads source PNG from disk, writes crop PNG. Pillow port of clipUtils.cropToElement. |
+| `generate_report` | audit_id | report_path | Renders Jinja2 template from manifest + l3-synthesis.json into a single-file HTML report (Drive-hosted image URLs). |
+| `set_step_status` | audit_id, step_id, status, error? | — | Manifest step status update for live-ops rendering. |
+
+**Deliberately not MCP tools:**
+- **KILOS analysis (L2) and synthesis (L3)** — performed by the orchestrating skill inline; persisted via `save_artifact` + `validate_schema`. (See credentials table.)
+- **Drive upload** — the skill calls the connected Drive MCP (`create_file`); the returned `fileId` is recorded via `save_artifact` params.
 
 ---
 
 ## Audit Manifest
 
-The manifest is the single source of truth for pipeline state and all UI rendering. See [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) for the principle. ADR-002 (forthcoming) will specify the full schema; key fields:
+The manifest is the single source of truth for pipeline state and all UI rendering. See [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) for the principle and [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) for the full schema of record (the snippet below is illustrative; ADR-002 is authoritative, including the `parent_step_ids` vs `parent_ids` distinction). Key fields:
 
 ```json
 {
@@ -213,7 +232,8 @@ The manifest is the single source of truth for pipeline state and all UI renderi
       "type": "text",
       "status": "complete",
       "created_at": "2026-06-10T14:05:00Z",
-      "parent_ids": ["l0-url-discovery"],
+      "produced_by_step_id": "l1-text-capture",
+      "parent_ids": ["l0-urls"],
       "params": { "url": "https://careers.acme.com" },
       "file_path": "artifacts/l1-careers-main-text.md"
     }
@@ -270,7 +290,7 @@ employer-brand-audit/
 ```
 Note: exact plugin-dir path variable syntax is implementation-dependent; resolve during plugin build.
 
-**First-run setup:** On first skill invocation, the skill checks for Python 3 and runs `pip install -r requirements.txt` (Pillow, jinja2, markdown) if not already installed. No Node.js required. No user-facing install steps beyond plugin installation.
+**First-run setup:** On first skill invocation, the skill checks for Python 3 and runs `pip install -r requirements.txt` (Pillow for images, jinja2 for templating, jsonschema for artifact validation) into a plugin-local venv if not already present. No Node.js required. No user-facing install steps beyond plugin installation.
 
 ---
 
@@ -290,7 +310,9 @@ Symphony Talent Audits/
     └── l4-report-{company_slug}.html
 ```
 
-Images are uploaded to Drive and referenced in the L4 report via `lh3.googleusercontent.com/d/{fileId}` — no base64 embedding, no external CDN, reports work for anyone with Drive access.
+Files are uploaded via the **connected Drive MCP** (`create_file` with `base64Content` + `contentMimeType` for binary PNGs), not a service account. The returned `fileId` is recorded in the manifest, and the L4 report references images via `lh3.googleusercontent.com/d/{fileId}` — no base64 in the report, no external CDN; reports work for anyone with Drive access.
+
+**Known cost:** uploading a binary via the connected Drive MCP means the image's base64 passes through the agent's tool channel once, at upload time. For V1's modest image count (≈1–2 images per source, each scaled to ≤2000px) this is acceptable. If image volume grows, the alternative is to have the Python server write PNGs into a Drive-desktop-sync folder and resolve `fileId`s via Drive MCP `search_files` — avoiding base64 entirely, at the cost of assuming the user runs Drive desktop sync. Deferred until volume justifies it.
 
 ---
 
@@ -302,5 +324,6 @@ Images are uploaded to Drive and referenced in the L4 report via `lh3.googleuser
 | Browser as collaborative surface (overlays, guided tours) | [#2](https://github.com/michaelblum/employer-brand-audits/issues/2) | V2 |
 | L4 report visual design (publications kit) | [#3](https://github.com/michaelblum/employer-brand-audits/issues/3) | V1.1 |
 | L5 comparative meta-analysis | — | After V1 POC |
-| ADR-002: Full audit manifest schema | — | Early implementation |
 | Visual workflow diagram-with-blanks renderer | ADR-001 | V1.1 |
+
+**Architecture decisions of record:** [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) (workflow graph as UI), [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) (manifest schema), [ADR-003](../../decisions/ADR-003-browser-layer.md) (browser layer), [ADR-004](../../decisions/ADR-004-layered-artifact-dag.md) (layered artifact DAG).

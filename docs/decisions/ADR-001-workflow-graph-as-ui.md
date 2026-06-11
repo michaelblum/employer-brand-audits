@@ -82,4 +82,5 @@ Note on diagram hierarchy: steps support nesting via `parent_step_ids`. The visu
 ## Related
 
 - [Issue #2: V2 vision — browser as collaborative agent-human surface](https://github.com/michaelblum/employer-brand-audits/issues/2)
-- ADR-002 (forthcoming): Audit manifest schema
+- [ADR-002: Audit Manifest Schema](ADR-002-audit-manifest-schema.md) — the concrete schema behind this principle
+- [ADR-004: Layered Artifact DAG](ADR-004-layered-artifact-dag.md) — why the graph has layers
