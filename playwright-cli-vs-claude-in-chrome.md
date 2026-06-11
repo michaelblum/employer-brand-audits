@@ -119,9 +119,10 @@ python3 scripts/playwright_cli_smoke.py
 
 The smoke uses the named session `eba-smoke`, opens `https://example.com`,
 resizes the browser to `1280x900`, writes a boxed snapshot, writes viewport and
-full-page screenshots, runs
-`scripts/playwright-snippets/extract-visible-text.js`, captures that snippet's
-stdout to disk, and closes the session.
+full-page screenshots, writes an `h1` element screenshot, runs the checked-in
+settle / hide-obscuring-elements / visible-text / restore snippets, captures
+snippet stdout to disk, saves browser state, loads that state in a second named
+session, navigates again, and closes both sessions.
 
 Deterministic outputs are replaced on each run under:
 

@@ -31,7 +31,20 @@ def _run(args: list[str]) -> int:
     exe = _require_cli()
     cmd = [exe] + args
     print("+ " + " ".join(str(part) for part in cmd), flush=True)
-    return subprocess.call(cmd, cwd=REPO_ROOT)
+    completed = subprocess.run(
+        cmd,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.stdout:
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
+    if "### Error" in completed.stdout or "### Error" in completed.stderr:
+        return 1
+    return completed.returncode
 
 
 def _session_prefix(session: str) -> list[str]:

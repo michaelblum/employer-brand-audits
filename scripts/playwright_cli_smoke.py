@@ -11,9 +11,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "playwright-cli-smoke" / "latest"
 DEFAULT_SESSION = "eba-smoke"
+DEFAULT_STATE_SESSION_SUFFIX = "state"
 EXAMPLE_URL = "https://example.com"
 WRAPPER = REPO_ROOT / "scripts" / "playwright_cli_browser.py"
 TEXT_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "extract-visible-text.js"
+SETTLE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "settle-page.js"
+HIDE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "hide-obscuring-elements.js"
+RESTORE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "restore-page.js"
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,6 +25,10 @@ def parse_args() -> argparse.Namespace:
         description="Smoke-test Playwright CLI browser artifact generation via scripts/playwright_cli_browser.py."
     )
     parser.add_argument("--session", default=DEFAULT_SESSION, help="Named Playwright CLI session")
+    parser.add_argument(
+        "--state-session",
+        help="Second named session for state-load proof; defaults to '<session>-state'",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -81,6 +89,7 @@ def run_step(
 def main() -> int:
     args = parse_args()
     output_dir = args.output_dir.resolve()
+    state_session = args.state_session or f"{args.session}-{DEFAULT_STATE_SESSION_SUFFIX}"
 
     if output_dir == REPO_ROOT or REPO_ROOT not in output_dir.parents:
         raise SystemExit(f"Refusing to replace unsafe output directory: {output_dir}")
@@ -94,20 +103,44 @@ def main() -> int:
     snapshot_path = output_dir / "example.snapshot.txt"
     viewport_path = output_dir / "example.viewport.png"
     full_page_path = output_dir / "example.full-page.png"
+    element_path = output_dir / "example.element-h1.png"
     visible_text_path = output_dir / "example.visible-text.stdout.txt"
+    settle_path = output_dir / "example.settle.stdout.txt"
+    hide_path = output_dir / "example.hide-obscuring.stdout.txt"
+    restore_path = output_dir / "example.restore-page.stdout.txt"
+    state_path = output_dir / "example.state.json"
+    state_save_path = output_dir / "example.state-save.stdout.txt"
+    state_load_path = output_dir / "example.state-load.stdout.txt"
     log_path = output_dir / "playwright-cli-smoke.log"
 
     failed = False
+    primary_opened = False
+    state_opened = False
+    primary_closed = False
+    state_closed = False
     try:
         run_step(
             "open example.com",
             command_for(args.session, "open", EXAMPLE_URL, "--no-persistent"),
             log_path,
         )
+        primary_opened = True
         run_step(
             "resize browser",
             command_for(args.session, "resize", args.width, args.height),
             log_path,
+        )
+        run_step(
+            "settle page",
+            command_for(args.session, "run-code", SETTLE_SNIPPET),
+            log_path,
+            stdout_path=settle_path,
+        )
+        run_step(
+            "hide obscuring elements",
+            command_for(args.session, "run-code", HIDE_SNIPPET),
+            log_path,
+            stdout_path=hide_path,
         )
         run_step(
             "write snapshot with boxes",
@@ -125,26 +158,93 @@ def main() -> int:
             log_path,
         )
         run_step(
+            "write h1 element screenshot",
+            command_for(args.session, "screenshot", element_path, "--target", "h1"),
+            log_path,
+        )
+        run_step(
             "extract visible text",
             command_for(args.session, "run-code", TEXT_SNIPPET),
             log_path,
             stdout_path=visible_text_path,
         )
+        run_step(
+            "restore page",
+            command_for(args.session, "run-code", RESTORE_SNIPPET),
+            log_path,
+            stdout_path=restore_path,
+        )
+        run_step(
+            "save browser state",
+            command_for(args.session, "state-save", state_path),
+            log_path,
+            stdout_path=state_save_path,
+        )
+        run_step(
+            "close primary session",
+            command_for(args.session, "close"),
+            log_path,
+        )
+        primary_closed = True
+        run_step(
+            "open state-load session",
+            command_for(state_session, "open", "--no-persistent"),
+            log_path,
+        )
+        state_opened = True
+        run_step(
+            "load browser state",
+            command_for(state_session, "state-load", state_path),
+            log_path,
+            stdout_path=state_load_path,
+        )
+        run_step(
+            "navigate state-load session",
+            command_for(state_session, "goto", EXAMPLE_URL),
+            log_path,
+        )
     except RuntimeError as exc:
         failed = True
         print(f"[smoke] {exc}", file=sys.stderr)
     finally:
-        close_result = run_step(
-            "close session",
-            command_for(args.session, "close"),
-            log_path,
-            check=False,
-        )
-        if close_result.returncode != 0:
-            failed = True
+        if primary_opened and not primary_closed:
+            primary_close_result = run_step(
+                "close session",
+                command_for(args.session, "close"),
+                log_path,
+                check=False,
+            )
+            if primary_close_result.returncode == 0:
+                primary_closed = True
+            else:
+                failed = True
+        if state_opened and not state_closed:
+            state_close_result = run_step(
+                "close state-load session",
+                command_for(state_session, "close"),
+                log_path,
+                check=False,
+            )
+            if state_close_result.returncode == 0:
+                state_closed = True
+            else:
+                failed = True
 
     print("\n[smoke] artifact paths")
-    for path in [snapshot_path, viewport_path, full_page_path, visible_text_path, log_path]:
+    for path in [
+        snapshot_path,
+        viewport_path,
+        full_page_path,
+        element_path,
+        visible_text_path,
+        settle_path,
+        hide_path,
+        restore_path,
+        state_path,
+        state_save_path,
+        state_load_path,
+        log_path,
+    ]:
         status = "exists" if path.exists() else "missing"
         print(f"- {path} ({status})")
 

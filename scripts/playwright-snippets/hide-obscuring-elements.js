@@ -1,5 +1,5 @@
 async (page) => {
-  await page.evaluate(() => {
+  return await page.evaluate(() => {
     window.__ebaHiddenElements ||= [];
     const candidates = Array.from(document.querySelectorAll("body *"));
     for (const el of candidates) {
@@ -22,4 +22,4 @@ async (page) => {
     }
     return { hidden: window.__ebaHiddenElements.length };
   });
-};
+}

@@ -19,4 +19,5 @@ async (page) => {
       requestAnimationFrame(tick);
     });
   });
-};
+  return { settled: true };
+}
