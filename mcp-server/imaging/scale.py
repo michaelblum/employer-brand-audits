@@ -16,3 +16,9 @@ def measure_scale(image_path, inner_width, inner_height, tolerance=0.02):
             f"window may straddle two displays — re-capture"
         )
     return sx
+
+
+def _scale_from_width(pixel_width, inner_width):
+    """Scale factor from a known image width — used by crop/stitch where the
+    caller has already validated uniformity (or doesn't have height handy)."""
+    return pixel_width / inner_width
