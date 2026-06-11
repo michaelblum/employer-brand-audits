@@ -20,10 +20,11 @@ Three components, each with a single clear responsibility:
 
 | Component | Role |
 |---|---|
-| **Cowork Skill** | Conversational orchestrator **and analyst**. Intake wizard, workflow routing, layer handoffs, KILOS assessment (L2) and synthesis (L3) performed inline in the agent loop, Drive sync via the connected Drive MCP, report delivery. |
+| **Cowork Skill** | Conversational orchestrator **and analyst**. Intake wizard, workflow routing, layer handoffs, KILOS assessment (L2) and synthesis (L3) performed inline in the agent loop, report delivery. |
 | **Claude in Chrome** | Browser layer. URL discovery, text extraction, full-page screenshots, all in the user's real Chrome with real sessions/cookies. |
-| **Python MCP Server** | Mechanical utilities only. Image stitching/cropping (Pillow), manifest read/write, schema validation, L4 report templating (Jinja2). No model calls, no network credentials. |
-| **Connected Google Drive MCP** | Drive file operations (create/copy/read). Already authenticated in the Cowork session — reused, not re-provisioned. |
+| **Python MCP Server** | Mechanical utilities only. Image stitching/cropping/**rendition** (Pillow), manifest read/write, schema validation, L4 report templating (Jinja2), and writing all artifacts to the local audit folder + `git push` of public image clips. No model calls, no network credentials beyond the user's existing git auth. |
+| **Connected Google Drive MCP** | **Read-only** — fetches the KILOS source docs. No longer the artifact write path (see [ADR-006](../../decisions/ADR-006-report-image-hosting.md)). |
+| **GitHub assets repo (public)** | Hosts non-sensitive public-web image clips for `<img>` embedding in the report. Written by the Python server via `git push`; see [ADR-006](../../decisions/ADR-006-report-image-hosting.md). |
 
 **Why Claude in Chrome over Playwright/headless:** The target sites (Indeed, Glassdoor, LinkedIn, Kununu) actively detect headless automation. Claude in Chrome uses the user's real Chrome browser with their existing fingerprint and session cookies — indistinguishable from a legitimate user visit. No distribution problem (the extension is already installed). No captcha risk. See [ADR-003](../../decisions/ADR-003-browser-layer.md) and [Issue #1](https://github.com/michaelblum/employer-brand-audits/issues/1) (Playwright headless fallback, deferred to V1.1).
 
@@ -37,10 +38,12 @@ The architecture was chosen specifically to require **no API keys, no service ac
 |---|---|---|
 | Browser automation | Claude in Chrome (host extension) | The server has no browser and no session cookies. |
 | KILOS analysis & synthesis (L2/L3) | The orchestrating skill, inline in the agent loop | A bundled MCP server is a separate process with **no inherited model access** — calling Claude would require its own API key and billing. MCP *sampling* (server-requests-host-completion) is host-dependent and historically unsupported in Cowork, and even where available it is pure indirection: the skill already holds the page text and screenshots in context. The analysis stays in the agent loop. |
-| Google Drive read/write | Connected Drive MCP | A service account would be a second, conflicting credential mechanism. The session already has an authenticated Drive MCP. |
+| Read KILOS source docs | Connected Drive MCP (read-only) | A service account would be a second, conflicting credential mechanism; the session already has an authenticated Drive MCP. |
+| Artifact + report delivery to Drive | Python writes to the local audit folder → **Google Drive for Desktop** syncs it | The connected Drive MCP's `create_file` can't carry real files: a multi-MB base64 argument is model **output** tokens and exceeds the output ceiling (it fails, not just costs). So bytes must not route through the model. *(Drive for Desktop dependency pending confirmation — see ADR-006.)* |
+| Public image-clip hosting | Python `git push` to a public GitHub assets repo | Reuses the user's existing git auth (no new credential); bytes go local→GitHub, never through the model. Clips are non-sensitive public-web imagery (see ADR-006). |
 | Image processing, manifest, templating | Python MCP server | These are local, deterministic, credential-free — exactly what the server is for. |
 
-The Python MCP server is therefore a pure mechanical utility. If a future need requires it to call Claude or reach the network independently, that is a deliberate departure from this premise and warrants its own ADR.
+The Python MCP server is therefore a pure mechanical utility, plus the one sanctioned external action of `git push`ing public clips with the user's existing git credentials. If a future need requires it to call Claude or reach the network beyond that, that is a deliberate departure from this premise and warrants its own ADR. Detail in [ADR-006](../../decisions/ADR-006-report-image-hosting.md).
 
 ---
 
@@ -84,6 +87,8 @@ The pipeline is organized into layers. Each layer produces artifacts consumed by
 
 **Image handoff.** Single `zoom` element crops return inline to the agent (one image — fine). The many-tile full-page stitch prefers tiles on disk so N images don't cross the agent's context; whether `save_to_disk` exposes a server-readable path (or needs a fallback) is the one open build-time spike — [Issue #4](https://github.com/michaelblum/employer-brand-audits/issues/4).
 
+**Two renditions per capture (cost control).** The Python server writes each captured/stitched image in two renditions: an **archival** rendition for the report (JPEG q≈80, ≤~1600–2000px long edge — what humans see and what gets hosted) and a smaller **analysis** rendition (downscaled to a *tunable* ~768–1024px long edge) that is the **only** image sent to the model for the L2 visual pass. Vision token cost scales with pixel *area* (≈ `w×h/750`, capped for large images), so **downscaling — not JPEG quality — is the lever** (quality only affects bytes/hosting); the analysis rendition saves ~2–3× per image. Non-sensitive clips are published to the public GitHub assets repo by the server (`publish_image`); the report references their raw URLs. Full rationale in [ADR-006](../../decisions/ADR-006-report-image-hosting.md).
+
 **Capture recipes** are defined per source type in the workflow template. Each recipe captures intent, not implementation (e.g., "full-page scan of careers landing page, hiding chat widgets and cookie banners"). The agent can re-derive the approach from the intent description if the DOM changes (intent-addressable automation, per [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md)).
 
 Recipe types:
@@ -102,7 +107,7 @@ Recipe types:
 ### L2 — KILOS Analysis and Image Crops
 
 **Input:** L1 text + screenshot artifacts for a given URL.  
-**Process:** The **orchestrating skill performs the assessment inline** — it already holds the page markdown and screenshot in context from L1, plus the KILOS reference schema from its `references/` directory. It assesses each of the 29 KILOS factors across 5 pillars (K1–K5, I1–I6, L1–L7, O1–O6, S1–S5) and emits a structured JSON object. It then calls Python MCP `save_artifact` with `validate_schema: "kilos-l2"`, which validates the object against the L2 schema and persists it. (No MCP tool calls Claude — see the credentials table above.)
+**Process:** The **orchestrating skill performs the assessment inline** — it holds the page **markdown** (full fidelity, for content) and the small **analysis rendition** of the screenshot (for visual language) from L1, plus the KILOS reference schema from its `references/` directory. Content factors (benefits, DEI, progression, etc.) are read from the markdown; visual-language factors (tone, layout, imagery, modernity) are judged from the image. The prompt instructs: *judge visual language only from the image; the page text is provided separately; do not read or transcribe text from the image* — which is exactly why the analysis rendition can be aggressively downscaled (see [ADR-006](../../decisions/ADR-006-report-image-hosting.md)). It assesses each of the 29 KILOS factors across 5 pillars (K1–K5, I1–I6, L1–L7, O1–O6, S1–S5), emits a structured JSON object, then calls Python MCP `save_artifact` with `validate_schema: "kilos-l2"` to validate and persist it. (No MCP tool calls Claude — see the credentials table above.)
 
 Per-factor output:
 - `status`: `present` | `absent`
@@ -137,12 +142,12 @@ Strength promotion and modal tone/layout are mechanical and could be precomputed
 Every field in the L3 JSON carries `source_artifact_ids[]` and `source_url` for provenance. Citations in the L4 report link directly to the source URL with a snapshot date disclaimer.
 
 **Output:** `l3-synthesis.json`  
-**Synced to:** Google Drive (audit folder) via the connected Drive MCP
+**Synced to:** written to the local audit folder; reaches Drive via Drive-for-Desktop sync (see [ADR-006](../../decisions/ADR-006-report-image-hosting.md))
 
 ### L4 — HTML SPA Report
 
-**Input:** `l3-synthesis.json`, L2 crop images (Drive fileIds from the manifest), L1 screenshots (Drive fileIds from the manifest).  
-**Process:** Python MCP `generate_report` renders a Jinja2 template into a single-file HTML report (images referenced as remote Drive URLs, so the file carries no local asset dependencies).
+**Input:** `l3-synthesis.json`, L2 crop images and L1 archival screenshots (referenced by their public GitHub raw URLs, recorded in the manifest after the Python server pushes them — see [ADR-006](../../decisions/ADR-006-report-image-hosting.md)).  
+**Process:** Python MCP `generate_report` renders a Jinja2 template into an HTML report whose images are `<img src>` to the public GitHub-hosted clips. The report file itself (the sensitive layer — analysis + composed narrative) is **not** public; it stays access-controlled in the Drive shared folder. Only the non-sensitive public-web clips are publicly hosted.
 
 Report sections:
 1. **Cover** — company name, audit date, talent segment scope
@@ -151,14 +156,13 @@ Report sections:
 4. **KILOS heat map** — 29-factor grid showing `strong` / `present` / `absent` per source (columns = sources, rows = factors, grouped by pillar)
 5. **Strengths and differentiators** — 2–3 labeled narrative blocks
 6. **Gaps and opportunities** — 2–3 labeled narrative blocks with specific evidence
-7. **Source evidence** — per-source section with embedded screenshot (via `lh3.googleusercontent.com/d/{fileId}`) and key factor presence
+7. **Source evidence** — per-source section with embedded screenshot (public GitHub raw URL) and key factor presence
 
-Images are embedded using the `lh3.googleusercontent.com/d/{fileId}` pattern (Drive-hosted, no base64 bloat). Citations include source URL as a clickable link with snapshot date.
+Images are embedded as `<img src="https://raw.githubusercontent.com/<org>/<assets-repo>/<branch>/<audit>/<img>.png">` — the clips are non-sensitive public-web imagery (see [ADR-006](../../decisions/ADR-006-report-image-hosting.md)). For any image flagged sensitive, the fallback is base64 `data:` URI inlined into the (private) report. Citations include source URL as a clickable link with snapshot date.
 
 Report visual design is V1 functional/minimal. See [Issue #3](https://github.com/michaelblum/employer-brand-audits/issues/3) for V1.1 visual polish using the Symphony Talent publications kit.
 
-**Output:** `l4-report-{company_slug}.html`  
-**Synced to:** Google Drive (audit folder)  
+**Output:** `l4-report-{company_slug}.html` (private — written to the local audit folder; reaches the Drive shared folder via Drive-for-Desktop sync)  
 **Delivered:** Opened in the Cowork preview panel at end of run.
 
 ### L5 — Comparative Meta-Analysis (future)
@@ -192,7 +196,7 @@ KILOS reference data is stored in [`data/kilos-framework.json`](../../../data/ki
 
 ## Python MCP Tool Surface
 
-All tools are exposed via stdio MCP. The server lives at `mcp-server/server.py` inside the plugin. **Every tool is mechanical** — local file/image/template operations with no model calls and no network credentials. Inputs and outputs that reference images are **disk paths**, never base64.
+All tools are exposed via stdio MCP. The server lives at `mcp-server/server.py` inside the plugin. **Every tool is mechanical** — local file/image/template operations with no model calls and no network credentials, except `publish_image`, which uses the user's existing git auth. Inputs and outputs that reference images are **disk paths**, never base64.
 
 | Tool | Inputs | Outputs | Notes |
 |---|---|---|---|
@@ -201,12 +205,14 @@ All tools are exposed via stdio MCP. The server lives at `mcp-server/server.py` 
 | `save_artifact` | audit_id, layer, type, source_path, parent_ids[], params{}, validate_schema? | artifact_id | Records artifact in manifest; moves/copies the file into the audit dir. If `validate_schema` is given (e.g. `kilos-l2`, `l3-synthesis`), validates the file against that JSON schema first and fails on mismatch. This is the write path for **all** agent-produced artifacts (L0–L3). |
 | `stitch_images` | audit_id, tiles[{path, scroll_top}], viewport{inner_width, inner_height, client_height} | output_path, measured_scale | Reads tile PNGs from disk; derives scale `S = tile_pixel_width / inner_width` (validates against height ratio); stitches with overlap correction (`overlap = (prevScrollTop + clientHeight) − curScrollTop`). Pillow port of clipUtils.stitchImagesWithOverlap. |
 | `crop_image` | audit_id, source_path, css_rect{x,y,w,h}, inner_width, trim?, matte? | output_path | Reads source PNG; derives scale `S = source_pixel_width / inner_width`; crops `css_rect × S`, then optional `trim` (crop inward, CSS px) and/or `matte` (extend canvas with a solid color). Pillow port of clipUtils.cropToElement. Note: Pillow cannot produce an element's-*own-background* frame — that is the capture-time `frame` op (JIT padding); here only solid-color matte is possible. For in-viewport elements prefer a direct `zoom` crop. |
-| `generate_report` | audit_id | report_path | Renders Jinja2 template from manifest + l3-synthesis.json into a single-file HTML report (Drive-hosted image URLs). |
+| `make_rendition` | audit_id, source_path, max_edge, quality? | output_path | Downscales an image to `max_edge` (long edge) as JPEG. Produces the small **analysis** rendition for the L2 visual pass (default ~768–1024px, tunable) and the **archival** rendition for the report (~1600–2000px). See [ADR-006](../../decisions/ADR-006-report-image-hosting.md). |
+| `publish_image` | audit_id, source_path | public_url | `git add/commit/push`es the (archival) clip to the public GitHub assets repo using the user's existing git auth; returns the `raw.githubusercontent.com` URL. The only tool that touches the network. |
+| `generate_report` | audit_id | report_path | Renders Jinja2 template from manifest + l3-synthesis.json into an HTML report; images are `<img src>` to public GitHub raw URLs (or base64-inlined for any image flagged sensitive). |
 | `set_step_status` | audit_id, step_id, status, error? | — | Manifest step status update for live-ops rendering. |
 
 **Deliberately not MCP tools:**
 - **KILOS analysis (L2) and synthesis (L3)** — performed by the orchestrating skill inline; persisted via `save_artifact` + `validate_schema`. (See credentials table.)
-- **Drive upload** — the skill calls the connected Drive MCP (`create_file`); the returned `fileId` is recorded via `save_artifact` params.
+- **Drive upload of artifacts/report** — not via the connected Drive MCP (`create_file` can't carry multi-MB files — the base64 argument exceeds the output-token ceiling). The Python server writes artifacts to the local audit folder; Drive-for-Desktop syncs them. See [ADR-006](../../decisions/ADR-006-report-image-hosting.md).
 
 ---
 
@@ -304,25 +310,29 @@ Note: exact plugin-dir path variable syntax is implementation-dependent; resolve
 
 ---
 
-## Google Drive Integration
+## Storage, Sync, and Hosting
 
-All audits sync to a shared Google Drive folder structure:
+The governing rule (from the token-accounting finding): **image/large-file bytes never route through the model.** The Python server writes everything locally; bytes reach their destinations via file sync (Drive) and git (GitHub). See [ADR-006](../../decisions/ADR-006-report-image-hosting.md).
+
+**Private — the audit folder (analysis + report).** The Python server writes all artifacts to a local audit directory. That directory lives under a **Google Drive for Desktop** synced path, so Drive uploads it in the background — no `create_file`, no bytes through the model. The folder is shared at the folder level (the user sets this up once); the sensitive layer stays access-controlled.
 
 ```
-Symphony Talent Audits/
+<Drive-for-Desktop synced path>/Symphony Talent Audits/   ← private, shared within the org
 └── {company_slug}-{date}/
+    ├── manifest.json
     ├── artifacts/
     │   ├── l1-*.md
-    │   ├── l1-*.png
+    │   ├── l1-*-archival.jpg      ← report rendition
+    │   ├── l1-*-analysis.jpg      ← small rendition sent to the model
     │   ├── l2-*-kilos.json
-    │   ├── l2-*-crop-*.png
+    │   ├── l2-*-crop-*.jpg
     │   └── l3-synthesis.json
-    └── l4-report-{company_slug}.html
+    └── l4-report-{company_slug}.html   ← references public clip URLs; itself private
 ```
 
-Files are uploaded via the **connected Drive MCP** (`create_file` with `base64Content` + `contentMimeType` for binary PNGs), not a service account. The returned `fileId` is recorded in the manifest, and the L4 report references images via `lh3.googleusercontent.com/d/{fileId}` — no base64 in the report, no external CDN; reports work for anyone with Drive access.
+**Public — the image clips.** Non-sensitive public-web clips (archival renditions) are `git push`ed to a dedicated **public GitHub assets repo** by the Python server (`publish_image`), and the report embeds their `raw.githubusercontent.com` URLs. Clips are screenshots of public-facing pages; the *report* that interprets them is not public. Any image flagged sensitive skips GitHub and is base64-inlined into the private report instead.
 
-**Known cost:** uploading a binary via the connected Drive MCP means the image's base64 passes through the agent's tool channel once, at upload time. For V1's modest image count (≈1–2 images per source, each scaled to ≤2000px) this is acceptable. If image volume grows, the alternative is to have the Python server write PNGs into a Drive-desktop-sync folder and resolve `fileId`s via Drive MCP `search_files` — avoiding base64 entirely, at the cost of assuming the user runs Drive desktop sync. Deferred until volume justifies it.
+> **Dependency pending confirmation:** Drive for Desktop (for the private-folder sync) — standard in Google Workspace orgs, but a user-facing prerequisite. Without it, the audit folder is local-only and the user shares the report manually. The connected Drive MCP remains read-only (KILOS source docs); it is not the artifact write path.
 
 ---
 
@@ -335,5 +345,7 @@ Files are uploaded via the **connected Drive MCP** (`create_file` with `base64Co
 | L4 report visual design (publications kit) | [#3](https://github.com/michaelblum/employer-brand-audits/issues/3) | V1.1 |
 | L5 comparative meta-analysis | — | After V1 POC |
 | Visual workflow diagram-with-blanks renderer | ADR-001 | V1.1 |
+| DOM/CSS-derived visual metadata (cheaper visual-language signal) | ADR-006 | V1.1 |
+| Sensitive-image hosting (base64 inline / GCS signed URLs) | ADR-006 | As scope expands |
 
-**Architecture decisions of record:** [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) (workflow graph as UI), [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) (manifest schema), [ADR-003](../../decisions/ADR-003-browser-layer.md) (browser layer), [ADR-004](../../decisions/ADR-004-layered-artifact-dag.md) (layered artifact DAG), [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md) (screenshot capture strategy).
+**Architecture decisions of record:** [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) (workflow graph as UI), [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) (manifest schema), [ADR-003](../../decisions/ADR-003-browser-layer.md) (browser layer), [ADR-004](../../decisions/ADR-004-layered-artifact-dag.md) (layered artifact DAG), [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md) (screenshot capture strategy), [ADR-006](../../decisions/ADR-006-report-image-hosting.md) (report image hosting & renditions).
