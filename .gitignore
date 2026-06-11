@@ -11,3 +11,6 @@ venv/
 
 # OS
 .DS_Store
+
+# Chrome profile for plugin automation (user data, not code)
+chrome-profile/
