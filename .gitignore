@@ -1,0 +1,13 @@
+# Brainstorming visual-companion scaffolding and runtime state (ephemeral;
+# the decisions it produced live in docs/decisions/ and docs/superpowers/specs/)
+.superpowers/
+.brainstorm/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store

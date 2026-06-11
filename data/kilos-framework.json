@@ -1,0 +1,244 @@
+{
+  "framework": "KILOS",
+  "version": "1.0",
+  "copyright": "© Symphony Talent, LLC, 2023. All rights reserved.",
+  "description": "A proprietary model by Symphony Talent to assess and measure workplace motivators. KILOS underpins questions and exercises in all research activities — from focus groups and surveys to leadership interviews and competitor audits. It helps discover the nuances of desires that create a differentiated and far more emotional reason to work for an organization beyond pay.",
+  "survey_question": "Q15 — Which of the following factors would you say are the most rewarding aspects – the 'high points' – of working for your current employer? (Select up to FIVE factors)",
+  "pillars": [
+    {
+      "id": "K",
+      "name": "Kinship",
+      "color": "orange",
+      "description": "Culture, community, DEI, psychological safety, wellbeing",
+      "factors": [
+        {
+          "id": "K1",
+          "name": "Diverse and Inclusive",
+          "description": "People here act in a way that's understanding, welcoming and inclusive of all diversity",
+          "survey_labels": ["A diverse and inclusive working environment"]
+        },
+        {
+          "id": "K2",
+          "name": "Wellbeing",
+          "description": "This company recognizes people as individuals and understands that we are human first, employees second",
+          "survey_labels": ["Being recognised"]
+        },
+        {
+          "id": "K3",
+          "name": "Safe to Voice Opinions",
+          "description": "People here can disagree openly or share an alternate viewpoint without personal repercussions",
+          "survey_labels": []
+        },
+        {
+          "id": "K4",
+          "name": "Fairness and Respect",
+          "description": "People here are regularly seen to treat each other fairly and/or with respect, no matter their seniority",
+          "survey_labels": ["Supportive and fair managers"]
+        },
+        {
+          "id": "K5",
+          "name": "Sense of Belonging",
+          "description": "People here share a connection that goes deeper than colleagues, based on personal values/interests",
+          "survey_labels": [
+            "A friendly and sociable environment (fun)",
+            "Teamwork and collaboration",
+            "High performing colleagues",
+            "Passionate colleagues"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "I",
+      "name": "Impact",
+      "color": "purple",
+      "description": "Customer-focused, internal influence, sustainability, innovation",
+      "factors": [
+        {
+          "id": "I1",
+          "name": "Meaningful Work for People",
+          "description": "People working here make a noticeable impact on the people and communities they serve",
+          "survey_labels": [
+            "The organisation's purpose or mission – the 'why' they do what they do",
+            "A focus on the wellbeing (financial/health etc) of customers",
+            "Being able to contribute to/have an impact on patient wellbeing"
+          ]
+        },
+        {
+          "id": "I2",
+          "name": "Meaningful Work for the Planet",
+          "description": "People here are dedicated to positively changing our impact on the environment and the planet",
+          "survey_labels": ["Being able to contribute to/have an impact on the world/society"]
+        },
+        {
+          "id": "I3",
+          "name": "Empowerment / Autonomy",
+          "description": "People here are given the freedom to choose how they do their work",
+          "survey_labels": [
+            "A lack of bureaucracy and company politics",
+            "Being given the responsibility and resources to do a good job"
+          ]
+        },
+        {
+          "id": "I4",
+          "name": "Influence Strategy",
+          "description": "People working here are given opportunities to influence the direction of the business strategy",
+          "survey_labels": ["Being able to contribute to/have an impact on the business"]
+        },
+        {
+          "id": "I5",
+          "name": "Impact on a Big Scale",
+          "description": "People here are solving some of societies' big problems or working on large-scale projects",
+          "survey_labels": []
+        },
+        {
+          "id": "I6",
+          "name": "Innovation and Invention",
+          "description": "People here can define a vision for the future and invent, innovate and/or take risks to achieve it",
+          "survey_labels": ["High levels of innovation"]
+        }
+      ]
+    },
+    {
+      "id": "L",
+      "name": "Lifestyle",
+      "color": "blue",
+      "description": "Job security, benefits, work-life balance, flexibility, tools",
+      "factors": [
+        {
+          "id": "L1",
+          "name": "Good Benefits",
+          "description": "This company offers great benefits like retirement plans, healthcare and share options",
+          "survey_labels": [
+            "Financial rewards: competitive salary & bonuses",
+            "Other benefits such as pensions, healthcare, gyms etc."
+          ]
+        },
+        {
+          "id": "L2",
+          "name": "Work Environment",
+          "description": "This company offers a clean, safe or attractive working environment",
+          "survey_labels": ["An attractive, safe physical environment"]
+        },
+        {
+          "id": "L3",
+          "name": "Policies",
+          "description": "This company's policies are modern, innovative or relevant to people's needs (e.g. parental leave, vacation, wellbeing)",
+          "survey_labels": []
+        },
+        {
+          "id": "L4",
+          "name": "Flexibility (Hours)",
+          "description": "This company offers people the freedom to choose when they work",
+          "survey_labels": ["Flexibility of working environment (hours, remote working etc)"]
+        },
+        {
+          "id": "L5",
+          "name": "Flexibility (Location)",
+          "description": "This company offers people the freedom to choose where they work (remote/hybrid/office)",
+          "survey_labels": ["Flexibility of working environment (hours, remote working etc)"]
+        },
+        {
+          "id": "L6",
+          "name": "Balance",
+          "description": "This company encourages people to maintain a great work life balance for better mental and physical wellbeing",
+          "survey_labels": ["A good work-life balance"]
+        },
+        {
+          "id": "L7",
+          "name": "Stability",
+          "description": "This company has a stable market position which makes employees feel financially secure",
+          "survey_labels": ["Security of work and stability of the company"]
+        }
+      ]
+    },
+    {
+      "id": "O",
+      "name": "Opportunity",
+      "color": "green",
+      "description": "Skills attainment/development, internal mobility, advancement",
+      "factors": [
+        {
+          "id": "O1",
+          "name": "Skills Attainment",
+          "description": "People here are given the opportunity to learn new skills or abilities, and gain knowledge",
+          "survey_labels": ["Opportunities to learn and develop"]
+        },
+        {
+          "id": "O2",
+          "name": "Professional Expertise",
+          "description": "People here are encouraged to deepen and grow their professional skills, knowledge, expertise and abilities in order to specialize or gain a qualification",
+          "survey_labels": []
+        },
+        {
+          "id": "O3",
+          "name": "Challenge and Stretch",
+          "description": "This company challenges people here to expand their remit and/or responsibilities",
+          "survey_labels": ["Challenge & variety of work offered"]
+        },
+        {
+          "id": "O4",
+          "name": "Career Mobility",
+          "description": "People here can easily move function, job role and country or try new experiences",
+          "survey_labels": [
+            "Ability to move role or country within the company",
+            "Opportunities for international exposure"
+          ]
+        },
+        {
+          "id": "O5",
+          "name": "Task Variety",
+          "description": "People here can work on a variety of tasks and projects, where often no two days are the same",
+          "survey_labels": ["Challenge & variety of work offered"]
+        },
+        {
+          "id": "O6",
+          "name": "Career Progression",
+          "description": "People here can clearly see how to progress to a more senior or leadership position",
+          "survey_labels": ["Career progression and advancement opportunities"]
+        }
+      ]
+    },
+    {
+      "id": "S",
+      "name": "Status",
+      "color": "wine",
+      "description": "Heritage, ethics, reputation, commercial success, recognition",
+      "factors": [
+        {
+          "id": "S1",
+          "name": "Brand Name Recognition",
+          "description": "This company has a well-known brand name that impresses other people",
+          "survey_labels": ["Reputation of the company's brand(s), products or services"]
+        },
+        {
+          "id": "S2",
+          "name": "Industry Reputation",
+          "description": "This company has a strong industry reputation for excellence, innovation or success",
+          "survey_labels": [
+            "Their social, environmental and community actions",
+            "Ethics and safety focus"
+          ]
+        },
+        {
+          "id": "S3",
+          "name": "Tools and Technologies",
+          "description": "This company offers work with cutting edge tools, resources and technologies",
+          "survey_labels": []
+        },
+        {
+          "id": "S4",
+          "name": "Market Position",
+          "description": "This company holds a market-leading position",
+          "survey_labels": ["The company's financial performance (recent or historical) or market position"]
+        },
+        {
+          "id": "S5",
+          "name": "Professional Reputation",
+          "description": "This company rewards and recognizes excellence in ways that enhance an individual's reputation in the workplace or industry",
+          "survey_labels": ["Inspirational leadership"]
+        }
+      ]
+    }
+  ]
+}
