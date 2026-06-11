@@ -76,19 +76,25 @@ The pipeline is organized into layers. Each layer produces artifacts consumed by
 **Process:** For each URL, Claude in Chrome runs two capture passes:
 
 1. **Text pass:** `get_page_text` + DRAW `extractSimpleText` injected via `javascript_tool`. Output: clean markdown.
-2. **Screenshot pass:** DRAW `_waitForAnimations` + `_hideObscuringElements` injected via `javascript_tool` to settle the page, then a full-page capture. The capture primitive is the **first implementation spike** (see below) — the planned approach is the agent scrolling and capturing viewport tiles via Claude in Chrome's `computer` screenshot with `save_to_disk` (each tile returns a local file path), then the Python MCP `stitch_images` tool reading those tiles from disk and writing a stitched full-page PNG (≤2000px height) — the Pillow port of `clipUtils.stitchImagesWithOverlap` with overlap correction.
+2. **Screenshot pass:** DRAW `_waitForAnimations`, `_hideObscuringElements`, and `_suppressScrollbarsAndRounding` injected via `javascript_tool` to settle the page and remove overlays/seam artifacts, then capture. Two capture modes (full strategy in [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md), validated by an empirical spike):
+   - **Element crop (fits in viewport)** → scroll into view, then Claude in Chrome `zoom` to the element's `getBoundingClientRect`. The `zoom` region is CSS-px and viewport-relative, returns an element-exact crop at ~2× resolution. No stitching, no Pillow.
+   - **Full-page scan / element taller than viewport / inner-scroll container** → the agent scroll-tiles via `computer` screenshot and the Python MCP `stitch_images` tool stitches with overlap correction (Pillow port of `clipUtils.stitchImagesWithOverlap`). DRAW's three scroll-stitch paths apply (page scroll, element-window intersection crop, internal `scrollBy`).
 
-**Image handoff is disk-based, by design** (firm constraint, independent of the capture primitive). Tiles and stitched output move between Claude in Chrome and the Python server as **file paths on the local disk**, never as multi-MB base64 strings through the agent's tool channel. The agent passes path lists, not pixels.
+**Scale is measured, not assumed — "page as ruler."** `computer` screenshot is a *display-region* capture, so its pixel scale depends on which monitor the window is on (verified: ~0.982× CSS px on a scaled retina display; a lower-DPI external monitor differs; assuming `× devicePixelRatio` would be 2× wrong). The pipeline measures `S = capture_pixel_width / window.innerWidth` per sequence and validates it against the height ratio (mismatch ⇒ window straddles two displays ⇒ abort). The capture is page-only with origin at viewport (0,0), so once `S` is known, any CSS rect maps to image pixels. Never detect the display or query DPI.
 
-> **Spike before building L1 capture.** Two unknowns must be checked empirically — capture one real page and look at the result:
-> 1. **Does `computer` screenshot capture page content only, or include browser/OS chrome** (tab strip, address bar, menubar)? DRAW's prior art worked because the extension used a page-only capture API (`captureVisibleTab`); if Claude in Chrome's `computer` action includes chrome, tiles must be cropped before stitching or the stitch is garbage.
-> 2. **Does Claude in Chrome offer a native full-page capture?** If so, the entire tile-and-stitch Pillow port may be unnecessary — capture once, hand one file to Python (or skip stitching entirely). Resolve this before porting `clipUtils`.
+**Image handoff.** Single `zoom` element crops return inline to the agent (one image — fine). The many-tile full-page stitch prefers tiles on disk so N images don't cross the agent's context; whether `save_to_disk` exposes a server-readable path (or needs a fallback) is the one open build-time spike — [Issue #4](https://github.com/michaelblum/employer-brand-audits/issues/4).
 
 **Capture recipes** are defined per source type in the workflow template. Each recipe captures intent, not implementation (e.g., "full-page scan of careers landing page, hiding chat widgets and cookie banners"). The agent can re-derive the approach from the intent description if the DOM changes (intent-addressable automation, per [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md)).
 
-Additional recipe types:
-- `review_clip` — screenshot of a specific element (e.g., a Glassdoor rating widget), with crop coordinates
-- `animated_widget` — screenshot taken at the settled frame of an animation (uses `_waitForAnimations`)
+Recipe types:
+- `full_page` — scroll-tile-stitch of the whole page (optionally scaled to a max height, e.g. ≤2000px, per recipe)
+- `element_clip` — crop to one element via `zoom` to its rect; supports optional `frame` and `trim` (below)
+- `scroll_region` — full content of a nested `overflow:auto/scroll` element captured via internal `scrollBy` + stitch
+- `animated_widget` — capture at the settled frame of an animation (uses `_waitForAnimations`)
+
+**`frame` and `trim` are distinct operations** (see [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md) §5):
+- **`frame {top,right,bottom,left}`** — breathing room in the element's *own background* (e.g. text flush to the edge of a zero-padding element). Achieved by JIT-injecting CSS padding onto the element, re-measuring, capturing, then restoring (DRAW `apply_clip_padding`). Expanding the crop rect would instead capture adjacent page content — not a clean frame.
+- **`trim {top,right,bottom,left}`** — shave px off the clip: shrink the `zoom` region inward, or crop inward in Pillow (top/bottom on a stitched image are a post-stitch crop).
 
 **Output:** Per-URL `{url_id}-text.md` and `{url_id}-screenshot.png`, stored in the audit directory.  
 **Artifacts:** `l1-{url_id}-text`, `l1-{url_id}-screenshot`
@@ -110,7 +116,7 @@ Per-page output (in addition to factors):
 - `content_type`: `dynamic` | `static`
 - `talent_segment_specific`: `true` | `false` + supporting quote
 
-Image crops: where evidence points to a specific visual element (e.g., a hero image, a benefits section), the skill calls Python MCP `crop_image` with the screenshot path and a pixel rect; Pillow extracts the region and writes a crop PNG to disk.
+Image crops: where evidence points to a specific visual element (e.g., a hero image, a benefits section), the preferred path is a direct `zoom` element crop (the L1 `element_clip` recipe) — high-res, CSS coordinates, no post-processing. When the element exists only inside an already-captured stitched full-page image, the skill calls Python MCP `crop_image` with the stitched image, a CSS rect, and `window.innerWidth` so Pillow applies the measured scale `S`; Pillow writes the crop PNG to disk.
 
 **Output:** `l2-{url_id}-kilos.json`, `l2-{url_id}-crop-{n}.png`
 
@@ -193,8 +199,8 @@ All tools are exposed via stdio MCP. The server lives at `mcp-server/server.py` 
 | `create_audit` | company_name, domain, template_id, talent_segment? | audit_id, manifest path | Creates audit directory + manifest |
 | `get_audit_status` | audit_id | step statuses, artifact counts | Read-only manifest query |
 | `save_artifact` | audit_id, layer, type, source_path, parent_ids[], params{}, validate_schema? | artifact_id | Records artifact in manifest; moves/copies the file into the audit dir. If `validate_schema` is given (e.g. `kilos-l2`, `l3-synthesis`), validates the file against that JSON schema first and fails on mismatch. This is the write path for **all** agent-produced artifacts (L0–L3). |
-| `stitch_images` | audit_id, tile_paths[], client_height, device_pixel_ratio | output_path | Reads tile PNGs from disk, writes stitched full-page PNG. Pillow port of clipUtils.stitchImagesWithOverlap. |
-| `crop_image` | audit_id, source_path, rect{x,y,w,h}, device_pixel_ratio | output_path | Reads source PNG from disk, writes crop PNG. Pillow port of clipUtils.cropToElement. |
+| `stitch_images` | audit_id, tiles[{path, scroll_top}], viewport{inner_width, inner_height, client_height} | output_path, measured_scale | Reads tile PNGs from disk; derives scale `S = tile_pixel_width / inner_width` (validates against height ratio); stitches with overlap correction (`overlap = (prevScrollTop + clientHeight) − curScrollTop`). Pillow port of clipUtils.stitchImagesWithOverlap. |
+| `crop_image` | audit_id, source_path, css_rect{x,y,w,h}, inner_width, trim?, matte? | output_path | Reads source PNG; derives scale `S = source_pixel_width / inner_width`; crops `css_rect × S`, then optional `trim` (crop inward, CSS px) and/or `matte` (extend canvas with a solid color). Pillow port of clipUtils.cropToElement. Note: Pillow cannot produce an element's-*own-background* frame — that is the capture-time `frame` op (JIT padding); here only solid-color matte is possible. For in-viewport elements prefer a direct `zoom` crop. |
 | `generate_report` | audit_id | report_path | Renders Jinja2 template from manifest + l3-synthesis.json into a single-file HTML report (Drive-hosted image URLs). |
 | `set_step_status` | audit_id, step_id, status, error? | — | Manifest step status update for live-ops rendering. |
 
@@ -330,4 +336,4 @@ Files are uploaded via the **connected Drive MCP** (`create_file` with `base64Co
 | L5 comparative meta-analysis | — | After V1 POC |
 | Visual workflow diagram-with-blanks renderer | ADR-001 | V1.1 |
 
-**Architecture decisions of record:** [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) (workflow graph as UI), [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) (manifest schema), [ADR-003](../../decisions/ADR-003-browser-layer.md) (browser layer), [ADR-004](../../decisions/ADR-004-layered-artifact-dag.md) (layered artifact DAG).
+**Architecture decisions of record:** [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) (workflow graph as UI), [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) (manifest schema), [ADR-003](../../decisions/ADR-003-browser-layer.md) (browser layer), [ADR-004](../../decisions/ADR-004-layered-artifact-dag.md) (layered artifact DAG), [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md) (screenshot capture strategy).
