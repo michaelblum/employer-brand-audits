@@ -21,14 +21,14 @@ Three components, each with a single clear responsibility:
 | Component | Role |
 |---|---|
 | **Cowork Skill** | Conversational orchestrator **and analyst**. Intake wizard, workflow routing, layer handoffs, KILOS assessment (L2) and synthesis (L3) performed inline in the agent loop, report delivery. |
-| **Claude in Chrome** | Browser layer. URL discovery, text extraction, full-page screenshots, all in the user's real Chrome with real sessions/cookies. |
+| **Playwright CLI** | Browser engine. URL discovery, text extraction, page setup/cleanup, element targeting, session/state handling, and screenshots. Agents use `playwright-cli` or thin repo wrappers only. |
 | **Python MCP Server** | Mechanical utilities only. Image stitching/cropping/**rendition** (Pillow), manifest read/write, schema validation, L4 report templating (Jinja2), and writing all artifacts to the local audit folder + `git push` of public image clips. No model calls, no network credentials beyond the user's existing git auth. |
 | **Connected Google Drive MCP** | **Read-only** — fetches the KILOS source docs. No longer the artifact write path (see [ADR-006](../../decisions/ADR-006-report-image-hosting.md)). |
 | **GitHub assets repo (public)** | Hosts non-sensitive public-web image clips for `<img>` embedding in the report. Written by the Python server via `git push`; see [ADR-006](../../decisions/ADR-006-report-image-hosting.md). |
 
-**Why Claude in Chrome over Playwright/headless:** The target sites (Indeed, Glassdoor, LinkedIn, Kununu) actively detect headless automation. Claude in Chrome uses the user's real Chrome browser with their existing fingerprint and session cookies — indistinguishable from a legitimate user visit. No distribution problem (the extension is already installed). No captcha risk. See [ADR-003](../../decisions/ADR-003-browser-layer.md) and [Issue #1](https://github.com/michaelblum/employer-brand-audits/issues/1) (Playwright headless fallback, deferred to V1.1).
+**Why Playwright CLI:** Automated audits need repeatable navigation, deterministic viewport/session setup, targeted screenshots, text extraction, and disk artifacts that stay out of model context. Playwright CLI is now the browser engine of record; Claude in Chrome is disabled for audit execution. See [ADR-008](../../decisions/ADR-008-playwright-cli-browser-engine.md). [ADR-003](../../decisions/ADR-003-browser-layer.md) is superseded historical context.
 
-**Why Python over Node:** Python ships with macOS. No binary compilation issues, no Node.js install requirement for non-developer users. Pillow handles image stitching natively.
+**Why Python for the mechanical layer:** Python remains the MCP/image/report layer because Pillow handles post-processing cleanly and the existing tests cover it. The browser layer is the explicit exception: Playwright CLI is required by [ADR-008](../../decisions/ADR-008-playwright-cli-browser-engine.md).
 
 ### Credentials and external access (zero-config premise)
 
@@ -36,7 +36,7 @@ The architecture was chosen specifically to require **no API keys, no service ac
 
 | Capability | Where it runs | Why not the Python MCP server |
 |---|---|---|
-| Browser automation | Claude in Chrome (host extension) | The server has no browser and no session cookies. |
+| Browser automation | Playwright CLI | The Python server remains mechanical; browser actions are performed by CLI commands or checked-in wrappers that write disk artifacts. |
 | KILOS analysis & synthesis (L2/L3) | The orchestrating skill, inline in the agent loop | A bundled MCP server is a separate process with **no inherited model access** — calling Claude would require its own API key and billing. MCP *sampling* (server-requests-host-completion) is host-dependent and historically unsupported in Cowork, and even where available it is pure indirection: the skill already holds the page text and screenshots in context. The analysis stays in the agent loop. |
 | Read KILOS source docs | Connected Drive MCP (read-only) | A service account would be a second, conflicting credential mechanism; the session already has an authenticated Drive MCP. |
 | Artifact + report delivery to Drive | Python writes to the local audit folder → **Google Drive for Desktop** syncs it | The connected Drive MCP's `create_file` can't carry real files: a multi-MB base64 argument is model **output** tokens and exceeds the output ceiling (it fails, not just costs). So bytes must not route through the model. Drive for Desktop is mandated on the org's managed machines, so it's a safe dependency. |
@@ -69,23 +69,24 @@ The pipeline is organized into layers. Each layer produces artifacts consumed by
 ### L0 — URL Discovery
 
 **Input:** Company name, domain (or guessed from company name), workflow template.  
-**Process:** Claude in Chrome navigates the company's careers site and known platforms (LinkedIn, Indeed, Glassdoor) to discover and enumerate target URLs.  
+**Process:** Playwright CLI navigates the company's careers site and known platforms (LinkedIn, Indeed, Glassdoor) to discover and enumerate target URLs.
 **Output:** Ranked URL list with source type tags (`careers-main`, `careers-subpage`, `linkedin-jobs`, `indeed-company`, `glassdoor-company`, etc.)  
 **Artifacts:** `l0-urls.json`
 
 ### L1 — Text and Screenshot Capture
 
 **Input:** L0 URL list.  
-**Process:** For each URL, Claude in Chrome runs two capture passes:
+**Process:** For each URL, Playwright CLI runs two capture passes:
 
-1. **Text pass:** `get_page_text` + DRAW `extractSimpleText` injected via `javascript_tool`. Output: clean markdown.
-2. **Screenshot pass:** DRAW `_waitForAnimations`, `_hideObscuringElements`, and `_suppressScrollbarsAndRounding` injected via `javascript_tool` to settle the page and remove overlays/seam artifacts, then capture. Two capture modes (full strategy in [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md), validated by an empirical spike):
-   - **Element crop (fits in viewport)** → scroll into view, then Claude in Chrome `zoom` to the element's `getBoundingClientRect`. The `zoom` region is CSS-px and viewport-relative, returns an element-exact crop at ~2× resolution. No stitching, no Pillow.
-   - **Full-page scan / element taller than viewport / inner-scroll container** → the agent scroll-tiles via `computer` screenshot and the Python MCP `stitch_images` tool stitches with overlap correction (Pillow port of `clipUtils.stitchImagesWithOverlap`). DRAW's three scroll-stitch paths apply (page scroll, element-window intersection crop, internal `scrollBy`).
+1. **Text pass:** `playwright-cli eval` or `playwright-cli run-code --filename <script>` extracts visible text/markdown and writes it to disk through a wrapper.
+2. **Screenshot pass:** checked-in `run-code` snippets settle animations, hide obscuring elements, suppress scrollbars/seam artifacts, and restore mutations after capture. Capture modes:
+   - **Element crop (fits in viewport)** -> `playwright-cli screenshot <target> --filename <path>` where the target is a stable selector or snapshot element ref. For custom clip/mask/animation options, use `run-code`.
+   - **Full-page scan** -> `playwright-cli screenshot --full-page --filename <path>` for simple pages.
+   - **Element taller than viewport / inner-scroll container** -> a wrapper drives scroll steps with `run-code`, captures tiles, then Python MCP `stitch_images` stitches with overlap correction (Pillow port of `clipUtils.stitchImagesWithOverlap`).
 
-**Scale is measured, not assumed — "page as ruler."** `computer` screenshot is a *display-region* capture, so its pixel scale depends on which monitor the window is on (verified: ~0.982× CSS px on a scaled retina display; a lower-DPI external monitor differs; assuming `× devicePixelRatio` would be 2× wrong). The pipeline measures `S = capture_pixel_width / window.innerWidth` per sequence and validates it against the height ratio (mismatch ⇒ window straddles two displays ⇒ abort). The capture is page-only with origin at viewport (0,0), so once `S` is known, any CSS rect maps to image pixels. Never detect the display or query DPI.
+**Scale is measured, not assumed — "page as ruler."** For screenshots passed into Python post-processing, the pipeline measures `S = capture_pixel_width / window.innerWidth` per sequence and validates it against the height ratio. Direct Playwright element screenshots usually avoid manual scale math; stitched or post-cropped images still use the measured scale.
 
-**Image handoff.** Single `zoom` element crops return inline to the agent (one image — fine). The many-tile full-page stitch prefers tiles on disk so N images don't cross the agent's context; whether `save_to_disk` exposes a server-readable path (or needs a fallback) is the one open build-time spike — [Issue #4](https://github.com/michaelblum/employer-brand-audits/issues/4).
+**Image handoff.** Browser artifacts are written to disk by Playwright CLI or its wrapper. Image bytes do not cross the model/tool-argument boundary.
 
 **Two renditions per capture (cost control).** The Python server writes each captured/stitched image in two renditions: an **archival** rendition for the report (JPEG q≈80, ≤~1600–2000px long edge — what humans see and what gets hosted) and a smaller **analysis** rendition (downscaled to a *tunable* ~768–1024px long edge) that is the **only** image sent to the model for the L2 visual pass. Vision token cost scales with pixel *area* (≈ `w×h/750`, capped for large images), so **downscaling — not JPEG quality — is the lever** (quality only affects bytes/hosting); the analysis rendition saves ~2–3× per image. Non-sensitive clips are published to the public GitHub assets repo by the server (`publish_image`); the report references their raw URLs. Full rationale in [ADR-006](../../decisions/ADR-006-report-image-hosting.md).
 
@@ -93,13 +94,13 @@ The pipeline is organized into layers. Each layer produces artifacts consumed by
 
 Recipe types:
 - `full_page` — scroll-tile-stitch of the whole page (optionally scaled to a max height, e.g. ≤2000px, per recipe)
-- `element_clip` — crop to one element via `zoom` to its rect; supports optional `frame` and `trim` (below)
+- `element_clip` — screenshot one element by selector or snapshot ref; supports optional `frame` and `trim` (below)
 - `scroll_region` — full content of a nested `overflow:auto/scroll` element captured via internal `scrollBy` + stitch
 - `animated_widget` — capture at the settled frame of an animation (uses `_waitForAnimations`)
 
 **`frame` and `trim` are distinct operations** (see [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md) §5):
 - **`frame {top,right,bottom,left}`** — breathing room in the element's *own background* (e.g. text flush to the edge of a zero-padding element). Achieved by JIT-injecting CSS padding onto the element, re-measuring, capturing, then restoring (DRAW `apply_clip_padding`). Expanding the crop rect would instead capture adjacent page content — not a clean frame.
-- **`trim {top,right,bottom,left}`** — shave px off the clip: shrink the `zoom` region inward, or crop inward in Pillow (top/bottom on a stitched image are a post-stitch crop).
+- **`trim {top,right,bottom,left}`** — shave px off the clip: use a custom Playwright clip region via `run-code`, or crop inward in Pillow (top/bottom on a stitched image are a post-stitch crop).
 
 **Output:** Per-URL `{url_id}-text.md` and `{url_id}-screenshot.png`, stored in the audit directory.  
 **Artifacts:** `l1-{url_id}-text`, `l1-{url_id}-screenshot`
@@ -126,7 +127,7 @@ Per-source output (in addition to factors):
 
 Per-artifact `card` (lens-neutral, every text/screenshot/crop artifact): `summary` (≤~250-word NL essence) + tags (`content_type`, `theme[]`, `imagery_kind`, `talent_segment_hint`, source title/SLD). Stored on the manifest artifact record, mirrored to the Drive file description, echoed in the filename. This is the routing/grouping/lookup index.
 
-Image crops: where evidence points to a specific visual element (e.g., a hero image, a benefits section), the preferred path is a direct `zoom` element crop (the L1 `element_clip` recipe) — high-res, CSS coordinates, no post-processing. When the element exists only inside an already-captured stitched full-page image, the skill calls Python MCP `crop_image` with the stitched image, a CSS rect, and `window.innerWidth` so Pillow applies the measured scale `S`; Pillow writes the crop PNG to disk.
+Image crops: where evidence points to a specific visual element (e.g., a hero image, a benefits section), the preferred path is a direct Playwright CLI element screenshot (the L1 `element_clip` recipe) using a selector or snapshot ref. When the element exists only inside an already-captured stitched full-page image, the skill calls Python MCP `crop_image` with the stitched image, a CSS rect, and `window.innerWidth` so Pillow applies the measured scale `S`; Pillow writes the crop PNG to disk.
 
 **Output:** `l2-{url_id}-kilos.json`, `l2-{url_id}-crop-{n}.png`
 
@@ -209,7 +210,7 @@ All tools are exposed via stdio MCP. The server lives at `mcp-server/server.py` 
 | `get_audit_status` | audit_id | step statuses, artifact counts | Read-only manifest query |
 | `save_artifact` | audit_id, layer, type, source_path, parent_ids[], params{}, validate_schema? | artifact_id | Records artifact in manifest; moves/copies the file into the audit dir. If `validate_schema` is given (e.g. `kilos-l2`, `l3-synthesis`), validates the file against that JSON schema first and fails on mismatch. This is the write path for **all** agent-produced artifacts (L0–L3). |
 | `stitch_images` | audit_id, tiles[{path, scroll_top}], viewport{inner_width, inner_height, client_height} | output_path, measured_scale | Reads tile PNGs from disk; derives scale `S = tile_pixel_width / inner_width` (validates against height ratio); stitches with overlap correction (`overlap = (prevScrollTop + clientHeight) − curScrollTop`). Pillow port of clipUtils.stitchImagesWithOverlap. |
-| `crop_image` | audit_id, source_path, css_rect{x,y,w,h}, inner_width, trim?, matte? | output_path | Reads source PNG; derives scale `S = source_pixel_width / inner_width`; crops `css_rect × S`, then optional `trim` (crop inward, CSS px) and/or `matte` (extend canvas with a solid color). Pillow port of clipUtils.cropToElement. Note: Pillow cannot produce an element's-*own-background* frame — that is the capture-time `frame` op (JIT padding); here only solid-color matte is possible. For in-viewport elements prefer a direct `zoom` crop. |
+| `crop_image` | audit_id, source_path, css_rect{x,y,w,h}, inner_width, trim?, matte? | output_path | Reads source PNG; derives scale `S = source_pixel_width / inner_width`; crops `css_rect x S`, then optional `trim` (crop inward, CSS px) and/or `matte` (extend canvas with a solid color). Pillow port of clipUtils.cropToElement. Note: Pillow cannot produce an element's-own-background frame — that is the capture-time `frame` op (JIT padding); here only solid-color matte is possible. For in-viewport elements prefer a direct Playwright CLI element screenshot. |
 | `make_rendition` | audit_id, source_path, max_edge, quality? | output_path | Downscales an image to `max_edge` (long edge) as JPEG. Produces the small **analysis** rendition for the L2 visual pass (default ~768–1024px, tunable) and the **archival** rendition for the report (~1600–2000px). See [ADR-006](../../decisions/ADR-006-report-image-hosting.md). |
 | `publish_image` | audit_id, source_path | public_url | `git add/commit/push`es the (archival) clip to the public GitHub assets repo using the user's existing git auth; returns the `raw.githubusercontent.com` URL. The only tool that touches the network. |
 | `generate_report` | audit_id | report_path | Renders Jinja2 template from manifest + l3-synthesis.json into an HTML report; images are `<img src>` to public GitHub raw URLs (or base64-inlined for any image flagged sensitive). |
@@ -347,7 +348,7 @@ Filenames follow a meaningful convention (ADR-007): `l{layer}_{slug}_{sld}_{ordi
 
 | Item | Issue | Target |
 |---|---|---|
-| Playwright MCP headless fallback | [#1](https://github.com/michaelblum/employer-brand-audits/issues/1) | V1.1 |
+| Anti-bot parity validation for Playwright CLI | [#1](https://github.com/michaelblum/employer-brand-audits/issues/1) | V1 |
 | Browser as collaborative surface (overlays, guided tours) | [#2](https://github.com/michaelblum/employer-brand-audits/issues/2) | V2 |
 | L4 report visual design (publications kit) | [#3](https://github.com/michaelblum/employer-brand-audits/issues/3) | V1.1 |
 | L5 comparative meta-analysis | — | After V1 POC |
@@ -355,4 +356,4 @@ Filenames follow a meaningful convention (ADR-007): `l{layer}_{slug}_{sld}_{ordi
 | DOM/CSS-derived visual metadata (cheaper visual-language signal) | ADR-006 | V1.1 |
 | Sensitive-image hosting (base64 inline / GCS signed URLs) | ADR-006 | As scope expands |
 
-**Architecture decisions of record:** [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) (workflow graph as UI), [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) (manifest schema), [ADR-003](../../decisions/ADR-003-browser-layer.md) (browser layer), [ADR-004](../../decisions/ADR-004-layered-artifact-dag.md) (layered artifact DAG), [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md) (screenshot capture strategy), [ADR-006](../../decisions/ADR-006-report-image-hosting.md) (report image hosting & renditions), [ADR-007](../../decisions/ADR-007-eager-extraction-lazy-reinference.md) (eager extraction + lazy re-inference).
+**Architecture decisions of record:** [ADR-001](../../decisions/ADR-001-workflow-graph-as-ui.md) (workflow graph as UI), [ADR-002](../../decisions/ADR-002-audit-manifest-schema.md) (manifest schema), [ADR-003](../../decisions/ADR-003-browser-layer.md) (superseded browser-layer history), [ADR-004](../../decisions/ADR-004-layered-artifact-dag.md) (layered artifact DAG), [ADR-005](../../decisions/ADR-005-screenshot-capture-strategy.md) (screenshot capture strategy, amended by ADR-008), [ADR-006](../../decisions/ADR-006-report-image-hosting.md) (report image hosting & renditions), [ADR-007](../../decisions/ADR-007-eager-extraction-lazy-reinference.md) (eager extraction + lazy re-inference), [ADR-008](../../decisions/ADR-008-playwright-cli-browser-engine.md) (Playwright CLI browser engine).

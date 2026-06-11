@@ -109,7 +109,7 @@ The early-draft form (an artifact with `parent_ids: ["l0-url-discovery"]`, point
 
 ## Consequences
 
-- **`save_artifact` is the one write path.** Every artifact — whether produced by Claude in Chrome (L0/L1), the skill's inline analysis (L2/L3), or a Python tool (stitched/cropped images, report) — is recorded through `save_artifact`. The manifest never distinguishes "MCP-produced" from "agent-produced" artifacts; producer identity lives only in `produced_by_step_id`. This is what lets the renderer treat all layers uniformly.
+- **`save_artifact` is the one write path.** Every artifact — whether produced by Playwright CLI browser automation (L0/L1), the skill's inline analysis (L2/L3), or a Python tool (stitched/cropped images, report) — is recorded through `save_artifact`. The manifest never distinguishes "MCP-produced" from "agent-produced" artifacts; producer identity lives only in `produced_by_step_id`. This is what lets the renderer treat all layers uniformly.
 - **Provenance is queryable both ways.** Forward (what did this step produce?) via `artifact_ids`; backward (what was this derived from?) via `parent_ids`. The L4 report's rich citations walk `parent_ids` to the source `url_list`/`text` artifact and surface its `params.url`.
 - **Selective re-runs are well-defined.** Re-running a layer means re-executing its steps and writing new artifacts; downstream artifacts whose `parent_ids` changed are stale and flagged. (The staleness sweep is implementation detail, not schema.)
 - **The schema is additive.** New artifact `type`s or step fields extend the enums/objects without breaking the renderer, which is why `schema_version` is present from 1.0.

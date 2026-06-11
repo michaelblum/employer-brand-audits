@@ -1,0 +1,14 @@
+Unknown option: --screenshot
+
+playwright-cli open [url]
+
+Open the browser
+
+Arguments:
+  [url]                       the url to navigate to
+Options:
+  --browser                   browser or chrome channel to use, possible values: chrome, firefox, webkit, msedge.
+  --config                    path to the configuration file, defaults to .playwright/cli.config.json
+  --headed                    run browser in headed mode
+  --persistent                 use persistent browser profile
+  --profile                    path to a persistent user data directory.

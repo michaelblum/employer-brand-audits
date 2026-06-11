@@ -1,9 +1,13 @@
 # ADR-003: Browser Layer — Claude in Chrome
 
 **Date:** 2026-06-10  
-**Status:** Accepted  
+**Status:** Superseded by [ADR-008: Playwright CLI Is The Browser Engine](ADR-008-playwright-cli-browser-engine.md)
 
 ---
+
+## Supersession Note
+
+This ADR records the original V1 browser-layer decision. It is no longer the active browser-engine decision. [ADR-008](ADR-008-playwright-cli-browser-engine.md) supersedes it and requires Playwright CLI as the browser engine for automated audits. Agents must not use Claude in Chrome for audit execution.
 
 ## Context
 

@@ -1,5 +1,7 @@
 # Spike: Capture Primitive (Issue #4)
 
+> Historical note: this spike investigated the old Claude-in-Chrome capture path. [ADR-008](../../decisions/ADR-008-playwright-cli-browser-engine.md) supersedes that path. Do not use `computer`, `zoom`, or `save_to_disk` for new audit execution.
+
 **Date:** 2026-06-11  
 **Status:** Complete — one finding forces a capture-handoff pivot (does **not** block Plan 1).
 
