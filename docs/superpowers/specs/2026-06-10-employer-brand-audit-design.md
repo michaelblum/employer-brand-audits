@@ -39,7 +39,7 @@ The architecture was chosen specifically to require **no API keys, no service ac
 | Browser automation | Claude in Chrome (host extension) | The server has no browser and no session cookies. |
 | KILOS analysis & synthesis (L2/L3) | The orchestrating skill, inline in the agent loop | A bundled MCP server is a separate process with **no inherited model access** — calling Claude would require its own API key and billing. MCP *sampling* (server-requests-host-completion) is host-dependent and historically unsupported in Cowork, and even where available it is pure indirection: the skill already holds the page text and screenshots in context. The analysis stays in the agent loop. |
 | Read KILOS source docs | Connected Drive MCP (read-only) | A service account would be a second, conflicting credential mechanism; the session already has an authenticated Drive MCP. |
-| Artifact + report delivery to Drive | Python writes to the local audit folder → **Google Drive for Desktop** syncs it | The connected Drive MCP's `create_file` can't carry real files: a multi-MB base64 argument is model **output** tokens and exceeds the output ceiling (it fails, not just costs). So bytes must not route through the model. *(Drive for Desktop dependency pending confirmation — see ADR-006.)* |
+| Artifact + report delivery to Drive | Python writes to the local audit folder → **Google Drive for Desktop** syncs it | The connected Drive MCP's `create_file` can't carry real files: a multi-MB base64 argument is model **output** tokens and exceeds the output ceiling (it fails, not just costs). So bytes must not route through the model. Drive for Desktop is mandated on the org's managed machines, so it's a safe dependency. |
 | Public image-clip hosting | Python `git push` to a public GitHub assets repo | Reuses the user's existing git auth (no new credential); bytes go local→GitHub, never through the model. Clips are non-sensitive public-web imagery (see ADR-006). |
 | Image processing, manifest, templating | Python MCP server | These are local, deterministic, credential-free — exactly what the server is for. |
 
@@ -332,7 +332,7 @@ The governing rule (from the token-accounting finding): **image/large-file bytes
 
 **Public — the image clips.** Non-sensitive public-web clips (archival renditions) are `git push`ed to a dedicated **public GitHub assets repo** by the Python server (`publish_image`), and the report embeds their `raw.githubusercontent.com` URLs. Clips are screenshots of public-facing pages; the *report* that interprets them is not public. Any image flagged sensitive skips GitHub and is base64-inlined into the private report instead.
 
-> **Dependency pending confirmation:** Drive for Desktop (for the private-folder sync) — standard in Google Workspace orgs, but a user-facing prerequisite. Without it, the audit folder is local-only and the user shares the report manually. The connected Drive MCP remains read-only (KILOS source docs); it is not the artifact write path.
+> **Dependency (confirmed):** Drive for Desktop is mandated on the org's managed machines, so the private-folder sync is a safe assumption. The connected Drive MCP remains read-only (KILOS source docs); it is not the artifact write path.
 
 ---
 
