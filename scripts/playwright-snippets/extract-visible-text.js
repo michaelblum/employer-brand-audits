@@ -20,4 +20,4 @@ async (page) => {
     }
     return chunks.join("\n");
   });
-};
+}

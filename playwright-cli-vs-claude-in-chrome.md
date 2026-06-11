@@ -108,3 +108,23 @@ For `employer-brand-audits`, that means:
 - treat Claude-in-Chrome findings as historical context only
 
 That division gives you the best combination of repeatability, screenshot control, and low context cost.
+
+## Smoke Harness
+
+Run the no-behavior-change Playwright CLI smoke through the repository wrapper:
+
+```bash
+python3 scripts/playwright_cli_smoke.py
+```
+
+The smoke uses the named session `eba-smoke`, opens `https://example.com`,
+resizes the browser to `1280x900`, writes a boxed snapshot, writes viewport and
+full-page screenshots, runs
+`scripts/playwright-snippets/extract-visible-text.js`, captures that snippet's
+stdout to disk, and closes the session.
+
+Deterministic outputs are replaced on each run under:
+
+```text
+artifacts/playwright-cli-smoke/latest/
+```
