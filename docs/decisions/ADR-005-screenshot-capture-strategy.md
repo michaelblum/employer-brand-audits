@@ -19,25 +19,39 @@ Capture pixels from a viewport/region screenshot, then crop/stitch by computed g
 
 DRAW never used direct capture, deliberately: a real browser screenshot is GPU-composited and pixel-perfect across iframes, `<canvas>`, WebGL, shadow DOM, and hardware-accelerated layers — all known failure modes of `html2canvas`. The cost is scroll-stitch complexity, which is well-understood and ported below.
 
-### 2. Two capture primitives from Claude in Chrome
+### 2. Three capture primitives (updated after mss spike, 2026-06-11)
 
 - **`zoom` (region) for in-viewport element crops.** A spike confirmed `zoom`'s `region` is **CSS-pixel, viewport-relative**, returns an **element-exact** crop, at **~2× (near-retina) resolution**. So "crop to element" = scroll element into view → `zoom` to its `getBoundingClientRect`. No full capture, no Pillow crop. Padding/trim (below) = expand/shrink the region.
-- **`screenshot` (tiled) + Pillow stitch for full-page / tall-element / inner-scroll.** A spike confirmed plain `screenshot` is **page-only (no browser/OS chrome)** with **origin = viewport (0,0)** and **uniform scale**. Tiles are stitched in Python with DRAW's overlap correction.
+- **`mss` (server-side OS capture) + Pillow stitch for full-page / tall-element / inner-scroll.** A spike ([2026-06-11-mss-capture-spike.md](../superpowers/spikes/2026-06-11-mss-capture-spike.md)) confirmed `mss` is the correct primitive for the tile-stitch path. `mss` captures at **logical/CSS pixel resolution (S = 1.0)** — `getBoundingClientRect()` coordinates are used directly with no scale conversion. Chrome must be the foreground window; the capture sequence activates Chrome via AppleScript, grabs, then restores focus.
+- **`screenshot` (inline) for L2 vision analysis.** The `computer screenshot` action returns an image inline to the agent (no filesystem path). Suitable for the agent to view a page for analysis. Not usable for the stitch pipeline.
 
 ### 3. Scale is measured, never assumed — "page as ruler"
 
-`computer` screenshot is a **display-region capture**, so its pixel scale is a property of the monitor the Chrome window is on, not of the page. (Verified: a 1512-CSS-px viewport captured at 1485 px ≈ 0.982× on a scaled retina display; a lower-DPI extended display would differ; `× devicePixelRatio` would be wrong by ~2×.) Therefore:
+**For `mss` tiles:** scale S = 1.0 (logical pixels, no conversion). The `measure_scale` function still runs on the first tile as a sanity check and to handle multi-monitor edge cases — it should return ≈1.0 for mss. If it returns significantly different from 1.0, the window likely straddles two displays.
 
+**For `zoom` crops:** scale is ~2× (near-retina); applies measured S from the image width as before.
+
+**General rule:**
 ```
 S = capture_pixel_width / window.innerWidth
 ```
+Do **not** assume S from display DPI. Validate against height ratio; mismatch means window straddles two displays — abort and re-capture.
 
-measured from each capture sequence. Do **not** detect the display or query its DPI (brittle under multi-monitor, macOS scaled modes, and mid-run window drags). Validate `S` against `capture_pixel_height / window.innerHeight`; if they disagree, the window likely straddles two displays — abort and re-capture. `zoom` element crops need no calibration (CSS in, element out).
+### 4. Viewport screen coordinates for mss
 
-### 4. Division of labor
+`window.outerHeight` is always **0** in Chrome 100+ (privacy restriction). Use a calibration marker:
+
+1. Inject a marker at CSS (0, 0) via `javascript_tool`.
+2. Capture the full display with `mss`.
+3. Find the marker pixel cluster → `viewport_top_screen = cluster_y_min`.
+
+Then: `screen_x = window.screenX + css_x`, `screen_y = viewport_top_screen + css_y`. On the development machine: viewport top = screen y 155 (menu bar ≈ 25px + Chrome toolbar ≈ 130px). This is re-derived once per Chrome session.
+
+### 5. Division of labor
 
 - **Injected JS (`javascript_tool`)** — all page-context work, returning small JSON: measure rects (`getBoundingClientRect`), classify scroll mode, drive scrolling, hide obscuring elements, suppress scrollbars/rounding, wait for settle. (Ports from DRAW `content.js`.)
-- **`computer` `zoom` / `screenshot`** — the pixels.
+- **`mss` (Python MCP)** — OS-level screen grab for stitch tiles. In-process, no temp-file shell-out, ~10ms per viewport-sized region.
+- **`computer` `zoom`** — high-res element crops (inline, no disk).
 - **Python MCP (Pillow)** — crop from stitched images, stitch tiles with overlap correction, applying the measured `S`. (Ports from DRAW `clipUtils.js`.)
 
 ### 5. Frame, trim, and context-margin are three distinct operations
@@ -73,7 +87,7 @@ Three scroll-stitch paths to reproduce: **window/body** (scroll page, full tiles
 - Element evidence crops are one high-res `zoom` call — cheap and detailed.
 - Full-page / tall / inner-scroll go through scroll-tile-stitch with ported, battle-tested math.
 - The pipeline is **display-independent by construction** (measured `S`), which directly solves the multi-monitor/DPI problem.
-- **Open implementation spike:** `save_to_disk` returned an image inline plus an `ID`, not a confirmed filesystem path. Single `zoom` crops return inline (fine — one image). The many-tile stitch wants tiles on disk to avoid pushing N images through the agent context; whether `save_to_disk` gives the MCP server a readable path, or we need a fallback (configurable save dir, fewer/larger tiles, or accept inline), is tracked in [Issue #4](https://github.com/michaelblum/employer-brand-audits/issues/4).
+- **Capture primitive resolved:** `save_to_disk` was ruled out (no filesystem path returned). `mss` confirmed as the server-side tile-grab primitive (2026-06-11 spike). Issue #4 closed.
 - **V1 limitations (documented, acceptable for vertical employer-brand pages):** horizontal scroll (element wider than viewport) and two-axis inner-scroll are not handled. DRAW solved neither.
 
 ## Related
