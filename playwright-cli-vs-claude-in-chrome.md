@@ -225,10 +225,11 @@ normalization, lazy-content completeness, or audit readiness.
 After running the public-page matrix smoke, serve a local human review carousel:
 
 ```bash
-python3 scripts/playwright_cli_review_server.py artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+python3 scripts/playwright_cli_review_server.py artifacts/playwright-cli-public-page-matrix/latest/manifest.json --open
 ```
 
-Open:
+The `--open` flag opens the local review page in the system browser after the
+server starts. If the browser does not open automatically, open:
 
 ```text
 http://127.0.0.1:8765/

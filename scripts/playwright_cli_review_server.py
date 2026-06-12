@@ -8,6 +8,7 @@ import posixpath
 import shutil
 import sys
 import time
+import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -503,6 +504,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--host", default=DEFAULT_HOST, help="Host to bind")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Port to bind")
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        help="Open the local review URL in the system browser after the server starts",
+    )
     return parser.parse_args()
 
 
@@ -666,6 +672,8 @@ def main() -> int:
     print(f"[review-server] serving {manifest_path}")
     print(f"[review-server] open http://{host}:{port}/")
     print(f"[review-server] draft path: {server.draft_path}")
+    if args.open:
+        webbrowser.open(f"http://{host}:{port}/", new=2)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
