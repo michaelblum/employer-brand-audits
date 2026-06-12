@@ -232,6 +232,7 @@
       display: inline-block;
       user-select: none;
     }
+    .image-wrap[hidden] { display: none; }
     .image-wrap.centered {
       align-self: center;
       justify-self: center;
@@ -330,10 +331,29 @@
       background: var(--panel);
     }
     .segmented button {
+      width: 36px;
       height: 36px;
-      padding: 0 12px;
+      display: grid;
+      place-items: center;
+      padding: 0;
       border-radius: 0;
       color: var(--muted);
+    }
+    .tool-button svg,
+    .action-button.icon-only svg,
+    .artifact-type-icon svg {
+      width: 17px;
+      height: 17px;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .tool-button span {
+      font: 760 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: 0;
     }
     .segmented button.active {
       color: var(--ink);
@@ -507,6 +527,12 @@
       background: var(--panel-2);
       color: var(--ink);
     }
+    .action-button.icon-only {
+      width: 36px;
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+    }
     .action-button.primary { background: #2d6cdf; }
     .sidebar {
       min-width: 0;
@@ -624,10 +650,44 @@
     }
     .artifact-row.active { background: #17191f; }
     .row-title {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      align-items: center;
       gap: 10px;
       min-width: 0;
+    }
+    .artifact-type-icon {
+      width: 28px;
+      height: 28px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #18181b;
+    }
+    .artifact-type-icon.image {
+      color: #ff6b6b;
+      background: rgba(127, 29, 29, 0.26);
+      border-color: rgba(248, 113, 113, 0.28);
+    }
+    .artifact-type-icon.markdown {
+      color: #6ea8ff;
+      background: rgba(30, 64, 175, 0.24);
+      border-color: rgba(96, 165, 250, 0.3);
+    }
+    .artifact-type-icon.text {
+      color: #f4c56a;
+      background: rgba(120, 83, 20, 0.22);
+      border-color: rgba(251, 191, 36, 0.25);
+    }
+    .artifact-type-icon.log {
+      color: #c084fc;
+      background: rgba(88, 28, 135, 0.22);
+      border-color: rgba(192, 132, 252, 0.25);
+    }
+    .artifact-type-icon.unknown {
+      color: #a1a1aa;
+      background: #18181b;
     }
     .name {
       min-width: 0;
