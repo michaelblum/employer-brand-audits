@@ -78,6 +78,10 @@ HTML = """<!doctype html>
       background: var(--bar);
       border-bottom: 1px solid var(--line);
     }
+    .toolbar.primary {
+      width: 100%;
+      z-index: 90;
+    }
     .toolbar.secondary {
       height: 56px;
       justify-content: space-between;
@@ -106,6 +110,8 @@ HTML = """<!doctype html>
       border: 1px solid var(--line);
     }
     .artifact-title {
+      flex: 0 1 auto;
+      max-width: min(56vw, 780px);
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -118,9 +124,10 @@ HTML = """<!doctype html>
       color: var(--muted);
       font-weight: 500;
     }
+    .top-spacer { flex: 1; }
     .popover, .menu {
       position: absolute;
-      z-index: 40;
+      z-index: 120;
       min-width: 300px;
       max-width: min(520px, calc(100vw - 24px));
       max-height: min(520px, calc(100vh - 120px));
@@ -132,7 +139,7 @@ HTML = """<!doctype html>
       box-shadow: var(--shadow);
     }
     .popover[hidden], .menu[hidden] { display: none; }
-    .popover { left: 106px; top: 46px; }
+    .popover { left: 14px; top: 46px; }
     .menu { right: 58px; top: 44px; min-width: 210px; }
     .artifact-option, .menu button {
       width: 100%;
@@ -152,22 +159,90 @@ HTML = """<!doctype html>
       white-space: nowrap;
     }
     .shell {
-      height: calc(100vh - 108px);
+      height: calc(100vh - 52px);
       display: grid;
       grid-template-columns: minmax(0, 1fr) 360px;
       min-width: 0;
     }
     .shell.sidebar-hidden { grid-template-columns: minmax(0, 1fr) 0; }
     .shell.sidebar-hidden .sidebar { display: none; }
+    .stage-column {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 56px minmax(0, 1fr);
+    }
     .stage {
       position: relative;
       min-width: 0;
+      min-height: 0;
       overflow: auto;
       display: grid;
       place-items: start center;
       padding: 32px;
       background: #101012;
     }
+    .image-controls {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .dimension-readout {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .fit-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .fit-button {
+      height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .zoom-control {
+      display: grid;
+      grid-template-columns: 74px 24px;
+      align-items: center;
+      height: 38px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--panel);
+    }
+    .zoom-control input {
+      width: 74px;
+      height: 38px;
+      border: 0;
+      outline: 0;
+      padding: 0 8px;
+      color: var(--ink);
+      background: transparent;
+      font: inherit;
+      text-align: right;
+    }
+    .zoom-steps {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      height: 38px;
+      border-left: 1px solid var(--line);
+    }
+    .zoom-steps button {
+      width: 24px;
+      height: 19px;
+      border-radius: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1;
+    }
+    .zoom-steps button + button { border-top: 1px solid var(--line); }
     .image-wrap {
       position: relative;
       display: inline-block;
@@ -175,7 +250,8 @@ HTML = """<!doctype html>
     }
     .image-wrap img {
       display: block;
-      max-width: min(100%, 1280px);
+      width: auto;
+      max-width: none;
       height: auto;
       background: #000;
       box-shadow: 0 0 0 1px #27364d, 0 16px 40px rgba(0, 0, 0, 0.42);
@@ -186,6 +262,22 @@ HTML = """<!doctype html>
       background: var(--selection);
       pointer-events: none;
     }
+    .hover-marker {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: #1f7cff;
+      color: #fff;
+      font-size: 13px;
+      box-shadow: 0 0 0 3px rgba(31, 124, 255, 0.24), 0 8px 20px rgba(0, 0, 0, 0.35);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 4;
+    }
+    .hover-marker[hidden] { display: none; }
     .comment-popover {
       position: fixed;
       z-index: 50;
@@ -253,10 +345,12 @@ HTML = """<!doctype html>
       margin-left: 14px;
       padding: 8px 0 8px 10px;
       border-left: 2px solid var(--line);
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
-      align-items: center;
+      cursor: grab;
+    }
+    .annotation:hover { border-left-color: var(--accent); }
+    .annotation.dragging {
+      opacity: 0.45;
+      cursor: grabbing;
     }
     .annotation-text {
       min-width: 0;
@@ -264,18 +358,6 @@ HTML = """<!doctype html>
       text-overflow: ellipsis;
       white-space: nowrap;
       color: var(--accent);
-    }
-    .annotation-tools {
-      display: flex;
-      gap: 4px;
-      justify-content: flex-end;
-    }
-    .annotation-tools button {
-      width: 28px;
-      height: 28px;
-      display: grid;
-      place-items: center;
-      color: var(--muted);
     }
     .toast {
       position: fixed;
@@ -298,6 +380,7 @@ HTML = """<!doctype html>
     }
     @media (max-width: 900px) {
       .shell { grid-template-columns: 1fr; }
+      .stage-column { min-height: 64vh; }
       .sidebar {
         height: 36vh;
         border-left: 0;
@@ -308,14 +391,13 @@ HTML = """<!doctype html>
   </style>
 </head>
 <body>
-  <div class="toolbar">
-    <button class="icon-button" id="prev" type="button" title="Previous artifact">‹</button>
+  <div class="toolbar primary">
     <button class="overview-button" id="overview" type="button"><span>☰</span><span>Overview</span></button>
+    <button class="icon-button" id="prev" type="button" title="Previous artifact">‹</button>
+    <div class="artifact-title" id="artifact-title"></div>
     <button class="icon-button" id="next" type="button" title="Next artifact">›</button>
     <div class="popover" id="overview-popover" hidden></div>
-  </div>
-  <div class="toolbar secondary">
-    <div class="artifact-title" id="artifact-title"></div>
+    <div class="top-spacer"></div>
     <div class="group">
       <button class="icon-button" id="menu-button" type="button" title="Artifact menu">⋮</button>
       <div class="menu" id="artifact-menu" hidden>
@@ -326,22 +408,41 @@ HTML = """<!doctype html>
     </div>
   </div>
   <main class="shell" id="shell">
-    <section class="stage" id="stage">
-      <div class="image-wrap" id="image-wrap">
-        <img id="artifact-image" alt="" draggable="false">
-        <div class="selection" id="selection" hidden></div>
-      </div>
-      <div class="comment-popover" id="comment-popover" hidden>
-        <textarea id="comment-text" placeholder="Leave a comment"></textarea>
-        <div class="comment-actions">
-          <button class="icon-button" id="dictate" type="button" title="Dictate">♬</button>
-          <div class="group">
-            <button class="action-button" id="cancel-comment" type="button">Cancel</button>
-            <button class="action-button primary" id="add-comment" type="button">Add Comment</button>
+    <div class="stage-column">
+      <div class="toolbar secondary">
+        <div class="dimension-readout" id="dimension-readout"></div>
+        <div class="image-controls">
+          <div class="fit-group">
+            <button class="fit-button" id="fit-width" type="button">Fit W</button>
+            <button class="fit-button" id="fit-height" type="button">Fit H</button>
+          </div>
+          <div class="zoom-control" id="zoom-control">
+            <input id="zoom-input" type="text" inputmode="numeric" aria-label="Zoom percentage">
+            <div class="zoom-steps">
+              <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+              <button id="zoom-out" type="button" aria-label="Zoom out">-</button>
+            </div>
           </div>
         </div>
       </div>
-    </section>
+      <section class="stage" id="stage">
+        <div class="image-wrap" id="image-wrap">
+          <img id="artifact-image" alt="" draggable="false">
+          <div class="selection" id="selection" hidden></div>
+          <div class="hover-marker" id="hover-marker" hidden>💡</div>
+        </div>
+        <div class="comment-popover" id="comment-popover" hidden>
+          <textarea id="comment-text" placeholder="Leave a comment"></textarea>
+          <div class="comment-actions">
+            <button class="icon-button" id="dictate" type="button" title="Dictate">🎙</button>
+            <div class="group">
+              <button class="action-button" id="secondary-comment-action" type="button">Cancel</button>
+              <button class="action-button primary" id="primary-comment-action" type="button">Add Comment</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
     <aside class="sidebar" id="sidebar"></aside>
   </main>
   <div class="toast" id="toast"></div>
@@ -352,7 +453,11 @@ HTML = """<!doctype html>
       index: 0,
       drag: null,
       pendingRect: null,
+      editorMode: "create",
+      editing: null,
       sidebarVisible: true,
+      zoomPercent: 100,
+      zoomMode: "fit-width",
     };
     const $ = (id) => document.getElementById(id);
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -360,6 +465,8 @@ HTML = """<!doctype html>
     }[char]));
     const artifact = () => app.collection.artifacts[app.index];
     const artifactAnnotations = (id) => app.annotations[id] || [];
+    const artifactIndexById = (id) => app.collection.artifacts.findIndex((item) => item.id === id);
+    const annotationById = (artifactId, annotationId) => artifactAnnotations(artifactId).find((note) => note.id === annotationId);
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const formatTime = (epoch) => {
       if (!epoch) return "";
@@ -388,9 +495,51 @@ HTML = """<!doctype html>
       if (!response.ok) showToast("Annotation sync failed");
     }
 
+    function clampZoom(value) {
+      return Math.min(400, Math.max(10, Math.round(Number(value) || 100)));
+    }
+
+    function applyZoom(value, mode = "manual") {
+      const image = $("artifact-image");
+      app.zoomPercent = clampZoom(value);
+      app.zoomMode = mode;
+      $("zoom-input").value = `${app.zoomPercent}%`;
+      if (image.naturalWidth) {
+        image.style.width = `${Math.max(1, Math.round(image.naturalWidth * app.zoomPercent / 100))}px`;
+      }
+      if (app.editing) {
+        placeSelectionForRect(app.editing.rect);
+        placePopoverForRect(app.editing.rect);
+      }
+    }
+
+    function fitWidth() {
+      const image = $("artifact-image");
+      const stage = $("stage");
+      if (!image.naturalWidth) return;
+      applyZoom(((stage.clientWidth - 64) / image.naturalWidth) * 100, "fit-width");
+    }
+
+    function fitHeight() {
+      const image = $("artifact-image");
+      const stage = $("stage");
+      if (!image.naturalHeight) return;
+      applyZoom(((stage.clientHeight - 64) / image.naturalHeight) * 100, "fit-height");
+    }
+
+    function updateDimensionReadout() {
+      const item = artifact();
+      const dimensions = item.dimensions || {};
+      const width = dimensions.width || $("artifact-image").naturalWidth || "unknown";
+      const height = dimensions.height || $("artifact-image").naturalHeight || "unknown";
+      $("dimension-readout").textContent = `${width} x ${height} px`;
+    }
+
     function setArtifact(index) {
       const count = app.collection.artifacts.length;
       app.index = (index + count) % count;
+      closeEditor();
+      hideAnnotationMarker();
       render();
     }
 
@@ -406,10 +555,25 @@ HTML = """<!doctype html>
     function renderImage() {
       const item = artifact();
       const image = $("artifact-image");
+      $("selection").hidden = true;
+      $("hover-marker").hidden = true;
+      $("comment-popover").hidden = true;
+      updateDimensionReadout();
+      image.onload = () => {
+        updateDimensionReadout();
+        if (app.zoomMode === "fit-height") {
+          fitHeight();
+        } else if (app.zoomMode === "fit-width") {
+          fitWidth();
+        } else {
+          applyZoom(app.zoomPercent, "manual");
+        }
+      };
       image.src = artifactUrl(item);
       image.alt = item.name;
-      $("selection").hidden = true;
-      $("comment-popover").hidden = true;
+      if (image.complete && image.naturalWidth) {
+        image.onload();
+      }
     }
 
     function renderOverview() {
@@ -432,20 +596,15 @@ HTML = """<!doctype html>
         const notes = artifactAnnotations(item.id);
         const annotationHtml = notes.length
           ? notes.map((note) => `
-            <div class="annotation" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
+            <div class="annotation" draggable="true" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
               <div class="annotation-text" title="${escapeHtml(note.comment)}">${escapeHtml(note.comment)}</div>
-              <div class="annotation-tools">
-                <button type="button" data-action="edit" title="Edit">✎</button>
-                <button type="button" data-action="delete" title="Delete">⌫</button>
-              </div>
             </div>
           `).join("")
-          : `<div class="small">No annotations</div>`;
+          : "";
         return `
           <div class="artifact-row ${index === app.index ? "active" : ""}" data-index="${index}">
             <div class="row-title">
               <div class="name">${escapeHtml(item.name)}</div>
-              <div class="small">${notes.length}</div>
             </div>
             ${annotationHtml}
           </div>
@@ -453,53 +612,47 @@ HTML = """<!doctype html>
       }).join("");
       $("sidebar").querySelectorAll(".artifact-row[data-index]").forEach((row) => {
         row.addEventListener("click", (event) => {
-          if (event.target.closest(".annotation-tools")) return;
+          if (event.target.closest(".annotation")) return;
           setArtifact(Number(row.dataset.index));
         });
       });
-      $("sidebar").querySelectorAll("[data-action='delete']").forEach((button) => {
-        button.addEventListener("click", async (event) => {
+      $("sidebar").querySelectorAll(".annotation").forEach((row) => {
+        row.addEventListener("mouseenter", () => showAnnotationMarker(row.dataset.artifactId, row.dataset.annotationId));
+        row.addEventListener("mouseleave", hideAnnotationMarker);
+        row.addEventListener("click", (event) => {
           event.stopPropagation();
-          const row = button.closest(".annotation");
-          const id = row.dataset.artifactId;
-          const noteId = row.dataset.annotationId;
-          app.annotations[id] = artifactAnnotations(id).filter((note) => note.id !== noteId);
+          selectAnnotation(row.dataset.artifactId, row.dataset.annotationId);
+        });
+        row.addEventListener("dragstart", (event) => {
+          row.classList.add("dragging");
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", JSON.stringify({
+            artifactId: row.dataset.artifactId,
+            annotationId: row.dataset.annotationId,
+          }));
+        });
+        row.addEventListener("dragend", () => row.classList.remove("dragging"));
+        row.addEventListener("dragover", (event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+        });
+        row.addEventListener("drop", async (event) => {
+          event.preventDefault();
+          const targetArtifactId = row.dataset.artifactId;
+          const targetAnnotationId = row.dataset.annotationId;
+          const payload = JSON.parse(event.dataTransfer.getData("text/plain") || "{}");
+          if (payload.artifactId !== targetArtifactId || payload.annotationId === targetAnnotationId) return;
+          const notes = [...artifactAnnotations(targetArtifactId)];
+          const from = notes.findIndex((note) => note.id === payload.annotationId);
+          const to = notes.findIndex((note) => note.id === targetAnnotationId);
+          if (from < 0 || to < 0) return;
+          const [moved] = notes.splice(from, 1);
+          notes.splice(to, 0, moved);
+          app.annotations[targetArtifactId] = notes;
           await syncAnnotations();
           renderSidebar();
         });
       });
-      $("sidebar").querySelectorAll("[data-action='edit']").forEach((button) => {
-        button.addEventListener("click", (event) => {
-          event.stopPropagation();
-          editAnnotation(button.closest(".annotation"));
-        });
-      });
-    }
-
-    function editAnnotation(row) {
-      const id = row.dataset.artifactId;
-      const noteId = row.dataset.annotationId;
-      const note = artifactAnnotations(id).find((item) => item.id === noteId);
-      row.innerHTML = `
-        <div class="edit-box">
-          <textarea>${escapeHtml(note.comment)}</textarea>
-          <div class="comment-actions">
-            <span></span>
-            <div class="group">
-              <button class="action-button" type="button" data-edit="cancel">Cancel</button>
-              <button class="action-button primary" type="button" data-edit="save">Save</button>
-            </div>
-          </div>
-        </div>
-      `;
-      row.querySelector("[data-edit='cancel']").addEventListener("click", renderSidebar);
-      row.querySelector("[data-edit='save']").addEventListener("click", async () => {
-        note.comment = row.querySelector("textarea").value.trim();
-        note.updated_at_epoch = Math.floor(Date.now() / 1000);
-        await syncAnnotations();
-        renderSidebar();
-      });
-      row.querySelector("textarea").focus();
     }
 
     function renderShell() {
@@ -533,6 +686,53 @@ HTML = """<!doctype html>
       selection.hidden = false;
     }
 
+    function displayRectFromNatural(rect) {
+      const image = $("artifact-image");
+      const imageRect = image.getBoundingClientRect();
+      const sx = imageRect.width / image.naturalWidth;
+      const sy = imageRect.height / image.naturalHeight;
+      return {
+        x: rect.x * sx,
+        y: rect.y * sy,
+        width: rect.width * sx,
+        height: rect.height * sy,
+      };
+    }
+
+    function placeSelectionForRect(rect) {
+      placeSelection(displayRectFromNatural(rect));
+    }
+
+    function placePopoverForRect(rect) {
+      openComment(displayRectFromNatural(rect));
+    }
+
+    function placeMarkerForRect(rect) {
+      const marker = $("hover-marker");
+      const displayRect = displayRectFromNatural(rect);
+      const imageRect = $("artifact-image").getBoundingClientRect();
+      const wrapRect = $("image-wrap").getBoundingClientRect();
+      marker.style.left = `${displayRect.x + displayRect.width / 2 + imageRect.left - wrapRect.left}px`;
+      marker.style.top = `${displayRect.y + displayRect.height / 2 + imageRect.top - wrapRect.top}px`;
+      marker.hidden = false;
+    }
+
+    function hideAnnotationMarker() {
+      $("hover-marker").hidden = true;
+    }
+
+    function showAnnotationMarker(artifactId, annotationId) {
+      const note = annotationById(artifactId, annotationId);
+      if (!note) return;
+      const index = artifactIndexById(artifactId);
+      if (index !== app.index) {
+        setArtifact(index);
+        window.requestAnimationFrame(() => placeMarkerForRect(note.rect));
+        return;
+      }
+      placeMarkerForRect(note.rect);
+    }
+
     function naturalRect(displayRect) {
       const image = $("artifact-image");
       const imageRect = image.getBoundingClientRect();
@@ -553,9 +753,48 @@ HTML = """<!doctype html>
       const top = Math.min(imageRect.top + displayRect.y, window.innerHeight - 190);
       popover.style.left = `${Math.max(14, left)}px`;
       popover.style.top = `${Math.max(14, top)}px`;
-      $("comment-text").value = "";
       popover.hidden = false;
       $("comment-text").focus();
+    }
+
+    function openCreateEditor(displayRect) {
+      app.editorMode = "create";
+      app.editing = null;
+      $("comment-text").value = "";
+      $("secondary-comment-action").textContent = "Cancel";
+      $("primary-comment-action").textContent = "Add Comment";
+      openComment(displayRect);
+    }
+
+    function openExistingEditor(note) {
+      app.editorMode = "edit";
+      app.editing = note;
+      $("comment-text").value = note.comment;
+      $("secondary-comment-action").textContent = "Delete";
+      $("primary-comment-action").textContent = "Update";
+      placeSelectionForRect(note.rect);
+      placePopoverForRect(note.rect);
+    }
+
+    function closeEditor() {
+      app.pendingRect = null;
+      app.editing = null;
+      app.editorMode = "create";
+      $("comment-popover").hidden = true;
+      $("selection").hidden = true;
+    }
+
+    function selectAnnotation(artifactId, annotationId) {
+      const index = artifactIndexById(artifactId);
+      const note = annotationById(artifactId, annotationId);
+      if (index < 0 || !note) return;
+      if (index !== app.index) {
+        app.index = index;
+        render();
+        window.requestAnimationFrame(() => openExistingEditor(note));
+        return;
+      }
+      openExistingEditor(note);
     }
 
     function startDrag(event) {
@@ -594,12 +833,22 @@ HTML = """<!doctype html>
         return;
       }
       app.pendingRect = naturalRect(displayRect);
-      openComment(displayRect);
+      openCreateEditor(displayRect);
     }
 
-    async function addComment() {
+    async function commitEditor() {
       const comment = $("comment-text").value.trim();
-      if (!comment || !app.pendingRect) return;
+      if (!comment) return;
+      if (app.editorMode === "edit" && app.editing) {
+        app.editing.comment = comment;
+        app.editing.updated_at_epoch = Math.floor(Date.now() / 1000);
+        closeEditor();
+        await syncAnnotations();
+        renderSidebar();
+        showToast("Comment updated");
+        return;
+      }
+      if (!app.pendingRect) return;
       const item = artifact();
       const note = {
         id: `${item.id}-${Date.now().toString(36)}`,
@@ -609,12 +858,24 @@ HTML = """<!doctype html>
         created_at_epoch: Math.floor(Date.now() / 1000),
       };
       app.annotations[item.id] = [...artifactAnnotations(item.id), note];
-      app.pendingRect = null;
-      $("comment-popover").hidden = true;
-      $("selection").hidden = true;
+      closeEditor();
       await syncAnnotations();
       renderSidebar();
       showToast("Comment added");
+    }
+
+    async function secondaryEditorAction() {
+      if (app.editorMode === "edit" && app.editing) {
+        const artifactId = app.editing.artifact_id;
+        const noteId = app.editing.id;
+        app.annotations[artifactId] = artifactAnnotations(artifactId).filter((note) => note.id !== noteId);
+        closeEditor();
+        await syncAnnotations();
+        renderSidebar();
+        showToast("Comment deleted");
+        return;
+      }
+      closeEditor();
     }
 
     function setupDictation() {
@@ -649,14 +910,23 @@ HTML = """<!doctype html>
       });
       $("copy-artifact").addEventListener("click", () => copyText(JSON.stringify(artifact(), null, 2)));
       $("copy-path").addEventListener("click", () => copyText(artifact().path));
-      $("cancel-comment").addEventListener("click", () => {
-        app.pendingRect = null;
-        $("comment-popover").hidden = true;
-        $("selection").hidden = true;
+      $("secondary-comment-action").addEventListener("click", secondaryEditorAction);
+      $("primary-comment-action").addEventListener("click", commitEditor);
+      $("zoom-in").addEventListener("click", () => applyZoom(app.zoomPercent + 10));
+      $("zoom-out").addEventListener("click", () => applyZoom(app.zoomPercent - 10));
+      $("zoom-input").addEventListener("change", () => applyZoom($("zoom-input").value.replace("%", "")));
+      $("zoom-control").addEventListener("wheel", (event) => {
+        event.preventDefault();
+        applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
       });
-      $("add-comment").addEventListener("click", addComment);
+      $("fit-width").addEventListener("click", fitWidth);
+      $("fit-height").addEventListener("click", fitHeight);
       $("image-wrap").addEventListener("mousedown", startDrag);
       $("artifact-image").addEventListener("dragstart", (event) => event.preventDefault());
+      window.addEventListener("resize", () => {
+        if (app.zoomMode === "fit-width") fitWidth();
+        if (app.zoomMode === "fit-height") fitHeight();
+      });
       window.addEventListener("mousemove", moveDrag);
       window.addEventListener("mouseup", endDrag);
       document.addEventListener("keydown", (event) => {
@@ -665,8 +935,8 @@ HTML = """<!doctype html>
         if (event.key === "Escape") {
           $("overview-popover").hidden = true;
           $("artifact-menu").hidden = true;
-          $("comment-popover").hidden = true;
-          $("selection").hidden = true;
+          closeEditor();
+          hideAnnotationMarker();
         }
       });
       document.addEventListener("click", (event) => {
