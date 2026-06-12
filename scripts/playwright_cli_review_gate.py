@@ -285,6 +285,7 @@ def command_start(args: argparse.Namespace) -> int:
             print(f"pid={pid}")
             print(f"health={status}")
             print(f"annotation_state={url}api/annotation-state")
+            print(f"workbench_projection={url}api/workbench-projection")
         return 0
 
     if pid is not None:
@@ -328,6 +329,7 @@ def command_start(args: argparse.Namespace) -> int:
             "manifest": str(manifest_path.relative_to(REPO_ROOT)),
             "log": str(paths["log"].relative_to(REPO_ROOT)),
             "annotation_state_url": f"{url}api/annotation-state",
+            "workbench_projection_url": f"{url}api/workbench-projection",
             "started_at_epoch": int(time.time()),
         },
     )
@@ -354,6 +356,7 @@ def command_start(args: argparse.Namespace) -> int:
         print(f"health={status}")
         print(f"log={paths['log']}")
         print(f"annotation_state={url}api/annotation-state")
+        print(f"workbench_projection={url}api/workbench-projection")
     return 0
 
 
@@ -376,6 +379,7 @@ def status_payload(args: argparse.Namespace, manifest_path: Path) -> dict[str, A
         "manifest": str(manifest_path.relative_to(REPO_ROOT)),
         "log": str(paths["log"].relative_to(REPO_ROOT)),
         "annotation_state_url": f"{url.rstrip('/')}/api/annotation-state",
+        "workbench_projection_url": f"{url.rstrip('/')}/api/workbench-projection",
     }
 
 
@@ -466,6 +470,7 @@ def command_surface(args: argparse.Namespace) -> int:
     result: dict[str, Any] = {
         "url": payload["url"],
         "annotation_state_url": payload["annotation_state_url"],
+        "workbench_projection_url": payload["workbench_projection_url"],
         "server": {
             "pid": payload["pid"],
             "health": payload["health"],
@@ -491,6 +496,7 @@ def command_surface(args: argparse.Namespace) -> int:
     else:
         print(f"Artifact workbench: {result['url']}")
         print(f"annotation_state={result['annotation_state_url']}")
+        print(f"workbench_projection={result['workbench_projection_url']}")
         print(f"server_pid={result['server']['pid']} health={result['server']['health']}")
         print(
             "model="

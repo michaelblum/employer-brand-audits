@@ -15,6 +15,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+try:
+    from workbench_projection import project_matrix_manifest
+except ModuleNotFoundError:
+    from scripts.workbench_projection import project_matrix_manifest
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_HOST = "127.0.0.1"
@@ -272,6 +277,7 @@ class ReviewServer(ThreadingHTTPServer):
         self.manifest_path = manifest_path
         self.artifact_root = manifest_path.parent
         self.collection = build_collection(manifest_path)
+        self.workbench_projection = project_matrix_manifest(manifest_path)
         self.artifacts_by_id = {item["id"]: item for item in self.collection["artifacts"]}
         self.annotations: dict[str, list[dict[str, Any]]] = {
             item["id"]: [] for item in self.collection["artifacts"]
@@ -350,6 +356,9 @@ class ReviewHandler(BaseHTTPRequestHandler):
         if parsed.path in {"/api/annotation-state", "/api/collection"}:
             self.send_json(HTTPStatus.OK, self.server.annotation_state())
             return
+        if parsed.path == "/api/workbench-projection":
+            self.send_json(HTTPStatus.OK, self.server.workbench_projection)
+            return
         if parsed.path.startswith("/artifact/"):
             self.serve_artifact(parsed.path.removeprefix("/artifact/"))
             return
@@ -416,6 +425,7 @@ def main() -> int:
     print(f"[artifact-viewer] serving {manifest_path}")
     print(f"[artifact-viewer] open http://{host}:{port}/")
     print(f"[artifact-viewer] annotation state http://{host}:{port}/api/annotation-state")
+    print(f"[artifact-viewer] workbench projection http://{host}:{port}/api/workbench-projection")
     if args.open:
         webbrowser.open(f"http://{host}:{port}/", new=2)
     try:
