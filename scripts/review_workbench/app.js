@@ -25,6 +25,10 @@
       projectedArtifactsById: {},
       projectedStepsById: {},
       projectedSlotsByValue: {},
+      filters: {
+        stepId: null,
+        slot: null,
+      },
       viewerConfig: {
         ...DEFAULT_VIEWER_CONFIG,
         ...(window.WORKBENCH_VIEWER_CONFIG || {}),
@@ -75,6 +79,26 @@
       return new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     };
     const formatSlot = (value) => String(value || "").replace(/[._-]/g, " ");
+
+    function artifactMatchesFilters(item) {
+      const projected = projectedArtifact(item);
+      if (app.filters.stepId && projected?.produced_by_step_id !== app.filters.stepId) return false;
+      if (app.filters.slot && projected?.slot !== app.filters.slot) return false;
+      return true;
+    }
+
+    function visibleArtifactIndexes() {
+      const indexes = [];
+      for (let index = 0; index < app.collection.artifacts.length; index += 1) {
+        if (artifactMatchesFilters(app.collection.artifacts[index])) indexes.push(index);
+      }
+      return indexes;
+    }
+
+    function ensureVisibleArtifactSelected() {
+      const indexes = visibleArtifactIndexes();
+      if (indexes.length && !indexes.includes(app.index)) app.index = indexes[0];
+    }
 
     function indexProjection(payload) {
       app.workbenchProjection = payload && typeof payload === "object" ? payload : null;
@@ -379,7 +403,11 @@
     }
 
     function move(delta) {
-      setArtifact(app.index + delta);
+      const indexes = visibleArtifactIndexes();
+      if (!indexes.length) return;
+      const current = indexes.includes(app.index) ? indexes.indexOf(app.index) : 0;
+      const next = indexes[(current + delta + indexes.length) % indexes.length];
+      setArtifact(next);
     }
 
     function renderTitle() {
@@ -530,12 +558,15 @@
     }
 
     function renderOverview() {
-      $("overview-popover").innerHTML = app.collection.artifacts.map((item, index) => `
+      $("overview-popover").innerHTML = visibleArtifactIndexes().map((index) => {
+        const item = app.collection.artifacts[index];
+        return `
         <button class="artifact-option ${index === app.index ? "active" : ""}" type="button" data-index="${index}">
           <span>${escapeHtml(item.name)}</span>
           <span class="small">${escapeHtml(artifactProjectionLine(item))}</span>
         </button>
-      `).join("");
+      `;
+      }).join("");
       $("overview-popover").querySelectorAll("[data-index]").forEach((button) => {
         button.addEventListener("click", () => {
           $("overview-popover").hidden = true;
@@ -556,6 +587,46 @@
       return `${parts.join(" · ")} · ${item.path}`;
     }
 
+    function filterSteps() {
+      const stepIds = [...new Set(
+        app.collection.artifacts
+          .map((item) => projectedArtifact(item)?.produced_by_step_id)
+          .filter(Boolean)
+      )];
+      return stepIds
+        .map((stepId) => app.projectedStepsById[stepId])
+        .filter(Boolean)
+        .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+    }
+
+    function filterSlots() {
+      const slotValues = [...new Set(
+        app.collection.artifacts
+          .map((item) => projectedArtifact(item)?.slot)
+          .filter(Boolean)
+      )].sort();
+      return slotValues.map((slot) => app.projectedSlotsByValue[slot] || { value: slot, label: formatSlot(slot) });
+    }
+
+    function filterSummaryText() {
+      const total = app.collection.artifacts.length;
+      const visible = visibleArtifactIndexes().length;
+      return visible === total ? `${total} artifacts` : `${visible} of ${total} artifacts`;
+    }
+
+    function setWorkbenchFilter(kind, value) {
+      if (kind === "step") {
+        app.filters.stepId = app.filters.stepId === value ? null : value;
+      }
+      if (kind === "slot") {
+        app.filters.slot = app.filters.slot === value ? null : value;
+      }
+      ensureVisibleArtifactSelected();
+      closeEditor();
+      hideAnnotationMarker();
+      render();
+    }
+
     function renderWorkflowHeader() {
       const workflow = app.workbenchProjection?.workflow;
       if (!workflow) {
@@ -568,6 +639,8 @@
           .map((item) => projectedArtifact(item)?.slot)
           .filter(Boolean)
       )].sort();
+      const steps = filterSteps();
+      const slots = filterSlots();
       return `
         <div class="workflow-summary">
           <div class="summary-kicker">${escapeHtml(workflow.status || "unknown")}</div>
@@ -577,15 +650,31 @@
             <span>${escapeHtml(String(reviewableProjectionCount))} reviewable</span>
             <span>${escapeHtml(String(slotValues.length))} slots</span>
           </div>
-          <div class="slot-strip">
-            ${slotValues.map((slot) => `<span>${escapeHtml(formatSlot(slot))}</span>`).join("")}
+          <div class="filter-line">
+            <span>${escapeHtml(filterSummaryText())}</span>
+            ${(app.filters.stepId || app.filters.slot) ? '<button type="button" data-filter-kind="clear">Clear</button>' : ""}
+          </div>
+          <div class="filter-group" aria-label="Workflow step filters">
+            ${steps.map((step) => `
+              <button class="${step.id === app.filters.stepId ? "active" : ""}" type="button" data-filter-kind="step" data-filter-value="${escapeHtml(step.id)}">
+                ${escapeHtml(String(step.name || step.id).replace(/^Capture /, ""))}
+              </button>
+            `).join("")}
+          </div>
+          <div class="filter-group" aria-label="Slot filters">
+            ${slots.map((slot) => `
+              <button class="${slot.value === app.filters.slot ? "active" : ""}" type="button" data-filter-kind="slot" data-filter-value="${escapeHtml(slot.value)}">
+                ${escapeHtml(slot.label || formatSlot(slot.value))}
+              </button>
+            `).join("")}
           </div>
         </div>
       `;
     }
 
     function renderSidebar() {
-      const artifactRows = app.collection.artifacts.map((item, index) => {
+      const artifactRows = visibleArtifactIndexes().map((index) => {
+        const item = app.collection.artifacts[index];
         const notes = artifactAnnotations(item.id);
         const projected = projectedArtifact(item);
         const step = projectedStep(item);
@@ -615,7 +704,21 @@
           </div>
         `;
       }).join("");
-      $("sidebar").innerHTML = renderWorkflowHeader() + artifactRows;
+      $("sidebar").innerHTML = renderWorkflowHeader()
+        + (artifactRows || '<div class="empty-filter">No artifacts match the active filters.</div>');
+      $("sidebar").querySelectorAll("[data-filter-kind]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (button.dataset.filterKind === "clear") {
+            app.filters.stepId = null;
+            app.filters.slot = null;
+            ensureVisibleArtifactSelected();
+            render();
+            return;
+          }
+          setWorkbenchFilter(button.dataset.filterKind, button.dataset.filterValue);
+        });
+      });
       $("sidebar").querySelectorAll(".artifact-row[data-index]").forEach((row) => {
         row.addEventListener("click", (event) => {
           if (event.target.closest(".annotation")) return;

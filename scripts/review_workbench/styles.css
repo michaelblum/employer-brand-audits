@@ -573,6 +573,49 @@
       background: #202024;
       font-size: 11px;
     }
+    .filter-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .filter-line button {
+      min-width: 52px;
+      height: 28px;
+      padding: 0 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: #cbd5e1;
+      background: #19191d;
+      font-size: 12px;
+    }
+    .filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .filter-group button {
+      max-width: 100%;
+      min-height: 26px;
+      padding: 4px 8px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      color: var(--muted);
+      background: #202024;
+      font-size: 11px;
+      line-height: 1.2;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .filter-group button.active {
+      border-color: #315f9f;
+      color: #e5edf8;
+      background: #172033;
+    }
     .artifact-row {
       padding: 14px 16px;
       border-bottom: 1px solid var(--line);
@@ -609,6 +652,11 @@
       color: #cbd5e1;
       background: #161b24;
       font-size: 11px;
+    }
+    .empty-filter {
+      padding: 18px 16px;
+      color: var(--muted);
+      font-size: 12px;
     }
     .annotation {
       margin-left: 14px;
