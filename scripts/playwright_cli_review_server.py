@@ -194,28 +194,31 @@ HTML = """<!doctype html>
       font-size: 12px;
       white-space: nowrap;
     }
-    .fit-group {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .fit-button {
-      height: 32px;
-      padding: 0 10px;
-      border: 1px solid var(--line);
-      background: var(--panel);
-      color: var(--muted);
-      font-size: 12px;
-    }
     .zoom-control {
       display: grid;
-      grid-template-columns: 74px 24px;
+      grid-template-columns: 34px 74px 24px;
       align-items: center;
       height: 38px;
       overflow: hidden;
       border: 1px solid var(--line);
       border-radius: 9px;
       background: var(--panel);
+    }
+    .zoom-fit {
+      width: 34px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-right: 1px solid var(--line);
+      border-radius: 0;
+      color: var(--muted);
+    }
+    .zoom-fit svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
     }
     .zoom-control input {
       width: 74px;
@@ -247,6 +250,10 @@ HTML = """<!doctype html>
       position: relative;
       display: inline-block;
       user-select: none;
+    }
+    .image-wrap.centered {
+      align-self: center;
+      justify-self: center;
     }
     .image-wrap img {
       display: block;
@@ -289,6 +296,9 @@ HTML = """<!doctype html>
       box-shadow: var(--shadow);
     }
     .comment-popover[hidden] { display: none; }
+    .dictation-field {
+      position: relative;
+    }
     .comment-popover textarea, .edit-box textarea {
       width: 100%;
       min-height: 64px;
@@ -300,9 +310,87 @@ HTML = """<!doctype html>
       padding: 10px 12px;
       font: inherit;
     }
+    .dictation-field textarea {
+      padding-right: 74px;
+    }
+    .dictation-control {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      min-width: 52px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #171a20;
+      color: var(--muted);
+    }
+    .dictation-control:hover { color: var(--ink); }
+    .dictation-control.recording {
+      border-color: rgba(110, 168, 255, 0.72);
+      color: #dbeafe;
+      background: #1a2942;
+    }
+    .dictation-control.error {
+      border-color: #78350f;
+      color: #fed7aa;
+      background: #2b1709;
+    }
+    .dictation-icon {
+      width: 15px;
+      height: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dictation-icon svg {
+      width: 15px;
+      height: 15px;
+      display: block;
+      fill: currentColor;
+    }
+    .dictation-wave {
+      display: none;
+      align-items: center;
+      gap: 2px;
+      height: 14px;
+    }
+    .dictation-control.recording .dictation-wave,
+    .dictation-control.transcribing .dictation-wave {
+      display: inline-flex;
+    }
+    .dictation-wave i {
+      width: 2px;
+      height: 7px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.95;
+      transform-origin: center bottom;
+      animation: dictation-wave 0.9s ease-in-out infinite;
+    }
+    .dictation-wave i:nth-child(2) {
+      animation-delay: 0.15s;
+      height: 11px;
+    }
+    .dictation-wave i:nth-child(3) {
+      animation-delay: 0.3s;
+      height: 8px;
+    }
+    .dictation-wave i:nth-child(4) {
+      animation-delay: 0.45s;
+      height: 10px;
+    }
+    @keyframes dictation-wave {
+      0%, 100% { transform: scaleY(0.48); opacity: 0.54; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
     .comment-actions {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-end;
       align-items: center;
       gap: 8px;
       margin-top: 10px;
@@ -412,11 +500,17 @@ HTML = """<!doctype html>
       <div class="toolbar secondary">
         <div class="dimension-readout" id="dimension-readout"></div>
         <div class="image-controls">
-          <div class="fit-group">
-            <button class="fit-button" id="fit-width" type="button">Fit W</button>
-            <button class="fit-button" id="fit-height" type="button">Fit H</button>
-          </div>
           <div class="zoom-control" id="zoom-control">
+            <button class="zoom-fit" id="zoom-fit" type="button" aria-label="Smart fit" title="Smart fit">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+                <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
+                <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+                <path d="M9 12h6"></path>
+                <path d="M12 9v6"></path>
+              </svg>
+            </button>
             <input id="zoom-input" type="text" inputmode="numeric" aria-label="Zoom percentage">
             <div class="zoom-steps">
               <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
@@ -432,9 +526,18 @@ HTML = """<!doctype html>
           <div class="hover-marker" id="hover-marker" hidden>💡</div>
         </div>
         <div class="comment-popover" id="comment-popover" hidden>
-          <textarea id="comment-text" placeholder="Leave a comment"></textarea>
+          <div class="dictation-field">
+            <textarea id="comment-text" placeholder="Leave a comment"></textarea>
+            <button class="dictation-control" id="comment-dictation" type="button" aria-label="Start dictation" title="Start dictation">
+              <span class="dictation-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-4a1 1 0 1 1 2 0 7 7 0 0 1-6 6.92V20h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-3.08A7 7 0 0 1 5 10a1 1 0 1 1 2 0 5 5 0 0 0 10 0Z"></path>
+                </svg>
+              </span>
+              <span class="dictation-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            </button>
+          </div>
           <div class="comment-actions">
-            <button class="icon-button" id="dictate" type="button" title="Dictate">🎙</button>
             <div class="group">
               <button class="action-button" id="secondary-comment-action" type="button">Cancel</button>
               <button class="action-button primary" id="primary-comment-action" type="button">Add Comment</button>
@@ -455,9 +558,10 @@ HTML = """<!doctype html>
       pendingRect: null,
       editorMode: "create",
       editing: null,
+      activeMarker: null,
       sidebarVisible: true,
       zoomPercent: 100,
-      zoomMode: "fit-width",
+      zoomMode: "stage-fit",
     };
     const $ = (id) => document.getElementById(id);
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -499,6 +603,52 @@ HTML = """<!doctype html>
       return Math.min(400, Math.max(10, Math.round(Number(value) || 100)));
     }
 
+    function stageViewportSize() {
+      const stage = $("stage");
+      const style = window.getComputedStyle(stage);
+      const width = stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const height = stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      return {
+        width: Math.max(1, width),
+        height: Math.max(1, height),
+      };
+    }
+
+    function renderedImageSize(zoomPercent = app.zoomPercent) {
+      const image = $("artifact-image");
+      return {
+        width: image.naturalWidth * zoomPercent / 100,
+        height: image.naturalHeight * zoomPercent / 100,
+      };
+    }
+
+    function updateImageAlignment() {
+      const image = $("artifact-image");
+      if (!image.naturalWidth) return;
+      const stageSize = stageViewportSize();
+      const imageSize = renderedImageSize();
+      $("image-wrap").classList.toggle(
+        "centered",
+        imageSize.width <= stageSize.width && imageSize.height <= stageSize.height
+      );
+    }
+
+    function updateMooringOverlays() {
+      if (app.editing) {
+        placeSelectionForRect(app.editing.rect);
+        placePopoverForRect(app.editing.rect);
+      } else if (app.pendingRect && app.editorMode === "create" && !$("comment-popover").hidden) {
+        placeSelectionForRect(app.pendingRect);
+        placePopoverForRect(app.pendingRect);
+      }
+      if (app.activeMarker) {
+        const note = annotationById(app.activeMarker.artifactId, app.activeMarker.annotationId);
+        if (note && artifact().id === app.activeMarker.artifactId) {
+          placeMarkerForRect(note.rect);
+        }
+      }
+    }
+
     function applyZoom(value, mode = "manual") {
       const image = $("artifact-image");
       app.zoomPercent = clampZoom(value);
@@ -507,24 +657,36 @@ HTML = """<!doctype html>
       if (image.naturalWidth) {
         image.style.width = `${Math.max(1, Math.round(image.naturalWidth * app.zoomPercent / 100))}px`;
       }
-      if (app.editing) {
-        placeSelectionForRect(app.editing.rect);
-        placePopoverForRect(app.editing.rect);
+      updateImageAlignment();
+      updateMooringOverlays();
+    }
+
+    function stageFitZoom() {
+      const image = $("artifact-image");
+      if (!image.naturalWidth || !image.naturalHeight) return 100;
+      const stageSize = stageViewportSize();
+      const smallerThanStageAt100 =
+        image.naturalWidth <= stageSize.width && image.naturalHeight <= stageSize.height;
+      if (!smallerThanStageAt100) {
+        return Math.min(stageSize.width / image.naturalWidth, stageSize.height / image.naturalHeight) * 100;
       }
+      if (image.naturalWidth >= image.naturalHeight) {
+        return stageSize.width / image.naturalWidth * 100;
+      }
+      return stageSize.height / image.naturalHeight * 100;
     }
 
-    function fitWidth() {
+    function smartFit() {
       const image = $("artifact-image");
-      const stage = $("stage");
-      if (!image.naturalWidth) return;
-      applyZoom(((stage.clientWidth - 64) / image.naturalWidth) * 100, "fit-width");
-    }
-
-    function fitHeight() {
-      const image = $("artifact-image");
-      const stage = $("stage");
-      if (!image.naturalHeight) return;
-      applyZoom(((stage.clientHeight - 64) / image.naturalHeight) * 100, "fit-height");
+      if (!image.naturalWidth || !image.naturalHeight) return;
+      const stageSize = stageViewportSize();
+      const smallerThanStageAt100 =
+        image.naturalWidth <= stageSize.width && image.naturalHeight <= stageSize.height;
+      if (smallerThanStageAt100 && app.zoomMode !== "actual-size") {
+        applyZoom(100, "actual-size");
+        return;
+      }
+      applyZoom(stageFitZoom(), "stage-fit");
     }
 
     function updateDimensionReadout() {
@@ -533,6 +695,15 @@ HTML = """<!doctype html>
       const width = dimensions.width || $("artifact-image").naturalWidth || "unknown";
       const height = dimensions.height || $("artifact-image").naturalHeight || "unknown";
       $("dimension-readout").textContent = `${width} x ${height} px`;
+    }
+
+    function afterImageReady(callback) {
+      const image = $("artifact-image");
+      if (image.complete && image.naturalWidth) {
+        callback();
+        return;
+      }
+      image.addEventListener("load", callback, { once: true });
     }
 
     function setArtifact(index) {
@@ -561,10 +732,10 @@ HTML = """<!doctype html>
       updateDimensionReadout();
       image.onload = () => {
         updateDimensionReadout();
-        if (app.zoomMode === "fit-height") {
-          fitHeight();
-        } else if (app.zoomMode === "fit-width") {
-          fitWidth();
+        if (app.zoomMode === "stage-fit") {
+          applyZoom(stageFitZoom(), "stage-fit");
+        } else if (app.zoomMode === "actual-size") {
+          applyZoom(100, "actual-size");
         } else {
           applyZoom(app.zoomPercent, "manual");
         }
@@ -718,16 +889,19 @@ HTML = """<!doctype html>
     }
 
     function hideAnnotationMarker() {
+      app.activeMarker = null;
       $("hover-marker").hidden = true;
     }
 
     function showAnnotationMarker(artifactId, annotationId) {
       const note = annotationById(artifactId, annotationId);
       if (!note) return;
+      app.activeMarker = { artifactId, annotationId };
       const index = artifactIndexById(artifactId);
       if (index !== app.index) {
         setArtifact(index);
-        window.requestAnimationFrame(() => placeMarkerForRect(note.rect));
+        app.activeMarker = { artifactId, annotationId };
+        afterImageReady(() => window.requestAnimationFrame(() => placeMarkerForRect(note.rect)));
         return;
       }
       placeMarkerForRect(note.rect);
@@ -766,14 +940,34 @@ HTML = """<!doctype html>
       openComment(displayRect);
     }
 
+    function scrollRectIntoView(rect) {
+      const image = $("artifact-image");
+      const wrap = $("image-wrap");
+      const stage = $("stage");
+      if (!image.naturalWidth) return;
+      const displayRect = displayRectFromNatural(rect);
+      const targetLeft = wrap.offsetLeft + displayRect.x + displayRect.width / 2;
+      const targetTop = wrap.offsetTop + displayRect.y + displayRect.height / 2;
+      stage.scrollTo({
+        left: Math.max(0, targetLeft - stage.clientWidth / 2),
+        top: Math.max(0, targetTop - stage.clientHeight / 2),
+        behavior: "auto",
+      });
+    }
+
     function openExistingEditor(note) {
       app.editorMode = "edit";
       app.editing = note;
       $("comment-text").value = note.comment;
       $("secondary-comment-action").textContent = "Delete";
       $("primary-comment-action").textContent = "Update";
-      placeSelectionForRect(note.rect);
-      placePopoverForRect(note.rect);
+      afterImageReady(() => {
+        scrollRectIntoView(note.rect);
+        window.requestAnimationFrame(() => {
+          placeSelectionForRect(note.rect);
+          placePopoverForRect(note.rect);
+        });
+      });
     }
 
     function closeEditor() {
@@ -878,19 +1072,88 @@ HTML = """<!doctype html>
       closeEditor();
     }
 
-    function setupDictation() {
-      $("dictate").addEventListener("click", () => {
+    function insertTextAtCursor(input, value) {
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      const before = input.value.slice(0, start);
+      const after = input.value.slice(end);
+      const spacer = before && !before.endsWith(" ") ? " " : "";
+      const text = `${spacer}${value}`.trimStart();
+      input.value = `${before}${text}${after}`;
+      const caret = before.length + text.length;
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    }
+
+    function setupDictationControl({ buttonId, inputId }) {
+      const button = $(buttonId);
+      const input = $(inputId);
+      let recognition = null;
+      let state = "idle";
+
+      const setState = (nextState) => {
+        state = nextState;
+        button.classList.toggle("recording", state === "recording");
+        button.classList.toggle("transcribing", state === "transcribing");
+        button.classList.toggle("error", state === "error");
+        if (state === "recording") {
+          button.title = "Stop dictation";
+          button.setAttribute("aria-label", "Stop dictation");
+        } else if (state === "transcribing") {
+          button.title = "Transcribing";
+          button.setAttribute("aria-label", "Transcribing");
+        } else if (state === "error") {
+          button.title = "Dictation unavailable";
+          button.setAttribute("aria-label", "Dictation unavailable");
+        } else {
+          button.title = "Start dictation";
+          button.setAttribute("aria-label", "Start dictation");
+        }
+      };
+
+      button.addEventListener("click", () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
+          setState("error");
           showToast("Dictation unavailable");
           return;
         }
-        const recognition = new SpeechRecognition();
+        if (state === "recording" && recognition) {
+          setState("transcribing");
+          recognition.stop();
+          return;
+        }
+        recognition = new SpeechRecognition();
+        recognition.interimResults = false;
+        recognition.continuous = false;
+        recognition.onstart = () => setState("recording");
         recognition.onresult = (event) => {
-          $("comment-text").value = `${$("comment-text").value} ${event.results[0][0].transcript}`.trim();
+          const transcript = Array.from(event.results)
+            .map((result) => result[0]?.transcript || "")
+            .join(" ")
+            .trim();
+          if (transcript) insertTextAtCursor(input, transcript);
         };
-        recognition.start();
+        recognition.onerror = () => {
+          setState("error");
+          showToast("Dictation unavailable");
+        };
+        recognition.onend = () => {
+          recognition = null;
+          if (state !== "error") setState("idle");
+        };
+        try {
+          recognition.start();
+        } catch (_error) {
+          recognition = null;
+          setState("error");
+          showToast("Dictation unavailable");
+        }
       });
+    }
+
+    function setupDictation() {
+      setupDictationControl({ buttonId: "comment-dictation", inputId: "comment-text" });
     }
 
     function wireEvents() {
@@ -915,18 +1178,27 @@ HTML = """<!doctype html>
       $("zoom-in").addEventListener("click", () => applyZoom(app.zoomPercent + 10));
       $("zoom-out").addEventListener("click", () => applyZoom(app.zoomPercent - 10));
       $("zoom-input").addEventListener("change", () => applyZoom($("zoom-input").value.replace("%", "")));
+      $("zoom-fit").addEventListener("click", smartFit);
       $("zoom-control").addEventListener("wheel", (event) => {
         event.preventDefault();
         applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
       });
-      $("fit-width").addEventListener("click", fitWidth);
-      $("fit-height").addEventListener("click", fitHeight);
       $("image-wrap").addEventListener("mousedown", startDrag);
       $("artifact-image").addEventListener("dragstart", (event) => event.preventDefault());
       window.addEventListener("resize", () => {
-        if (app.zoomMode === "fit-width") fitWidth();
-        if (app.zoomMode === "fit-height") fitHeight();
+        if (app.zoomMode === "stage-fit") {
+          applyZoom(stageFitZoom(), "stage-fit");
+        } else {
+          updateImageAlignment();
+          updateMooringOverlays();
+        }
       });
+      $("stage").addEventListener("scroll", updateMooringOverlays);
+      $("stage").addEventListener("wheel", (event) => {
+        if (!event.ctrlKey) return;
+        event.preventDefault();
+        applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
+      }, { passive: false });
       window.addEventListener("mousemove", moveDrag);
       window.addEventListener("mouseup", endDrag);
       document.addEventListener("keydown", (event) => {
