@@ -219,3 +219,51 @@ python3 scripts/playwright_cli_public_page_matrix_smoke.py --page slug=https://e
 This matrix proves repeatable artifact collection across a small set of public
 pages. It still does not prove browser parity, anti-bot handling, consent
 normalization, lazy-content completeness, or audit readiness.
+
+## Human Review Gate
+
+After running the public-page matrix smoke, serve a local human review carousel:
+
+```bash
+python3 scripts/playwright_cli_review_server.py artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765/
+```
+
+The review UI is a wrap-around carousel with one slide per captured page. Each
+slide shows the page URL, target, overlay hide/restore counts, text length,
+viewport screenshot, full-page screenshot, element screenshot, and links to the
+raw text, snapshot, manifest, and log artifacts. Each slide has an exclusive
+three-way decision switch:
+
+- `Accept` selected by default
+- `Needs review`
+- `Reject`
+
+If `Needs review` or `Reject` is selected, a comment field appears. Browser
+interaction writes only a local draft:
+
+```text
+artifacts/playwright-cli-public-page-matrix/latest/review-draft.json
+```
+
+The browser UI deliberately does not finalize approval or trigger downstream
+audit work. To submit the gate, the user must return to the same agent session
+that drove the process and say `ready`. Only then should the agent run:
+
+```bash
+python3 scripts/playwright_cli_finalize_review.py artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+```
+
+That writes:
+
+```text
+artifacts/playwright-cli-public-page-matrix/latest/human-approval.json
+```
+
+Downstream audit steps should require `human-approval.json`, not
+`review-draft.json`.
