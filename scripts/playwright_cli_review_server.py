@@ -333,7 +333,7 @@ HTML = """<!doctype html>
       "'": "&#39;",
     }[char]));
 
-    const rel = (path) => `/artifact/${encodeURIComponent(path)}`;
+    const rel = (path) => `/artifact/${String(path || "").split("/").map(encodeURIComponent).join("/")}`;
     const textLength = (page) => Number(page.visible_text_length || 0).toLocaleString();
     const dims = (dim) => dim ? `${dim.width}x${dim.height}` : "missing";
 
