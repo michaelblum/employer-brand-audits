@@ -222,15 +222,31 @@ normalization, lazy-content completeness, or audit readiness.
 
 ## Artifact Viewer
 
-After running the public-page matrix smoke, serve a local artifact viewer:
+After running the public-page matrix smoke, bring up the artifact workbench with
+one command:
 
 ```bash
-python3 scripts/playwright_cli_review_gate.py start artifacts/playwright-cli-public-page-matrix/latest/manifest.json --open
+python3 scripts/playwright_cli_review_gate.py surface artifacts/playwright-cli-public-page-matrix/latest/manifest.json
 ```
 
-The manager keeps PID, state, and logs in the ignored artifact directory and
-opens the local artifact page only after the server passes an HTTP health check.
-If the browser does not open automatically, open:
+`surface` is the default agent-safe path. It starts or reuses the managed local
+server, verifies HTTP health, opens the workbench in Chrome through the local
+Playwright wrapper, and prints the model endpoint plus a compact artifact and
+annotation summary. Use `--json` when another script or agent needs a stable
+machine-readable payload:
+
+```bash
+python3 scripts/playwright_cli_review_gate.py surface artifacts/playwright-cli-public-page-matrix/latest/manifest.json --json
+```
+
+If you only need the server and model URLs without opening a browser:
+
+```bash
+python3 scripts/playwright_cli_review_gate.py surface artifacts/playwright-cli-public-page-matrix/latest/manifest.json --no-browser
+```
+
+The manager keeps PID, state, browser PID, and logs in the ignored artifact
+directory. The local workbench URL is:
 
 ```text
 http://127.0.0.1:8765/
@@ -243,20 +259,43 @@ python3 scripts/playwright_cli_review_gate.py status artifacts/playwright-cli-pu
 python3 scripts/playwright_cli_review_gate.py stop artifacts/playwright-cli-public-page-matrix/latest/manifest.json
 python3 scripts/playwright_cli_review_gate.py open artifacts/playwright-cli-public-page-matrix/latest/manifest.json
 python3 scripts/playwright_cli_review_gate.py state artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+python3 scripts/playwright_cli_review_gate.py surface artifacts/playwright-cli-public-page-matrix/latest/manifest.json --json
 ```
 
 The viewer treats browser outputs as a generalized artifact collection. Each
 image artifact is a pointer to a file under the matrix artifact directory, not
 image bytes routed through the model. The UI provides simple previous/next
 navigation, an overview popover, an artifact menu, and a toggleable sidebar.
+Markdown artifacts are first-class documents with preview/edit controls and
+line-range annotations.
 
-Users annotate by click-dragging a rectangle on the current artifact and adding
-a comment. Stored annotations have this shape:
+Users annotate images by click-dragging a rectangle and annotate markdown by
+dragging over rendered lines. Stored annotations use typed anchors:
 
 ```json
 {
   "artifact_id": "mozilla-careers:viewport",
-  "rect": { "x": 10, "y": 20, "width": 320, "height": 180 },
+  "kind": "comment",
+  "anchor": {
+    "type": "image_region",
+    "coordinate_space": "natural_image",
+    "rect": { "x": 10, "y": 20, "width": 320, "height": 180 }
+  },
+  "comment": "Comment text"
+}
+```
+
+```json
+{
+  "artifact_id": "mozilla-careers:summary",
+  "kind": "comment",
+  "anchor": {
+    "type": "text_range",
+    "coordinate_space": "markdown_source",
+    "start": { "line": 12, "column": 1 },
+    "end": { "line": 18, "column": 72 },
+    "excerpt": "Selected markdown excerpt"
+  },
   "comment": "Comment text"
 }
 ```

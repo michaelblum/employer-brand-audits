@@ -27,6 +27,14 @@ IMAGE_ARTIFACT_KEYS = {
     "full_page": "Full Page",
     "element": "Element",
 }
+MARKDOWN_ARTIFACT_KEYS = {
+    "markdown": "Markdown",
+    "md": "Markdown",
+    "report": "Report",
+    "summary": "Summary",
+    "analysis": "Analysis",
+    "synthesis": "Synthesis",
+}
 
 HTML = """<!doctype html>
 <html lang="en">
@@ -263,6 +271,101 @@ HTML = """<!doctype html>
       background: #000;
       box-shadow: 0 0 0 1px #27364d, 0 16px 40px rgba(0, 0, 0, 0.42);
     }
+    .markdown-wrap {
+      position: relative;
+      width: min(980px, 100%);
+      min-height: 100%;
+      align-self: stretch;
+      justify-self: center;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr);
+      color: #ececf0;
+      background: #18181b;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+      overflow: hidden;
+    }
+    .markdown-wrap[hidden] { display: none; }
+    .markdown-preview {
+      overflow: auto;
+      padding: 36px 44px 72px;
+      background: #f4f0e8;
+      color: #1f1f21;
+      font: 16px/1.62 Georgia, "Times New Roman", serif;
+    }
+    .markdown-preview h1,
+    .markdown-preview h2,
+    .markdown-preview h3 {
+      margin: 1.15em 0 0.42em;
+      color: #111113;
+      font-family: ui-serif, Georgia, "Times New Roman", serif;
+      line-height: 1.12;
+    }
+    .markdown-preview h1 { font-size: 34px; }
+    .markdown-preview h2 { font-size: 25px; }
+    .markdown-preview h3 { font-size: 20px; }
+    .markdown-preview p,
+    .markdown-preview li {
+      max-width: 76ch;
+    }
+    .markdown-preview code,
+    .markdown-preview pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .markdown-preview pre {
+      padding: 14px 16px;
+      overflow: auto;
+      border-radius: 10px;
+      background: #171717;
+      color: #f4f4f5;
+      font-size: 13px;
+    }
+    .markdown-preview [data-source-line].line-hit {
+      outline: 2px solid rgba(45, 108, 223, 0.72);
+      background: rgba(45, 108, 223, 0.12);
+    }
+    .markdown-source {
+      width: 100%;
+      height: 100%;
+      min-height: 60vh;
+      resize: none;
+      border: 0;
+      outline: 0;
+      padding: 24px 28px 72px;
+      color: #f4f4f5;
+      background: #171717;
+      font: 13px/1.62 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      tab-size: 2;
+    }
+    .markdown-source[hidden],
+    .markdown-preview[hidden] {
+      display: none;
+    }
+    .markdown-controls {
+      display: none;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .markdown-controls.visible { display: flex; }
+    .segmented {
+      display: inline-flex;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--panel);
+    }
+    .segmented button {
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 0;
+      color: var(--muted);
+    }
+    .segmented button.active {
+      color: var(--ink);
+      background: var(--panel-2);
+    }
     .selection {
       position: absolute;
       border: 2px solid var(--selection-line);
@@ -285,6 +388,15 @@ HTML = """<!doctype html>
       z-index: 4;
     }
     .hover-marker[hidden] { display: none; }
+    .markdown-marker {
+      position: absolute;
+      z-index: 4;
+      border: 2px solid var(--selection-line);
+      border-radius: 8px;
+      background: rgba(110, 168, 255, 0.13);
+      pointer-events: none;
+    }
+    .markdown-marker[hidden] { display: none; }
     .comment-popover {
       position: fixed;
       z-index: 50;
@@ -499,7 +611,7 @@ HTML = """<!doctype html>
     <div class="stage-column">
       <div class="toolbar secondary">
         <div class="dimension-readout" id="dimension-readout"></div>
-        <div class="image-controls">
+        <div class="image-controls" id="image-controls">
           <div class="zoom-control" id="zoom-control">
             <button class="zoom-fit" id="zoom-fit" type="button" aria-label="Smart fit" title="Smart fit">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -518,12 +630,25 @@ HTML = """<!doctype html>
             </div>
           </div>
         </div>
+        <div class="markdown-controls" id="markdown-controls">
+          <div class="segmented" role="group" aria-label="Markdown view mode">
+            <button id="markdown-preview-mode" type="button" data-markdown-mode="preview">Preview</button>
+            <button id="markdown-source-mode" type="button" data-markdown-mode="source">Edit</button>
+          </div>
+          <button class="action-button" id="markdown-revert" type="button">Revert</button>
+          <button class="action-button primary" id="markdown-save" type="button">Save</button>
+        </div>
       </div>
       <section class="stage" id="stage">
         <div class="image-wrap" id="image-wrap">
           <img id="artifact-image" alt="" draggable="false">
           <div class="selection" id="selection" hidden></div>
           <div class="hover-marker" id="hover-marker" hidden>💡</div>
+        </div>
+        <div class="markdown-wrap" id="markdown-wrap" hidden>
+          <div class="markdown-preview" id="markdown-preview"></div>
+          <textarea class="markdown-source" id="markdown-source" spellcheck="true" hidden></textarea>
+          <div class="markdown-marker" id="markdown-marker" hidden></div>
         </div>
         <div class="comment-popover" id="comment-popover" hidden>
           <div class="dictation-field">
@@ -555,13 +680,17 @@ HTML = """<!doctype html>
       annotations: {},
       index: 0,
       drag: null,
-      pendingRect: null,
+      pendingAnchor: null,
       editorMode: "create",
       editing: null,
       activeMarker: null,
       sidebarVisible: true,
       zoomPercent: 100,
       zoomMode: "stage-fit",
+      markdownMode: "preview",
+      markdownContent: {},
+      markdownSavedContent: {},
+      markdownDirty: {},
     };
     const $ = (id) => document.getElementById(id);
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -572,6 +701,28 @@ HTML = """<!doctype html>
     const artifactIndexById = (id) => app.collection.artifacts.findIndex((item) => item.id === id);
     const annotationById = (artifactId, annotationId) => artifactAnnotations(artifactId).find((note) => note.id === annotationId);
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
+    const isImageArtifact = (item = artifact()) => item.type === "image";
+    const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
+    const annotationAnchor = (note) => note?.anchor || {};
+    const imageRectAnchor = (note) => {
+      const anchor = annotationAnchor(note);
+      return anchor.type === "image_region" ? anchor.rect : null;
+    };
+    const textRangeAnchor = (note) => {
+      const anchor = annotationAnchor(note);
+      return anchor.type === "text_range" ? anchor : null;
+    };
+    const anchorSummary = (anchor = {}) => {
+      if (anchor.type === "image_region" && anchor.rect) {
+        return `image ${anchor.rect.x},${anchor.rect.y} ${anchor.rect.width}x${anchor.rect.height}`;
+      }
+      if (anchor.type === "text_range" && anchor.start && anchor.end) {
+        return anchor.start.line === anchor.end.line
+          ? `line ${anchor.start.line}`
+          : `lines ${anchor.start.line}-${anchor.end.line}`;
+      }
+      return "unanchored";
+    };
     const formatTime = (epoch) => {
       if (!epoch) return "";
       return new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -597,6 +748,120 @@ HTML = """<!doctype html>
         body: JSON.stringify({ annotations: app.annotations }),
       });
       if (!response.ok) showToast("Annotation sync failed");
+    }
+
+    function safeHref(value) {
+      const href = String(value || "").trim();
+      if (!href || href.startsWith("#") || href.startsWith("/")) return href;
+      try {
+        const parsed = new URL(href, window.location.href);
+        return ["http:", "https:", "mailto:"].includes(parsed.protocol) ? href : "";
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    function renderInlineMarkdown(value) {
+      const tokens = [];
+      const token = (html) => {
+        const marker = `@@TOKEN_${tokens.length}@@`;
+        tokens.push(html);
+        return marker;
+      };
+      let text = String(value || "");
+      text = text.replace(/`([^`]+)`/g, (_match, code) => token(`<code>${escapeHtml(code)}</code>`));
+      text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => {
+        const safe = safeHref(href);
+        return safe
+          ? token(`<a href="${escapeHtml(safe)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`)
+          : escapeHtml(label);
+      });
+      let html = escapeHtml(text);
+      html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+      return html.replace(/@@TOKEN_(\d+)@@/g, (_match, index) => tokens[Number(index)] || "");
+    }
+
+    function sourceLineAttribute(index) {
+      return ` data-source-line="${index + 1}"`;
+    }
+
+    function renderMarkdown(source) {
+      const lines = String(source || "").split("\n");
+      let html = "";
+      let listTag = null;
+      const closeList = () => {
+        if (!listTag) return;
+        html += `</${listTag}>`;
+        listTag = null;
+      };
+      for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index];
+        const fence = line.match(/^```\s*([a-zA-Z0-9_-]+)?\s*$/);
+        if (fence) {
+          closeList();
+          const language = fence[1] || "";
+          const start = index;
+          const body = [];
+          index += 1;
+          while (index < lines.length && !/^```\s*$/.test(lines[index])) {
+            body.push(lines[index]);
+            index += 1;
+          }
+          html += `<pre${sourceLineAttribute(start)}><code${language ? ` data-language="${escapeHtml(language)}"` : ""}>${escapeHtml(body.join("\n"))}</code></pre>`;
+          continue;
+        }
+        const heading = line.match(/^(#{1,3})\s+(.+)/);
+        if (heading) {
+          closeList();
+          const depth = heading[1].length;
+          html += `<h${depth}${sourceLineAttribute(index)}>${renderInlineMarkdown(heading[2])}</h${depth}>`;
+          continue;
+        }
+        if (/^---+$/.test(line.trim())) {
+          closeList();
+          html += `<hr${sourceLineAttribute(index)}>`;
+          continue;
+        }
+        const unordered = line.match(/^[-*]\s+(.+)/);
+        if (unordered) {
+          if (listTag !== "ul") {
+            closeList();
+            html += "<ul>";
+            listTag = "ul";
+          }
+          html += `<li${sourceLineAttribute(index)}>${renderInlineMarkdown(unordered[1])}</li>`;
+          continue;
+        }
+        const ordered = line.match(/^\d+\.\s+(.+)/);
+        if (ordered) {
+          if (listTag !== "ol") {
+            closeList();
+            html += "<ol>";
+            listTag = "ol";
+          }
+          html += `<li${sourceLineAttribute(index)}>${renderInlineMarkdown(ordered[1])}</li>`;
+          continue;
+        }
+        if (!line.trim()) {
+          closeList();
+          continue;
+        }
+        closeList();
+        html += `<p${sourceLineAttribute(index)}>${renderInlineMarkdown(line)}</p>`;
+      }
+      closeList();
+      return html;
+    }
+
+    function markdownDiagnostics(content) {
+      const lines = String(content || "").split("\n");
+      const words = String(content || "").trim() ? String(content || "").trim().split(/\s+/).length : 0;
+      const headings = lines
+        .map((line, index) => ({ match: line.match(/^(#{1,6})\s+(.+)$/), line: index + 1 }))
+        .filter((item) => item.match)
+        .map((item) => ({ depth: item.match[1].length, text: item.match[2].trim(), line: item.line }));
+      return { line_count: content ? lines.length : 0, word_count: words, heading_count: headings.length, headings };
     }
 
     function clampZoom(value) {
@@ -635,16 +900,16 @@ HTML = """<!doctype html>
 
     function updateMooringOverlays() {
       if (app.editing) {
-        placeSelectionForRect(app.editing.rect);
-        placePopoverForRect(app.editing.rect);
-      } else if (app.pendingRect && app.editorMode === "create" && !$("comment-popover").hidden) {
-        placeSelectionForRect(app.pendingRect);
-        placePopoverForRect(app.pendingRect);
+        placeSelectionForAnchor(app.editing.anchor);
+        placePopoverForAnchor(app.editing.anchor);
+      } else if (app.pendingAnchor && app.editorMode === "create" && !$("comment-popover").hidden) {
+        placeSelectionForAnchor(app.pendingAnchor);
+        placePopoverForAnchor(app.pendingAnchor);
       }
       if (app.activeMarker) {
         const note = annotationById(app.activeMarker.artifactId, app.activeMarker.annotationId);
         if (note && artifact().id === app.activeMarker.artifactId) {
-          placeMarkerForRect(note.rect);
+          placeMarkerForAnchor(note.anchor);
         }
       }
     }
@@ -691,10 +956,16 @@ HTML = """<!doctype html>
 
     function updateDimensionReadout() {
       const item = artifact();
-      const dimensions = item.dimensions || {};
-      const width = dimensions.width || $("artifact-image").naturalWidth || "unknown";
-      const height = dimensions.height || $("artifact-image").naturalHeight || "unknown";
-      $("dimension-readout").textContent = `${width} x ${height} px`;
+      if (isImageArtifact(item)) {
+        const dimensions = item.dimensions || {};
+        const width = dimensions.width || $("artifact-image").naturalWidth || "unknown";
+        const height = dimensions.height || $("artifact-image").naturalHeight || "unknown";
+        $("dimension-readout").textContent = `${width} x ${height} px`;
+        return;
+      }
+      const content = app.markdownContent[item.id] || "";
+      const diagnostics = markdownDiagnostics(content);
+      $("dimension-readout").textContent = `${diagnostics.line_count} lines · ${diagnostics.word_count} words · ${diagnostics.heading_count} headings`;
     }
 
     function afterImageReady(callback) {
@@ -726,7 +997,12 @@ HTML = """<!doctype html>
     function renderImage() {
       const item = artifact();
       const image = $("artifact-image");
+      $("image-wrap").hidden = false;
+      $("markdown-wrap").hidden = true;
+      $("image-controls").style.display = "flex";
+      $("markdown-controls").classList.remove("visible");
       $("selection").hidden = true;
+      $("markdown-marker").hidden = true;
       $("hover-marker").hidden = true;
       $("comment-popover").hidden = true;
       updateDimensionReadout();
@@ -747,11 +1023,120 @@ HTML = """<!doctype html>
       }
     }
 
+    async function loadMarkdown(item) {
+      if (Object.prototype.hasOwnProperty.call(app.markdownContent, item.id)) return app.markdownContent[item.id];
+      const response = await fetch(artifactUrl(item), { cache: "no-store" });
+      if (!response.ok) throw new Error(`Markdown fetch failed: ${response.status}`);
+      const content = await response.text();
+      app.markdownContent[item.id] = content;
+      app.markdownSavedContent[item.id] = content;
+      app.markdownDirty[item.id] = false;
+      return content;
+    }
+
+    function syncMarkdownModeButtons() {
+      for (const button of document.querySelectorAll("[data-markdown-mode]")) {
+        const active = button.dataset.markdownMode === app.markdownMode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+      }
+    }
+
+    function renderMarkdownBody(item) {
+      const content = app.markdownContent[item.id] || "";
+      $("markdown-preview").innerHTML = renderMarkdown(content);
+      $("markdown-source").value = content;
+      $("markdown-preview").hidden = app.markdownMode !== "preview";
+      $("markdown-source").hidden = app.markdownMode !== "source";
+      $("markdown-save").disabled = !app.markdownDirty[item.id];
+      syncMarkdownModeButtons();
+      updateDimensionReadout();
+      renderMarkdownHighlights();
+    }
+
+    function renderMarkdownHighlights() {
+      $("markdown-preview").querySelectorAll(".line-hit").forEach((node) => node.classList.remove("line-hit"));
+      if (app.markdownMode !== "preview" || !isMarkdownArtifact()) return;
+      for (const note of artifactAnnotations(artifact().id)) {
+        const anchor = textRangeAnchor(note);
+        if (!anchor) continue;
+        for (const node of markdownLineElementsForRange(anchor)) {
+          node.classList.add("line-hit");
+        }
+      }
+      if (app.pendingAnchor?.type === "text_range") {
+        for (const node of markdownLineElementsForRange(app.pendingAnchor)) {
+          node.classList.add("line-hit");
+        }
+      }
+    }
+
+    async function renderMarkdownArtifact() {
+      const item = artifact();
+      $("image-wrap").hidden = true;
+      $("markdown-wrap").hidden = false;
+      $("image-controls").style.display = "none";
+      $("markdown-controls").classList.add("visible");
+      $("selection").hidden = true;
+      $("hover-marker").hidden = true;
+      $("comment-popover").hidden = true;
+      try {
+        await loadMarkdown(item);
+        renderMarkdownBody(item);
+      } catch (error) {
+        $("markdown-preview").hidden = false;
+        $("markdown-source").hidden = true;
+        $("markdown-preview").innerHTML = `<p>Failed to load markdown: ${escapeHtml(error.message)}</p>`;
+      }
+    }
+
+    async function saveMarkdownArtifact() {
+      const item = artifact();
+      if (!isMarkdownArtifact(item)) return;
+      const content = app.markdownContent[item.id] || "";
+      const response = await fetch(`/api/artifact-content/${encodeURIComponent(item.id)}`, {
+        method: "PUT",
+        headers: { "content-type": "text/markdown; charset=utf-8" },
+        body: content,
+      });
+      if (!response.ok) {
+        showToast("Markdown save failed");
+        return;
+      }
+      app.markdownSavedContent[item.id] = content;
+      app.markdownDirty[item.id] = false;
+      renderMarkdownBody(item);
+      showToast("Markdown saved");
+    }
+
+    function revertMarkdownArtifact() {
+      const item = artifact();
+      if (!isMarkdownArtifact(item)) return;
+      app.markdownContent[item.id] = app.markdownSavedContent[item.id] || "";
+      app.markdownDirty[item.id] = false;
+      renderMarkdownBody(item);
+      showToast("Markdown reverted");
+    }
+
+    function setMarkdownMode(mode) {
+      app.markdownMode = mode === "source" ? "source" : "preview";
+      renderMarkdownBody(artifact());
+      if (app.markdownMode === "source") $("markdown-source").focus();
+    }
+
+    function renderArtifact() {
+      if (isMarkdownArtifact()) {
+        void renderMarkdownArtifact();
+        return;
+      }
+      renderImage();
+    }
+
     function renderOverview() {
       $("overview-popover").innerHTML = app.collection.artifacts.map((item, index) => `
         <button class="artifact-option ${index === app.index ? "active" : ""}" type="button" data-index="${index}">
           <span>${escapeHtml(item.name)}</span>
-          <span class="small">${escapeHtml(item.path)}</span>
+          <span class="small">${escapeHtml(item.type || "file")} · ${escapeHtml(item.path)}</span>
         </button>
       `).join("");
       $("overview-popover").querySelectorAll("[data-index]").forEach((button) => {
@@ -769,6 +1154,7 @@ HTML = """<!doctype html>
           ? notes.map((note) => `
             <div class="annotation" draggable="true" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
               <div class="annotation-text" title="${escapeHtml(note.comment)}">${escapeHtml(note.comment)}</div>
+              <div class="small">${escapeHtml(anchorSummary(note.anchor))}</div>
             </div>
           `).join("")
           : "";
@@ -776,6 +1162,7 @@ HTML = """<!doctype html>
           <div class="artifact-row ${index === app.index ? "active" : ""}" data-index="${index}">
             <div class="row-title">
               <div class="name">${escapeHtml(item.name)}</div>
+              <div class="small">${escapeHtml(item.type || "file")}</div>
             </div>
             ${annotationHtml}
           </div>
@@ -832,7 +1219,7 @@ HTML = """<!doctype html>
 
     function render() {
       renderTitle();
-      renderImage();
+      renderArtifact();
       renderOverview();
       renderSidebar();
       renderShell();
@@ -870,12 +1257,70 @@ HTML = """<!doctype html>
       };
     }
 
+    function markdownLineElementsForRange(anchor) {
+      if (!anchor?.start?.line || !anchor?.end?.line) return [];
+      const start = Math.min(anchor.start.line, anchor.end.line);
+      const end = Math.max(anchor.start.line, anchor.end.line);
+      return [...$("markdown-preview").querySelectorAll("[data-source-line]")]
+        .filter((node) => {
+          const line = Number(node.dataset.sourceLine);
+          return line >= start && line <= end;
+        });
+    }
+
+    function markdownDisplayRectFromAnchor(anchor) {
+      const elements = markdownLineElementsForRange(anchor);
+      if (!elements.length) return null;
+      const wrapRect = $("markdown-wrap").getBoundingClientRect();
+      const rects = elements.map((node) => node.getBoundingClientRect());
+      const left = Math.min(...rects.map((rect) => rect.left));
+      const top = Math.min(...rects.map((rect) => rect.top));
+      const right = Math.max(...rects.map((rect) => rect.right));
+      const bottom = Math.max(...rects.map((rect) => rect.bottom));
+      return {
+        x: left - wrapRect.left,
+        y: top - wrapRect.top,
+        width: right - left,
+        height: bottom - top,
+      };
+    }
+
     function placeSelectionForRect(rect) {
       placeSelection(displayRectFromNatural(rect));
     }
 
     function placePopoverForRect(rect) {
       openComment(displayRectFromNatural(rect));
+    }
+
+    function placeSelectionForAnchor(anchor) {
+      if (anchor?.type === "image_region" && anchor.rect) {
+        $("markdown-marker").hidden = true;
+        placeSelectionForRect(anchor.rect);
+        return;
+      }
+      if (anchor?.type === "text_range") {
+        $("selection").hidden = true;
+        const displayRect = markdownDisplayRectFromAnchor(anchor);
+        if (!displayRect) return;
+        const marker = $("markdown-marker");
+        marker.style.left = `${displayRect.x}px`;
+        marker.style.top = `${displayRect.y}px`;
+        marker.style.width = `${displayRect.width}px`;
+        marker.style.height = `${displayRect.height}px`;
+        marker.hidden = false;
+      }
+    }
+
+    function placePopoverForAnchor(anchor) {
+      if (anchor?.type === "image_region" && anchor.rect) {
+        placePopoverForRect(anchor.rect);
+        return;
+      }
+      if (anchor?.type === "text_range") {
+        const displayRect = markdownDisplayRectFromAnchor(anchor);
+        if (displayRect) openComment(displayRect, $("markdown-wrap"));
+      }
     }
 
     function placeMarkerForRect(rect) {
@@ -888,9 +1333,29 @@ HTML = """<!doctype html>
       marker.hidden = false;
     }
 
+    function placeMarkerForAnchor(anchor) {
+      if (anchor?.type === "image_region" && anchor.rect) {
+        $("markdown-marker").hidden = true;
+        placeMarkerForRect(anchor.rect);
+        return;
+      }
+      if (anchor?.type === "text_range") {
+        $("hover-marker").hidden = true;
+        const displayRect = markdownDisplayRectFromAnchor(anchor);
+        if (!displayRect) return;
+        const marker = $("markdown-marker");
+        marker.style.left = `${displayRect.x}px`;
+        marker.style.top = `${displayRect.y}px`;
+        marker.style.width = `${displayRect.width}px`;
+        marker.style.height = `${displayRect.height}px`;
+        marker.hidden = false;
+      }
+    }
+
     function hideAnnotationMarker() {
       app.activeMarker = null;
       $("hover-marker").hidden = true;
+      $("markdown-marker").hidden = true;
     }
 
     function showAnnotationMarker(artifactId, annotationId) {
@@ -901,10 +1366,13 @@ HTML = """<!doctype html>
       if (index !== app.index) {
         setArtifact(index);
         app.activeMarker = { artifactId, annotationId };
-        afterImageReady(() => window.requestAnimationFrame(() => placeMarkerForRect(note.rect)));
+        window.requestAnimationFrame(() => {
+          if (isImageArtifact()) afterImageReady(() => placeMarkerForAnchor(note.anchor));
+          else placeMarkerForAnchor(note.anchor);
+        });
         return;
       }
-      placeMarkerForRect(note.rect);
+      placeMarkerForAnchor(note.anchor);
     }
 
     function naturalRect(displayRect) {
@@ -920,24 +1388,71 @@ HTML = """<!doctype html>
       };
     }
 
-    function openComment(displayRect) {
+    function markdownPoint(event) {
+      const rect = $("markdown-wrap").getBoundingClientRect();
+      return {
+        x: Math.min(Math.max(event.clientX - rect.left, 0), rect.width),
+        y: Math.min(Math.max(event.clientY - rect.top, 0), rect.height),
+      };
+    }
+
+    function placeMarkdownSelection(displayRect) {
+      const marker = $("markdown-marker");
+      marker.style.left = `${displayRect.x}px`;
+      marker.style.top = `${displayRect.y}px`;
+      marker.style.width = `${displayRect.width}px`;
+      marker.style.height = `${displayRect.height}px`;
+      marker.hidden = false;
+    }
+
+    function markdownAnchorFromDisplayRect(displayRect) {
+      const wrapRect = $("markdown-wrap").getBoundingClientRect();
+      const selectionRect = {
+        left: wrapRect.left + displayRect.x,
+        top: wrapRect.top + displayRect.y,
+        right: wrapRect.left + displayRect.x + displayRect.width,
+        bottom: wrapRect.top + displayRect.y + displayRect.height,
+      };
+      const hits = [...$("markdown-preview").querySelectorAll("[data-source-line]")]
+        .map((node) => ({ node, rect: node.getBoundingClientRect(), line: Number(node.dataset.sourceLine) }))
+        .filter(({ rect }) => rect.right >= selectionRect.left
+          && rect.left <= selectionRect.right
+          && rect.bottom >= selectionRect.top
+          && rect.top <= selectionRect.bottom)
+        .filter(({ line }) => Number.isFinite(line));
+      if (!hits.length) return null;
+      const startLine = Math.min(...hits.map((hit) => hit.line));
+      const endLine = Math.max(...hits.map((hit) => hit.line));
+      const content = app.markdownContent[artifact().id] || "";
+      const lines = content.split("\n");
+      const excerpt = lines.slice(startLine - 1, endLine).join("\n").slice(0, 600);
+      return {
+        type: "text_range",
+        coordinate_space: "markdown_source",
+        start: { line: startLine, column: 1 },
+        end: { line: endLine, column: (lines[endLine - 1] || "").length + 1 },
+        excerpt,
+      };
+    }
+
+    function openComment(displayRect, relativeTo = $("artifact-image")) {
       const popover = $("comment-popover");
-      const imageRect = $("artifact-image").getBoundingClientRect();
-      const left = Math.min(imageRect.left + displayRect.x + displayRect.width + 10, window.innerWidth - 434);
-      const top = Math.min(imageRect.top + displayRect.y, window.innerHeight - 190);
+      const baseRect = relativeTo.getBoundingClientRect();
+      const left = Math.min(baseRect.left + displayRect.x + displayRect.width + 10, window.innerWidth - 434);
+      const top = Math.min(baseRect.top + displayRect.y, window.innerHeight - 190);
       popover.style.left = `${Math.max(14, left)}px`;
       popover.style.top = `${Math.max(14, top)}px`;
       popover.hidden = false;
       $("comment-text").focus();
     }
 
-    function openCreateEditor(displayRect) {
+    function openCreateEditor(displayRect, relativeTo = $("artifact-image")) {
       app.editorMode = "create";
       app.editing = null;
       $("comment-text").value = "";
       $("secondary-comment-action").textContent = "Cancel";
       $("primary-comment-action").textContent = "Add Comment";
-      openComment(displayRect);
+      openComment(displayRect, relativeTo);
     }
 
     function scrollRectIntoView(rect) {
@@ -955,27 +1470,57 @@ HTML = """<!doctype html>
       });
     }
 
+    function scrollTextRangeIntoView(anchor) {
+      if (!anchor?.start?.line) return;
+      const target = $("markdown-preview").querySelector(`[data-source-line="${anchor.start.line}"]`);
+      if (target) {
+        target.scrollIntoView({ block: "center", inline: "nearest" });
+        return;
+      }
+      const source = $("markdown-source");
+      const lines = String(source.value || "").split("\n");
+      const lineHeight = Number.parseFloat(window.getComputedStyle(source).lineHeight) || 21;
+      source.scrollTop = Math.max(0, (Math.max(1, anchor.start.line) - 3) * lineHeight);
+    }
+
     function openExistingEditor(note) {
       app.editorMode = "edit";
       app.editing = note;
       $("comment-text").value = note.comment;
       $("secondary-comment-action").textContent = "Delete";
       $("primary-comment-action").textContent = "Update";
-      afterImageReady(() => {
-        scrollRectIntoView(note.rect);
-        window.requestAnimationFrame(() => {
-          placeSelectionForRect(note.rect);
-          placePopoverForRect(note.rect);
+      const anchor = note.anchor;
+      if (anchor?.type === "image_region" && anchor.rect) {
+        afterImageReady(() => {
+          scrollRectIntoView(anchor.rect);
+          window.requestAnimationFrame(() => {
+            placeSelectionForAnchor(anchor);
+            placePopoverForAnchor(anchor);
+          });
         });
-      });
+        return;
+      }
+      if (anchor?.type === "text_range") {
+        if (app.markdownMode !== "preview") {
+          app.markdownMode = "preview";
+          renderMarkdownBody(artifact());
+        }
+        scrollTextRangeIntoView(anchor);
+        window.requestAnimationFrame(() => {
+          renderMarkdownHighlights();
+          placeSelectionForAnchor(anchor);
+          placePopoverForAnchor(anchor);
+        });
+      }
     }
 
     function closeEditor() {
-      app.pendingRect = null;
+      app.pendingAnchor = null;
       app.editing = null;
       app.editorMode = "create";
       $("comment-popover").hidden = true;
       $("selection").hidden = true;
+      $("markdown-marker").hidden = true;
     }
 
     function selectAnnotation(artifactId, annotationId) {
@@ -992,41 +1537,73 @@ HTML = """<!doctype html>
     }
 
     function startDrag(event) {
-      if (event.button !== 0 || !event.target.closest("#image-wrap")) return;
-      const point = imagePoint(event);
-      app.drag = { startX: point.x, startY: point.y };
-      app.pendingRect = null;
-      $("comment-popover").hidden = true;
-      placeSelection({ x: point.x, y: point.y, width: 0, height: 0 });
+      if (event.button !== 0) return;
+      if (event.target.closest("#image-wrap")) {
+        const point = imagePoint(event);
+        app.drag = { type: "image", startX: point.x, startY: point.y };
+        app.pendingAnchor = null;
+        $("comment-popover").hidden = true;
+        placeSelection({ x: point.x, y: point.y, width: 0, height: 0 });
+        return;
+      }
+      if (app.markdownMode === "preview" && event.target.closest("#markdown-preview")) {
+        const point = markdownPoint(event);
+        app.drag = { type: "markdown", startX: point.x, startY: point.y };
+        app.pendingAnchor = null;
+        $("comment-popover").hidden = true;
+        placeMarkdownSelection({ x: point.x, y: point.y, width: 0, height: 0 });
+      }
+    }
+
+    function dragDisplayRect(point) {
+      return {
+        x: Math.min(app.drag.startX, point.x),
+        y: Math.min(app.drag.startY, point.y),
+        width: Math.abs(point.x - app.drag.startX),
+        height: Math.abs(point.y - app.drag.startY),
+      };
     }
 
     function moveDrag(event) {
       if (!app.drag) return;
-      const point = imagePoint(event);
-      const displayRect = {
-        x: Math.min(app.drag.startX, point.x),
-        y: Math.min(app.drag.startY, point.y),
-        width: Math.abs(point.x - app.drag.startX),
-        height: Math.abs(point.y - app.drag.startY),
-      };
-      placeSelection(displayRect);
+      if (app.drag.type === "image") {
+        placeSelection(dragDisplayRect(imagePoint(event)));
+        return;
+      }
+      if (app.drag.type === "markdown") {
+        placeMarkdownSelection(dragDisplayRect(markdownPoint(event)));
+      }
     }
 
     function endDrag(event) {
       if (!app.drag) return;
-      const point = imagePoint(event);
-      const displayRect = {
-        x: Math.min(app.drag.startX, point.x),
-        y: Math.min(app.drag.startY, point.y),
-        width: Math.abs(point.x - app.drag.startX),
-        height: Math.abs(point.y - app.drag.startY),
-      };
+      const type = app.drag.type;
+      const displayRect = type === "markdown"
+        ? dragDisplayRect(markdownPoint(event))
+        : dragDisplayRect(imagePoint(event));
       app.drag = null;
       if (displayRect.width < 8 || displayRect.height < 8) {
         $("selection").hidden = true;
+        $("markdown-marker").hidden = true;
         return;
       }
-      app.pendingRect = naturalRect(displayRect);
+      if (type === "markdown") {
+        const anchor = markdownAnchorFromDisplayRect(displayRect);
+        if (!anchor) {
+          $("markdown-marker").hidden = true;
+          return;
+        }
+        app.pendingAnchor = anchor;
+        renderMarkdownHighlights();
+        openCreateEditor(displayRect, $("markdown-wrap"));
+        return;
+      }
+      app.pendingAnchor = {
+        type: "image_region",
+        coordinate_space: "natural_image",
+        rect: naturalRect(displayRect),
+      };
+      $("comment-popover").hidden = true;
       openCreateEditor(displayRect);
     }
 
@@ -1042,14 +1619,16 @@ HTML = """<!doctype html>
         showToast("Comment updated");
         return;
       }
-      if (!app.pendingRect) return;
+      if (!app.pendingAnchor) return;
       const item = artifact();
       const note = {
         id: `${item.id}-${Date.now().toString(36)}`,
         artifact_id: item.id,
-        rect: app.pendingRect,
+        kind: "comment",
+        anchor: app.pendingAnchor,
         comment,
         created_at_epoch: Math.floor(Date.now() / 1000),
+        updated_at_epoch: null,
       };
       app.annotations[item.id] = [...artifactAnnotations(item.id), note];
       closeEditor();
@@ -1183,10 +1762,41 @@ HTML = """<!doctype html>
         event.preventDefault();
         applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
       });
+      $("markdown-preview-mode").addEventListener("click", () => setMarkdownMode("preview"));
+      $("markdown-source-mode").addEventListener("click", () => setMarkdownMode("source"));
+      $("markdown-save").addEventListener("click", saveMarkdownArtifact);
+      $("markdown-revert").addEventListener("click", revertMarkdownArtifact);
+      $("markdown-source").addEventListener("input", () => {
+        const item = artifact();
+        app.markdownContent[item.id] = $("markdown-source").value;
+        app.markdownDirty[item.id] = app.markdownContent[item.id] !== app.markdownSavedContent[item.id];
+        $("markdown-save").disabled = !app.markdownDirty[item.id];
+        updateDimensionReadout();
+      });
+      $("markdown-source").addEventListener("keydown", (event) => {
+        const key = String(event.key || "").toLowerCase();
+        if ((event.metaKey || event.ctrlKey) && key === "s") {
+          event.preventDefault();
+          void saveMarkdownArtifact();
+        }
+        if (event.key !== "Tab") return;
+        event.preventDefault();
+        const input = $("markdown-source");
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        const prefix = input.value.slice(0, start);
+        const suffix = input.value.slice(end);
+        input.value = `${prefix}  ${suffix}`;
+        input.setSelectionRange(start + 2, start + 2);
+        input.dispatchEvent(new Event("input"));
+      });
       $("image-wrap").addEventListener("mousedown", startDrag);
+      $("markdown-preview").addEventListener("mousedown", startDrag);
       $("artifact-image").addEventListener("dragstart", (event) => event.preventDefault());
       window.addEventListener("resize", () => {
-        if (app.zoomMode === "stage-fit") {
+        if (!isImageArtifact()) {
+          updateMooringOverlays();
+        } else if (app.zoomMode === "stage-fit") {
           applyZoom(stageFitZoom(), "stage-fit");
         } else {
           updateImageAlignment();
@@ -1194,8 +1804,10 @@ HTML = """<!doctype html>
         }
       });
       $("stage").addEventListener("scroll", updateMooringOverlays);
+      $("markdown-preview").addEventListener("scroll", updateMooringOverlays);
+      $("markdown-source").addEventListener("scroll", updateMooringOverlays);
       $("stage").addEventListener("wheel", (event) => {
-        if (!event.ctrlKey) return;
+        if (!event.ctrlKey || !isImageArtifact()) return;
         event.preventDefault();
         applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
       }, { passive: false });
@@ -1228,7 +1840,7 @@ HTML = """<!doctype html>
       app.collection = payload.collection;
       app.annotations = payload.annotations || {};
       if (!app.collection.artifacts.length) {
-        $("stage").innerHTML = "<div class='small'>No image artifacts found.</div>";
+        $("stage").innerHTML = "<div class='small'>No artifacts found.</div>";
         return;
       }
       wireEvents();
@@ -1290,6 +1902,23 @@ def artifact_created_at(path: Path) -> int | None:
     return int(path.stat().st_mtime)
 
 
+def markdown_artifact_label(key: str) -> str:
+    if key in MARKDOWN_ARTIFACT_KEYS:
+        return MARKDOWN_ARTIFACT_KEYS[key]
+    return key.replace("_", " ").replace("-", " ").title()
+
+
+def is_markdown_artifact(key: str, path: Path) -> bool:
+    suffix = path.suffix.lower()
+    if suffix in {".md", ".markdown"}:
+        return True
+    mime = mimetypes.guess_type(str(path))[0]
+    if mime == "text/markdown":
+        return True
+    normalized_key = key.lower().replace("-", "_")
+    return normalized_key in MARKDOWN_ARTIFACT_KEYS and suffix in {".md", ".markdown", ".txt"}
+
+
 def safe_artifact_path(relative_path: str, artifact_root: Path) -> Path | None:
     candidate = (REPO_ROOT / relative_path).resolve()
     root = artifact_root.resolve()
@@ -1321,15 +1950,41 @@ def build_collection(manifest_path: Path) -> dict[str, Any]:
                 {
                     "id": artifact_id(slug, key),
                     "name": f"{slug} {label}",
+                    "type": "image",
                     "kind": key,
                     "path": relative_path,
                     "mime_type": mime,
+                    "capabilities": ["view", "annotate"],
                     "source_page": {
                         "slug": slug,
                         "url": page.get("url"),
                         "target_used": page.get("target_used"),
                     },
                     "dimensions": dimensions.get(key),
+                    "created_at_epoch": artifact_created_at(path),
+                }
+            )
+        for key, relative_path in page_artifacts.items():
+            if key in IMAGE_ARTIFACT_KEYS or not relative_path:
+                continue
+            path = safe_artifact_path(relative_path, artifact_root)
+            if path is None or not is_markdown_artifact(str(key), path):
+                continue
+            mime = mimetypes.guess_type(str(path))[0] or "text/markdown"
+            artifacts.append(
+                {
+                    "id": artifact_id(slug, key),
+                    "name": f"{slug} {markdown_artifact_label(str(key))}",
+                    "type": "markdown",
+                    "kind": str(key),
+                    "path": relative_path,
+                    "mime_type": mime,
+                    "capabilities": ["view", "edit", "annotate"],
+                    "source_page": {
+                        "slug": slug,
+                        "url": page.get("url"),
+                        "target_used": page.get("target_used"),
+                    },
                     "created_at_epoch": artifact_created_at(path),
                 }
             )
@@ -1353,21 +2008,20 @@ def clean_annotations(payload: Any, artifact_ids: set[str]) -> dict[str, list[di
         for annotation in annotations:
             if not isinstance(annotation, dict):
                 continue
-            rect = annotation.get("rect")
+            anchor = annotation.get("anchor")
             comment = str(annotation.get("comment", "")).strip()
-            if not isinstance(rect, dict) or not comment:
+            if not isinstance(anchor, dict) or not comment:
+                continue
+            clean_anchor = clean_annotation_anchor(anchor)
+            if clean_anchor is None:
                 continue
             try:
                 clean[item_id].append(
                     {
                         "id": str(annotation.get("id") or f"{item_id}-{len(clean[item_id]) + 1}"),
                         "artifact_id": item_id,
-                        "rect": {
-                            "x": int(rect["x"]),
-                            "y": int(rect["y"]),
-                            "width": int(rect["width"]),
-                            "height": int(rect["height"]),
-                        },
+                        "kind": str(annotation.get("kind") or "comment"),
+                        "anchor": clean_anchor,
                         "comment": comment,
                         "created_at_epoch": int(annotation.get("created_at_epoch") or time.time()),
                         "updated_at_epoch": int(annotation["updated_at_epoch"])
@@ -1380,11 +2034,53 @@ def clean_annotations(payload: Any, artifact_ids: set[str]) -> dict[str, list[di
     return clean
 
 
+def clean_annotation_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
+    anchor_type = str(anchor.get("type") or "")
+    if anchor_type == "image_region":
+        rect = anchor.get("rect")
+        if not isinstance(rect, dict):
+            return None
+        try:
+            return {
+                "type": "image_region",
+                "coordinate_space": "natural_image",
+                "rect": {
+                    "x": int(rect["x"]),
+                    "y": int(rect["y"]),
+                    "width": int(rect["width"]),
+                    "height": int(rect["height"]),
+                },
+            }
+        except (KeyError, TypeError, ValueError):
+            return None
+    if anchor_type == "text_range":
+        start = anchor.get("start")
+        end = anchor.get("end")
+        if not isinstance(start, dict) or not isinstance(end, dict):
+            return None
+        try:
+            start_line = max(1, int(start["line"]))
+            end_line = max(start_line, int(end["line"]))
+            start_column = max(1, int(start.get("column", 1)))
+            end_column = max(start_column if start_line == end_line else 1, int(end.get("column", 1)))
+        except (KeyError, TypeError, ValueError):
+            return None
+        return {
+            "type": "text_range",
+            "coordinate_space": "markdown_source",
+            "start": {"line": start_line, "column": start_column},
+            "end": {"line": end_line, "column": end_column},
+            "excerpt": str(anchor.get("excerpt", ""))[:1000],
+        }
+    return None
+
+
 class ReviewServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], manifest_path: Path):
         self.manifest_path = manifest_path
         self.artifact_root = manifest_path.parent
         self.collection = build_collection(manifest_path)
+        self.artifacts_by_id = {item["id"]: item for item in self.collection["artifacts"]}
         self.annotations: dict[str, list[dict[str, Any]]] = {
             item["id"]: [] for item in self.collection["artifacts"]
         }
@@ -1403,6 +2099,24 @@ class ReviewServer(ThreadingHTTPServer):
         artifact_ids = {item["id"] for item in self.collection["artifacts"]}
         self.annotations = clean_annotations(annotations, artifact_ids)
         self.updated_at_epoch = int(time.time())
+
+    def artifact_path_by_id(self, artifact_id_value: str) -> Path | None:
+        artifact = self.artifacts_by_id.get(artifact_id_value)
+        if not artifact:
+            return None
+        return safe_artifact_path(str(artifact.get("path", "")), self.artifact_root)
+
+    def write_markdown_artifact(self, artifact_id_value: str, content: str) -> dict[str, Any] | None:
+        artifact = self.artifacts_by_id.get(artifact_id_value)
+        if not artifact or artifact.get("type") != "markdown":
+            return None
+        path = self.artifact_path_by_id(artifact_id_value)
+        if path is None:
+            return None
+        path.write_text(content, encoding="utf-8")
+        artifact["created_at_epoch"] = artifact_created_at(path)
+        artifact["size_bytes"] = path.stat().st_size
+        return artifact
 
 
 class ReviewHandler(BaseHTTPRequestHandler):
@@ -1457,6 +2171,20 @@ class ReviewHandler(BaseHTTPRequestHandler):
             return
         self.server.replace_annotations(payload.get("annotations"))
         self.send_json(HTTPStatus.OK, self.server.annotation_state())
+
+    def do_PUT(self) -> None:
+        parsed = urlparse(self.path)
+        if not parsed.path.startswith("/api/artifact-content/"):
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        artifact_id_value = unquote(parsed.path.removeprefix("/api/artifact-content/"))
+        length = int(self.headers.get("content-length", "0"))
+        content = self.rfile.read(length).decode("utf-8")
+        artifact = self.server.write_markdown_artifact(artifact_id_value, content)
+        if artifact is None:
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": "Markdown artifact not found"})
+            return
+        self.send_json(HTTPStatus.OK, {"status": "saved", "artifact": artifact})
 
     def serve_artifact(self, encoded_path: str) -> None:
         relative = Path(posixpath.normpath(unquote(encoded_path)))
