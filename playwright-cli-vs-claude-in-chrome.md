@@ -220,51 +220,57 @@ This matrix proves repeatable artifact collection across a small set of public
 pages. It still does not prove browser parity, anti-bot handling, consent
 normalization, lazy-content completeness, or audit readiness.
 
-## Human Review Gate
+## Artifact Viewer
 
-After running the public-page matrix smoke, serve a local human review carousel:
+After running the public-page matrix smoke, serve a local artifact viewer:
 
 ```bash
-python3 scripts/playwright_cli_review_server.py artifacts/playwright-cli-public-page-matrix/latest/manifest.json --open
+python3 scripts/playwright_cli_review_gate.py start artifacts/playwright-cli-public-page-matrix/latest/manifest.json --open
 ```
 
-The `--open` flag opens the local review page in the system browser after the
-server starts. If the browser does not open automatically, open:
+The manager keeps PID, state, and logs in the ignored artifact directory and
+opens the local artifact page only after the server passes an HTTP health check.
+If the browser does not open automatically, open:
 
 ```text
 http://127.0.0.1:8765/
 ```
 
-The review UI is a wrap-around carousel with one slide per captured page. Each
-slide shows the page URL, target, overlay hide/restore counts, text length,
-viewport screenshot, full-page screenshot, element screenshot, and links to the
-raw text, snapshot, manifest, and log artifacts. Each slide has an exclusive
-three-way decision switch:
-
-- `Accept` selected by default
-- `Needs review`
-- `Reject`
-
-If `Needs review` or `Reject` is selected, a comment field appears. Browser
-interaction writes only a local draft:
-
-```text
-artifacts/playwright-cli-public-page-matrix/latest/review-draft.json
-```
-
-The browser UI deliberately does not finalize approval or trigger downstream
-audit work. To submit the gate, the user must return to the same agent session
-that drove the process and say `ready`. Only then should the agent run:
+Useful lifecycle commands:
 
 ```bash
-python3 scripts/playwright_cli_finalize_review.py artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+python3 scripts/playwright_cli_review_gate.py status artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+python3 scripts/playwright_cli_review_gate.py stop artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+python3 scripts/playwright_cli_review_gate.py open artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+python3 scripts/playwright_cli_review_gate.py state artifacts/playwright-cli-public-page-matrix/latest/manifest.json
 ```
 
-That writes:
+The viewer treats browser outputs as a generalized artifact collection. Each
+image artifact is a pointer to a file under the matrix artifact directory, not
+image bytes routed through the model. The UI provides simple previous/next
+navigation, an overview popover, an artifact menu, and a toggleable sidebar.
+
+Users annotate by click-dragging a rectangle on the current artifact and adding
+a comment. Stored annotations have this shape:
+
+```json
+{
+  "artifact_id": "mozilla-careers:viewport",
+  "rect": { "x": 10, "y": 20, "width": 320, "height": 180 },
+  "comment": "Comment text"
+}
+```
+
+The annotation state is intentionally transient. It lives in the running server
+process and disappears when that server exits. Agents can consume the collection
+and annotations during their turn with:
+
+```bash
+python3 scripts/playwright_cli_review_gate.py state artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+```
+
+or by reading:
 
 ```text
-artifacts/playwright-cli-public-page-matrix/latest/human-approval.json
+http://127.0.0.1:8765/api/annotation-state
 ```
-
-Downstream audit steps should require `human-approval.json`, not
-`review-draft.json`.

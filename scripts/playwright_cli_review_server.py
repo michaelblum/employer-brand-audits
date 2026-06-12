@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serve a local human review carousel for Playwright CLI matrix artifacts."""
+"""Serve a local artifact viewer with transient annotation state."""
 
 import argparse
 import json
@@ -19,26 +19,35 @@ from urllib.parse import unquote, urlparse
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-DEFAULT_MANIFEST = REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
+DEFAULT_MANIFEST = (
+    REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
+)
+IMAGE_ARTIFACT_KEYS = {
+    "viewport": "Viewport",
+    "full_page": "Full Page",
+    "element": "Element",
+}
+
 HTML = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Playwright CLI Artifact Review</title>
+  <title>Artifacts</title>
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --ink: #16181d;
-      --muted: #5f6877;
-      --line: #d9dee7;
-      --accent: #2563eb;
-      --accept: #15803d;
-      --review: #b45309;
-      --reject: #b91c1c;
-      --shadow: 0 10px 28px rgba(31, 41, 55, 0.12);
+      color-scheme: dark;
+      --bg: #0d0d0f;
+      --bar: #141416;
+      --panel: #18181b;
+      --panel-2: #202024;
+      --ink: #d6d6da;
+      --muted: #8f8f98;
+      --line: #2b2b31;
+      --accent: #6ea8ff;
+      --selection: rgba(110, 168, 255, 0.26);
+      --selection-line: #6ea8ff;
+      --shadow: 0 12px 34px rgba(0, 0, 0, 0.38);
     }
     * { box-sizing: border-box; }
     body {
@@ -46,231 +55,232 @@ HTML = """<!doctype html>
       min-height: 100vh;
       background: var(--bg);
       color: var(--ink);
-      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+      font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      background: rgba(246, 247, 249, 0.96);
-      border-bottom: 1px solid var(--line);
-      backdrop-filter: blur(10px);
+    button {
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      cursor: pointer;
     }
-    .topbar {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 16px;
+    button:hover { background: var(--panel-2); }
+    .toolbar {
+      position: relative;
+      z-index: 10;
+      height: 52px;
+      display: flex;
       align-items: center;
-      width: min(1440px, calc(100vw - 40px));
-      margin: 0 auto;
-      padding: 14px 0;
+      gap: 8px;
+      padding: 0 14px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--line);
     }
-    h1 {
-      margin: 0;
+    .toolbar.secondary {
+      height: 56px;
+      justify-content: space-between;
+    }
+    .group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .icon-button {
+      width: 38px;
+      height: 38px;
+      display: inline-grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 20px;
+    }
+    .overview-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 38px;
+      padding: 0 12px;
+      color: var(--ink);
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+    .artifact-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       font-size: 18px;
-      line-height: 1.2;
+      font-weight: 700;
       letter-spacing: 0;
     }
-    .subtle { color: var(--muted); }
-    .progress {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: flex-end;
-      align-items: center;
-    }
-    .pill {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 4px 10px;
-      background: var(--panel);
+    .artifact-time {
       color: var(--muted);
+      font-weight: 500;
+    }
+    .popover, .menu {
+      position: absolute;
+      z-index: 40;
+      min-width: 300px;
+      max-width: min(520px, calc(100vw - 24px));
+      max-height: min(520px, calc(100vh - 120px));
+      overflow: auto;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .popover[hidden], .menu[hidden] { display: none; }
+    .popover { left: 106px; top: 46px; }
+    .menu { right: 58px; top: 44px; min-width: 210px; }
+    .artifact-option, .menu button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2px;
+      padding: 10px;
+      text-align: left;
+      letter-spacing: 0;
+    }
+    .artifact-option.active { background: var(--panel-2); }
+    .small {
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
-    main {
-      width: min(1440px, calc(100vw - 40px));
-      margin: 18px auto 36px;
-    }
-    .carousel {
+    .shell {
+      height: calc(100vh - 108px);
       display: grid;
-      grid-template-columns: 44px minmax(0, 1fr) 44px;
-      gap: 12px;
-      align-items: stretch;
-    }
-    .nav {
-      align-self: center;
-      width: 44px;
-      height: 88px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      color: var(--ink);
-      font-size: 30px;
-      cursor: pointer;
-      box-shadow: var(--shadow);
-    }
-    .nav:hover { border-color: var(--accent); }
-    .slide {
+      grid-template-columns: minmax(0, 1fr) 360px;
       min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      box-shadow: var(--shadow);
-      overflow: hidden;
     }
-    .slide-head {
+    .shell.sidebar-hidden { grid-template-columns: minmax(0, 1fr) 0; }
+    .shell.sidebar-hidden .sidebar { display: none; }
+    .stage {
+      position: relative;
+      min-width: 0;
+      overflow: auto;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 16px;
-      padding: 18px 20px;
-      border-bottom: 1px solid var(--line);
-      align-items: start;
+      place-items: start center;
+      padding: 32px;
+      background: #101012;
     }
-    h2 {
-      margin: 0 0 6px;
-      font-size: 24px;
-      line-height: 1.18;
-      letter-spacing: 0;
-    }
-    .url {
-      margin: 0;
-      overflow-wrap: anywhere;
-      color: var(--muted);
-    }
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(4, auto);
-      gap: 8px;
-      align-items: center;
-      justify-content: end;
-      font-size: 13px;
-    }
-    .switch {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(112px, 1fr));
-      gap: 6px;
-      padding: 12px 20px;
-      border-bottom: 1px solid var(--line);
-      background: #fbfcfe;
-    }
-    .switch label {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 38px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      font-weight: 700;
-      cursor: pointer;
+    .image-wrap {
+      position: relative;
+      display: inline-block;
       user-select: none;
     }
-    .switch input {
+    .image-wrap img {
+      display: block;
+      max-width: min(100%, 1280px);
+      height: auto;
+      background: #000;
+      box-shadow: 0 0 0 1px #27364d, 0 16px 40px rgba(0, 0, 0, 0.42);
+    }
+    .selection {
       position: absolute;
-      opacity: 0;
+      border: 2px solid var(--selection-line);
+      background: var(--selection);
       pointer-events: none;
     }
-    .switch label:has(input:checked) {
-      color: #fff;
-      border-color: transparent;
+    .comment-popover {
+      position: fixed;
+      z-index: 50;
+      width: min(420px, calc(100vw - 28px));
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
     }
-    .switch label.accept:has(input:checked) { background: var(--accept); }
-    .switch label.review:has(input:checked) { background: var(--review); }
-    .switch label.reject:has(input:checked) { background: var(--reject); }
-    .comment {
-      display: none;
-      padding: 0 20px 16px;
-      border-bottom: 1px solid var(--line);
-      background: #fbfcfe;
-    }
-    .comment.visible { display: block; }
-    .comment textarea {
+    .comment-popover[hidden] { display: none; }
+    .comment-popover textarea, .edit-box textarea {
       width: 100%;
-      min-height: 76px;
+      min-height: 64px;
       resize: vertical;
+      color: var(--ink);
+      background: var(--panel-2);
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 10px 12px;
       font: inherit;
     }
-    .body {
-      display: grid;
-      grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
-      gap: 18px;
-      padding: 18px 20px 20px;
+    .comment-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
     }
-    .shots {
-      display: grid;
-      gap: 16px;
-      min-width: 0;
-    }
-    .shot {
-      min-width: 0;
-      border: 1px solid var(--line);
+    .action-button {
+      height: 36px;
+      padding: 0 12px;
       border-radius: 8px;
-      overflow: hidden;
-      background: #fff;
+      background: var(--panel-2);
+      color: var(--ink);
     }
-    .shot h3, .side h3 {
-      margin: 0;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
-      font-size: 14px;
-      letter-spacing: 0;
-      background: #f9fafb;
-    }
-    .shot-frame {
-      max-height: 620px;
+    .action-button.primary { background: #2d6cdf; }
+    .sidebar {
+      min-width: 0;
       overflow: auto;
-      background: #eef1f5;
+      border-left: 1px solid var(--line);
+      background: #111113;
     }
-    .shot-frame.compact { max-height: 420px; }
-    img {
-      display: block;
-      max-width: 100%;
-      height: auto;
-      background: #fff;
-    }
-    .side {
+    .artifact-row {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
       display: grid;
-      gap: 16px;
-      align-content: start;
+      gap: 8px;
+    }
+    .artifact-row.active { background: #17191f; }
+    .row-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
       min-width: 0;
     }
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 8px;
+    .name {
+      min-width: 0;
       overflow: hidden;
-      background: #fff;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 700;
     }
-    .panel-body {
-      padding: 12px;
+    .annotation {
+      margin-left: 14px;
+      padding: 8px 0 8px 10px;
+      border-left: 2px solid var(--line);
       display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 8px;
+      align-items: center;
     }
-    .links {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    a {
+    .annotation-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: var(--accent);
-      text-decoration: none;
-      overflow-wrap: anywhere;
     }
-    a:hover { text-decoration: underline; }
-    .ready {
-      margin-top: 16px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-      padding: 14px 16px;
+    .annotation-tools {
+      display: flex;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+    .annotation-tools button {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
       color: var(--muted);
     }
     .toast {
       position: fixed;
-      right: 20px;
-      bottom: 20px;
+      right: 16px;
+      bottom: 16px;
       max-width: 360px;
       padding: 12px 14px;
       border-radius: 8px;
@@ -280,210 +290,411 @@ HTML = """<!doctype html>
       transform: translateY(8px);
       transition: opacity 160ms ease, transform 160ms ease;
       pointer-events: none;
-      z-index: 20;
+      z-index: 60;
     }
     .toast.visible {
       opacity: 1;
       transform: translateY(0);
     }
-    @media (max-width: 960px) {
-      .topbar, main { width: min(100vw - 24px, 1440px); }
-      .carousel { grid-template-columns: 1fr; }
-      .nav { width: 100%; height: 44px; }
-      .slide-head, .body { grid-template-columns: 1fr; }
-      .metrics { justify-content: start; grid-template-columns: repeat(2, auto); }
-      .switch { grid-template-columns: 1fr; }
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar {
+        height: 36vh;
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+      .stage { padding: 16px; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="topbar">
-      <div>
-        <h1>Playwright CLI Artifact Review</h1>
-        <div class="subtle" id="gate-copy">Review draft saves locally. Return to the agent session and say "ready" to submit.</div>
+  <div class="toolbar">
+    <button class="icon-button" id="prev" type="button" title="Previous artifact">‹</button>
+    <button class="overview-button" id="overview" type="button"><span>☰</span><span>Overview</span></button>
+    <button class="icon-button" id="next" type="button" title="Next artifact">›</button>
+    <div class="popover" id="overview-popover" hidden></div>
+  </div>
+  <div class="toolbar secondary">
+    <div class="artifact-title" id="artifact-title"></div>
+    <div class="group">
+      <button class="icon-button" id="menu-button" type="button" title="Artifact menu">⋮</button>
+      <div class="menu" id="artifact-menu" hidden>
+        <button type="button" id="copy-artifact">Copy</button>
+        <button type="button" id="copy-path">Copy Path</button>
       </div>
-      <div class="progress" id="progress"></div>
+      <button class="icon-button" id="toggle-sidebar" type="button" title="Toggle sidebar">▣</button>
     </div>
-  </header>
-  <main>
-    <div class="carousel">
-      <button class="nav" id="prev" type="button" aria-label="Previous slide">&lsaquo;</button>
-      <section class="slide" id="slide"></section>
-      <button class="nav" id="next" type="button" aria-label="Next slide">&rsaquo;</button>
-    </div>
-    <div class="ready">
-      Final approval is intentionally not submitted from this browser page. When your review choices are set, return to the same agent session that started this process and say <strong>ready</strong>.
-    </div>
+  </div>
+  <main class="shell" id="shell">
+    <section class="stage" id="stage">
+      <div class="image-wrap" id="image-wrap">
+        <img id="artifact-image" alt="" draggable="false">
+        <div class="selection" id="selection" hidden></div>
+      </div>
+      <div class="comment-popover" id="comment-popover" hidden>
+        <textarea id="comment-text" placeholder="Leave a comment"></textarea>
+        <div class="comment-actions">
+          <button class="icon-button" id="dictate" type="button" title="Dictate">♬</button>
+          <div class="group">
+            <button class="action-button" id="cancel-comment" type="button">Cancel</button>
+            <button class="action-button primary" id="add-comment" type="button">Add Comment</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <aside class="sidebar" id="sidebar"></aside>
   </main>
   <div class="toast" id="toast"></div>
   <script>
-    const state = {
-      manifest: null,
-      draft: {},
+    const app = {
+      collection: null,
+      annotations: {},
       index: 0,
-      saveTimer: null,
+      drag: null,
+      pendingRect: null,
+      sidebarVisible: true,
+    };
+    const $ = (id) => document.getElementById(id);
+    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[char]));
+    const artifact = () => app.collection.artifacts[app.index];
+    const artifactAnnotations = (id) => app.annotations[id] || [];
+    const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
+    const formatTime = (epoch) => {
+      if (!epoch) return "";
+      return new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     };
 
-    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    }[char]));
-
-    const rel = (path) => `/artifact/${String(path || "").split("/").map(encodeURIComponent).join("/")}`;
-    const textLength = (page) => Number(page.visible_text_length || 0).toLocaleString();
-    const dims = (dim) => dim ? `${dim.width}x${dim.height}` : "missing";
-
-    function ensureDecision(slug) {
-      if (!state.draft[slug]) {
-        state.draft[slug] = { decision: "accept", comment: "" };
-      }
-      return state.draft[slug];
-    }
-
     function showToast(message) {
-      const toast = document.getElementById("toast");
+      const toast = $("toast");
       toast.textContent = message;
       toast.classList.add("visible");
       clearTimeout(showToast.timer);
       showToast.timer = setTimeout(() => toast.classList.remove("visible"), 1400);
     }
 
-    async function saveDraftSoon() {
-      clearTimeout(state.saveTimer);
-      state.saveTimer = setTimeout(saveDraft, 180);
+    async function copyText(value) {
+      await navigator.clipboard.writeText(value);
+      showToast("Copied");
     }
 
-    async function saveDraft() {
-      const response = await fetch("/api/draft", {
+    async function syncAnnotations() {
+      const response = await fetch("/api/annotation-state", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ decisions: state.draft }),
+        body: JSON.stringify({ annotations: app.annotations }),
       });
-      if (!response.ok) {
-        showToast("Draft save failed");
-        return;
-      }
-      showToast("Draft saved locally");
+      if (!response.ok) showToast("Annotation sync failed");
     }
 
-    function updateProgress() {
-      const pages = state.manifest.pages;
-      const counts = pages.reduce((acc, page) => {
-        const decision = ensureDecision(page.slug).decision;
-        acc[decision] = (acc[decision] || 0) + 1;
-        return acc;
-      }, {});
-      document.getElementById("progress").innerHTML = `
-        <span class="pill">${state.index + 1} / ${pages.length}</span>
-        <span class="pill">Accept ${counts.accept || 0}</span>
-        <span class="pill">Needs review ${counts.needs_review || 0}</span>
-        <span class="pill">Reject ${counts.reject || 0}</span>
-      `;
-    }
-
-    function renderSlide() {
-      const page = state.manifest.pages[state.index];
-      const decision = ensureDecision(page.slug);
-      const artifacts = page.artifacts || {};
-      const shotDims = page.screenshot_dimensions || {};
-      const commentVisible = decision.decision === "accept" ? "" : " visible";
-      document.getElementById("slide").innerHTML = `
-        <div class="slide-head">
-          <div>
-            <h2>${escapeHtml(page.slug)}</h2>
-            <p class="url"><a href="${escapeHtml(page.url)}" target="_blank" rel="noreferrer">${escapeHtml(page.url)}</a></p>
-          </div>
-          <div class="metrics">
-            <span class="pill">Target ${escapeHtml(page.target_used || "missing")}</span>
-            <span class="pill">Hidden ${escapeHtml(page.hidden_count)}</span>
-            <span class="pill">Restored ${escapeHtml(page.restored_count)}</span>
-            <span class="pill">Text ${textLength(page)} chars</span>
-          </div>
-        </div>
-        <div class="switch" role="radiogroup" aria-label="Review decision">
-          <label class="accept"><input type="radio" name="decision" value="accept" ${decision.decision === "accept" ? "checked" : ""}>Accept</label>
-          <label class="review"><input type="radio" name="decision" value="needs_review" ${decision.decision === "needs_review" ? "checked" : ""}>Needs review</label>
-          <label class="reject"><input type="radio" name="decision" value="reject" ${decision.decision === "reject" ? "checked" : ""}>Reject</label>
-        </div>
-        <div class="comment${commentVisible}" id="comment-wrap">
-          <textarea id="comment" placeholder="Optional comment for this decision">${escapeHtml(decision.comment || "")}</textarea>
-        </div>
-        <div class="body">
-          <div class="shots">
-            <div class="shot">
-              <h3>Viewport Screenshot (${escapeHtml(dims(shotDims.viewport))})</h3>
-              <div class="shot-frame compact"><img src="${rel(artifacts.viewport)}" alt="Viewport screenshot"></div>
-            </div>
-            <div class="shot">
-              <h3>Full-Page Screenshot (${escapeHtml(dims(shotDims.full_page))})</h3>
-              <div class="shot-frame"><img src="${rel(artifacts.full_page)}" alt="Full page screenshot"></div>
-            </div>
-          </div>
-          <div class="side">
-            <div class="shot">
-              <h3>Element Screenshot (${escapeHtml(dims(shotDims.element))})</h3>
-              <div class="shot-frame compact"><img src="${rel(artifacts.element)}" alt="Element screenshot"></div>
-            </div>
-            <div class="panel">
-              <h3>Artifact Links</h3>
-              <div class="panel-body links">
-                <a href="${rel(artifacts.visible_text_stdout)}" target="_blank">Visible text</a>
-                <a href="${rel(artifacts.snapshot)}" target="_blank">Snapshot</a>
-                <a href="${rel(artifacts.manifest)}" target="_blank">Page manifest</a>
-                <a href="${rel(artifacts.log)}" target="_blank">Log</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-      document.querySelectorAll('input[name="decision"]').forEach((input) => {
-        input.addEventListener("change", (event) => {
-          decision.decision = event.target.value;
-          const wrap = document.getElementById("comment-wrap");
-          wrap.classList.toggle("visible", decision.decision !== "accept");
-          updateProgress();
-          saveDraftSoon();
-        });
-      });
-      const comment = document.getElementById("comment");
-      comment.addEventListener("input", (event) => {
-        decision.comment = event.target.value;
-        saveDraftSoon();
-      });
-      updateProgress();
+    function setArtifact(index) {
+      const count = app.collection.artifacts.length;
+      app.index = (index + count) % count;
+      render();
     }
 
     function move(delta) {
-      const count = state.manifest.pages.length;
-      state.index = (state.index + delta + count) % count;
-      renderSlide();
+      setArtifact(app.index + delta);
     }
 
-    async function boot() {
-      const manifestResponse = await fetch("/api/manifest");
-      state.manifest = await manifestResponse.json();
-      const draftResponse = await fetch("/api/draft");
-      const draftPayload = await draftResponse.json();
-      state.draft = draftPayload.decisions || {};
-      for (const page of state.manifest.pages) {
-        ensureDecision(page.slug);
+    function renderTitle() {
+      const item = artifact();
+      $("artifact-title").innerHTML = `${escapeHtml(item.name)} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span>`;
+    }
+
+    function renderImage() {
+      const item = artifact();
+      const image = $("artifact-image");
+      image.src = artifactUrl(item);
+      image.alt = item.name;
+      $("selection").hidden = true;
+      $("comment-popover").hidden = true;
+    }
+
+    function renderOverview() {
+      $("overview-popover").innerHTML = app.collection.artifacts.map((item, index) => `
+        <button class="artifact-option ${index === app.index ? "active" : ""}" type="button" data-index="${index}">
+          <span>${escapeHtml(item.name)}</span>
+          <span class="small">${escapeHtml(item.path)}</span>
+        </button>
+      `).join("");
+      $("overview-popover").querySelectorAll("[data-index]").forEach((button) => {
+        button.addEventListener("click", () => {
+          $("overview-popover").hidden = true;
+          setArtifact(Number(button.dataset.index));
+        });
+      });
+    }
+
+    function renderSidebar() {
+      $("sidebar").innerHTML = app.collection.artifacts.map((item, index) => {
+        const notes = artifactAnnotations(item.id);
+        const annotationHtml = notes.length
+          ? notes.map((note) => `
+            <div class="annotation" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
+              <div class="annotation-text" title="${escapeHtml(note.comment)}">${escapeHtml(note.comment)}</div>
+              <div class="annotation-tools">
+                <button type="button" data-action="edit" title="Edit">✎</button>
+                <button type="button" data-action="delete" title="Delete">⌫</button>
+              </div>
+            </div>
+          `).join("")
+          : `<div class="small">No annotations</div>`;
+        return `
+          <div class="artifact-row ${index === app.index ? "active" : ""}" data-index="${index}">
+            <div class="row-title">
+              <div class="name">${escapeHtml(item.name)}</div>
+              <div class="small">${notes.length}</div>
+            </div>
+            ${annotationHtml}
+          </div>
+        `;
+      }).join("");
+      $("sidebar").querySelectorAll(".artifact-row[data-index]").forEach((row) => {
+        row.addEventListener("click", (event) => {
+          if (event.target.closest(".annotation-tools")) return;
+          setArtifact(Number(row.dataset.index));
+        });
+      });
+      $("sidebar").querySelectorAll("[data-action='delete']").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          const row = button.closest(".annotation");
+          const id = row.dataset.artifactId;
+          const noteId = row.dataset.annotationId;
+          app.annotations[id] = artifactAnnotations(id).filter((note) => note.id !== noteId);
+          await syncAnnotations();
+          renderSidebar();
+        });
+      });
+      $("sidebar").querySelectorAll("[data-action='edit']").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          editAnnotation(button.closest(".annotation"));
+        });
+      });
+    }
+
+    function editAnnotation(row) {
+      const id = row.dataset.artifactId;
+      const noteId = row.dataset.annotationId;
+      const note = artifactAnnotations(id).find((item) => item.id === noteId);
+      row.innerHTML = `
+        <div class="edit-box">
+          <textarea>${escapeHtml(note.comment)}</textarea>
+          <div class="comment-actions">
+            <span></span>
+            <div class="group">
+              <button class="action-button" type="button" data-edit="cancel">Cancel</button>
+              <button class="action-button primary" type="button" data-edit="save">Save</button>
+            </div>
+          </div>
+        </div>
+      `;
+      row.querySelector("[data-edit='cancel']").addEventListener("click", renderSidebar);
+      row.querySelector("[data-edit='save']").addEventListener("click", async () => {
+        note.comment = row.querySelector("textarea").value.trim();
+        note.updated_at_epoch = Math.floor(Date.now() / 1000);
+        await syncAnnotations();
+        renderSidebar();
+      });
+      row.querySelector("textarea").focus();
+    }
+
+    function renderShell() {
+      $("shell").classList.toggle("sidebar-hidden", !app.sidebarVisible);
+    }
+
+    function render() {
+      renderTitle();
+      renderImage();
+      renderOverview();
+      renderSidebar();
+      renderShell();
+    }
+
+    function imagePoint(event) {
+      const image = $("artifact-image");
+      const rect = image.getBoundingClientRect();
+      const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width);
+      const y = Math.min(Math.max(event.clientY - rect.top, 0), rect.height);
+      return { x, y };
+    }
+
+    function placeSelection(displayRect) {
+      const selection = $("selection");
+      const imageRect = $("artifact-image").getBoundingClientRect();
+      const wrapRect = $("image-wrap").getBoundingClientRect();
+      selection.style.left = `${displayRect.x + imageRect.left - wrapRect.left}px`;
+      selection.style.top = `${displayRect.y + imageRect.top - wrapRect.top}px`;
+      selection.style.width = `${displayRect.width}px`;
+      selection.style.height = `${displayRect.height}px`;
+      selection.hidden = false;
+    }
+
+    function naturalRect(displayRect) {
+      const image = $("artifact-image");
+      const imageRect = image.getBoundingClientRect();
+      const sx = image.naturalWidth / imageRect.width;
+      const sy = image.naturalHeight / imageRect.height;
+      return {
+        x: Math.round(displayRect.x * sx),
+        y: Math.round(displayRect.y * sy),
+        width: Math.round(displayRect.width * sx),
+        height: Math.round(displayRect.height * sy),
+      };
+    }
+
+    function openComment(displayRect) {
+      const popover = $("comment-popover");
+      const imageRect = $("artifact-image").getBoundingClientRect();
+      const left = Math.min(imageRect.left + displayRect.x + displayRect.width + 10, window.innerWidth - 434);
+      const top = Math.min(imageRect.top + displayRect.y, window.innerHeight - 190);
+      popover.style.left = `${Math.max(14, left)}px`;
+      popover.style.top = `${Math.max(14, top)}px`;
+      $("comment-text").value = "";
+      popover.hidden = false;
+      $("comment-text").focus();
+    }
+
+    function startDrag(event) {
+      if (event.button !== 0 || !event.target.closest("#image-wrap")) return;
+      const point = imagePoint(event);
+      app.drag = { startX: point.x, startY: point.y };
+      app.pendingRect = null;
+      $("comment-popover").hidden = true;
+      placeSelection({ x: point.x, y: point.y, width: 0, height: 0 });
+    }
+
+    function moveDrag(event) {
+      if (!app.drag) return;
+      const point = imagePoint(event);
+      const displayRect = {
+        x: Math.min(app.drag.startX, point.x),
+        y: Math.min(app.drag.startY, point.y),
+        width: Math.abs(point.x - app.drag.startX),
+        height: Math.abs(point.y - app.drag.startY),
+      };
+      placeSelection(displayRect);
+    }
+
+    function endDrag(event) {
+      if (!app.drag) return;
+      const point = imagePoint(event);
+      const displayRect = {
+        x: Math.min(app.drag.startX, point.x),
+        y: Math.min(app.drag.startY, point.y),
+        width: Math.abs(point.x - app.drag.startX),
+        height: Math.abs(point.y - app.drag.startY),
+      };
+      app.drag = null;
+      if (displayRect.width < 8 || displayRect.height < 8) {
+        $("selection").hidden = true;
+        return;
       }
-      document.getElementById("prev").addEventListener("click", () => move(-1));
-      document.getElementById("next").addEventListener("click", () => move(1));
+      app.pendingRect = naturalRect(displayRect);
+      openComment(displayRect);
+    }
+
+    async function addComment() {
+      const comment = $("comment-text").value.trim();
+      if (!comment || !app.pendingRect) return;
+      const item = artifact();
+      const note = {
+        id: `${item.id}-${Date.now().toString(36)}`,
+        artifact_id: item.id,
+        rect: app.pendingRect,
+        comment,
+        created_at_epoch: Math.floor(Date.now() / 1000),
+      };
+      app.annotations[item.id] = [...artifactAnnotations(item.id), note];
+      app.pendingRect = null;
+      $("comment-popover").hidden = true;
+      $("selection").hidden = true;
+      await syncAnnotations();
+      renderSidebar();
+      showToast("Comment added");
+    }
+
+    function setupDictation() {
+      $("dictate").addEventListener("click", () => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          showToast("Dictation unavailable");
+          return;
+        }
+        const recognition = new SpeechRecognition();
+        recognition.onresult = (event) => {
+          $("comment-text").value = `${$("comment-text").value} ${event.results[0][0].transcript}`.trim();
+        };
+        recognition.start();
+      });
+    }
+
+    function wireEvents() {
+      $("prev").addEventListener("click", () => move(-1));
+      $("next").addEventListener("click", () => move(1));
+      $("overview").addEventListener("click", () => {
+        $("overview-popover").hidden = !$("overview-popover").hidden;
+        $("artifact-menu").hidden = true;
+      });
+      $("menu-button").addEventListener("click", () => {
+        $("artifact-menu").hidden = !$("artifact-menu").hidden;
+        $("overview-popover").hidden = true;
+      });
+      $("toggle-sidebar").addEventListener("click", () => {
+        app.sidebarVisible = !app.sidebarVisible;
+        renderShell();
+      });
+      $("copy-artifact").addEventListener("click", () => copyText(JSON.stringify(artifact(), null, 2)));
+      $("copy-path").addEventListener("click", () => copyText(artifact().path));
+      $("cancel-comment").addEventListener("click", () => {
+        app.pendingRect = null;
+        $("comment-popover").hidden = true;
+        $("selection").hidden = true;
+      });
+      $("add-comment").addEventListener("click", addComment);
+      $("image-wrap").addEventListener("mousedown", startDrag);
+      $("artifact-image").addEventListener("dragstart", (event) => event.preventDefault());
+      window.addEventListener("mousemove", moveDrag);
+      window.addEventListener("mouseup", endDrag);
       document.addEventListener("keydown", (event) => {
         if (event.key === "ArrowLeft") move(-1);
         if (event.key === "ArrowRight") move(1);
+        if (event.key === "Escape") {
+          $("overview-popover").hidden = true;
+          $("artifact-menu").hidden = true;
+          $("comment-popover").hidden = true;
+          $("selection").hidden = true;
+        }
       });
-      renderSlide();
-      await saveDraft();
+      document.addEventListener("click", (event) => {
+        if (!event.target.closest(".popover") && !event.target.closest("#overview")) {
+          $("overview-popover").hidden = true;
+        }
+        if (!event.target.closest(".menu") && !event.target.closest("#menu-button")) {
+          $("artifact-menu").hidden = true;
+        }
+      });
+      setupDictation();
+    }
+
+    async function boot() {
+      const response = await fetch("/api/annotation-state");
+      const payload = await response.json();
+      app.collection = payload.collection;
+      app.annotations = payload.annotations || {};
+      if (!app.collection.artifacts.length) {
+        $("stage").innerHTML = "<div class='small'>No image artifacts found.</div>";
+        return;
+      }
+      wireEvents();
+      render();
     }
 
     boot().catch((error) => {
-      document.getElementById("slide").innerHTML = `<div class="panel-body">Failed to load review data: ${escapeHtml(error.message)}</div>`;
+      $("stage").innerHTML = `<div class="small">Failed to load artifacts: ${escapeHtml(error.message)}</div>`;
     });
   </script>
 </body>
@@ -493,21 +704,21 @@ HTML = """<!doctype html>
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Serve a local approval carousel for Playwright CLI public-page matrix artifacts."
+        description="Serve a local artifact viewer for Playwright CLI public-page matrix outputs."
     )
     parser.add_argument(
         "manifest",
         nargs="?",
         type=Path,
         default=DEFAULT_MANIFEST,
-        help="Aggregate matrix manifest to review",
+        help="Aggregate matrix manifest to view",
     )
     parser.add_argument("--host", default=DEFAULT_HOST, help="Host to bind")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Port to bind")
     parser.add_argument(
         "--open",
         action="store_true",
-        help="Open the local review URL in the system browser after the server starts",
+        help="Open the local artifact viewer in the system browser after the server starts",
     )
     return parser.parse_args()
 
@@ -523,52 +734,140 @@ def safe_manifest_path(path: Path) -> Path:
     return manifest_path
 
 
-def read_json(path: Path, default: Any = None) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return default
+def read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def write_json_atomic(path: Path, value: Any) -> None:
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp_path.replace(path)
+def artifact_id(slug: str, key: str) -> str:
+    return f"{slug}:{key}"
 
 
-def visible_text_length(page: dict[str, Any]) -> int:
-    path = page.get("artifacts", {}).get("visible_text_stdout")
-    if not path:
-        return 0
-    artifact_path = (REPO_ROOT / path).resolve()
-    if not artifact_path.exists() or REPO_ROOT not in artifact_path.parents:
-        return 0
-    return len(artifact_path.read_text(encoding="utf-8", errors="replace"))
+def artifact_created_at(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    return int(path.stat().st_mtime)
 
 
-def load_review_manifest(manifest_path: Path) -> dict[str, Any]:
+def safe_artifact_path(relative_path: str, artifact_root: Path) -> Path | None:
+    candidate = (REPO_ROOT / relative_path).resolve()
+    root = artifact_root.resolve()
+    if not candidate.exists() or REPO_ROOT not in candidate.parents:
+        return None
+    if candidate != root and root not in candidate.parents:
+        return None
+    return candidate
+
+
+def build_collection(manifest_path: Path) -> dict[str, Any]:
     manifest = read_json(manifest_path)
     if not isinstance(manifest, dict) or not isinstance(manifest.get("pages"), list):
         raise SystemExit(f"Invalid matrix manifest: {manifest_path}")
-    enriched = json.loads(json.dumps(manifest))
-    for page in enriched["pages"]:
-        page["visible_text_length"] = visible_text_length(page)
-    return enriched
+
+    artifact_root = manifest_path.parent
+    artifacts: list[dict[str, Any]] = []
+    for page in manifest["pages"]:
+        slug = str(page.get("slug", "artifact"))
+        page_artifacts = page.get("artifacts", {})
+        dimensions = page.get("screenshot_dimensions", {})
+        for key, label in IMAGE_ARTIFACT_KEYS.items():
+            relative_path = page_artifacts.get(key)
+            if not relative_path or safe_artifact_path(relative_path, artifact_root) is None:
+                continue
+            path = safe_artifact_path(relative_path, artifact_root)
+            mime = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+            artifacts.append(
+                {
+                    "id": artifact_id(slug, key),
+                    "name": f"{slug} {label}",
+                    "kind": key,
+                    "path": relative_path,
+                    "mime_type": mime,
+                    "source_page": {
+                        "slug": slug,
+                        "url": page.get("url"),
+                        "target_used": page.get("target_used"),
+                    },
+                    "dimensions": dimensions.get(key),
+                    "created_at_epoch": artifact_created_at(path),
+                }
+            )
+
+    return {
+        "id": f"artifact-collection:{manifest_path.relative_to(REPO_ROOT)}",
+        "manifest": str(manifest_path.relative_to(REPO_ROOT)),
+        "artifact_count": len(artifacts),
+        "created_at_epoch": int(time.time()),
+        "artifacts": artifacts,
+    }
+
+
+def clean_annotations(payload: Any, artifact_ids: set[str]) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(payload, dict):
+        return {}
+    clean: dict[str, list[dict[str, Any]]] = {artifact_id_value: [] for artifact_id_value in artifact_ids}
+    for item_id, annotations in payload.items():
+        if item_id not in artifact_ids or not isinstance(annotations, list):
+            continue
+        for annotation in annotations:
+            if not isinstance(annotation, dict):
+                continue
+            rect = annotation.get("rect")
+            comment = str(annotation.get("comment", "")).strip()
+            if not isinstance(rect, dict) or not comment:
+                continue
+            try:
+                clean[item_id].append(
+                    {
+                        "id": str(annotation.get("id") or f"{item_id}-{len(clean[item_id]) + 1}"),
+                        "artifact_id": item_id,
+                        "rect": {
+                            "x": int(rect["x"]),
+                            "y": int(rect["y"]),
+                            "width": int(rect["width"]),
+                            "height": int(rect["height"]),
+                        },
+                        "comment": comment,
+                        "created_at_epoch": int(annotation.get("created_at_epoch") or time.time()),
+                        "updated_at_epoch": int(annotation["updated_at_epoch"])
+                        if annotation.get("updated_at_epoch") is not None
+                        else None,
+                    }
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+    return clean
 
 
 class ReviewServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], manifest_path: Path):
         self.manifest_path = manifest_path
         self.artifact_root = manifest_path.parent
-        self.draft_path = self.artifact_root / "review-draft.json"
+        self.collection = build_collection(manifest_path)
+        self.annotations: dict[str, list[dict[str, Any]]] = {
+            item["id"]: [] for item in self.collection["artifacts"]
+        }
+        self.updated_at_epoch = int(time.time())
         super().__init__(server_address, ReviewHandler)
+
+    def annotation_state(self) -> dict[str, Any]:
+        return {
+            "status": "annotation_state",
+            "collection": self.collection,
+            "annotations": self.annotations,
+            "updated_at_epoch": self.updated_at_epoch,
+        }
+
+    def replace_annotations(self, annotations: Any) -> None:
+        artifact_ids = {item["id"] for item in self.collection["artifacts"]}
+        self.annotations = clean_annotations(annotations, artifact_ids)
+        self.updated_at_epoch = int(time.time())
 
 
 class ReviewHandler(BaseHTTPRequestHandler):
     server: ReviewServer
 
     def log_message(self, format: str, *args: object) -> None:
-        print("[review-server] " + format % args, file=sys.stderr)
+        print("[artifact-viewer] " + format % args, file=sys.stderr)
 
     def send_text(self, status: HTTPStatus, content: str, content_type: str = "text/plain") -> None:
         data = content.encode("utf-8")
@@ -595,12 +894,8 @@ class ReviewHandler(BaseHTTPRequestHandler):
             self.send_response(HTTPStatus.NO_CONTENT)
             self.end_headers()
             return
-        if parsed.path == "/api/manifest":
-            self.send_json(HTTPStatus.OK, load_review_manifest(self.server.manifest_path))
-            return
-        if parsed.path == "/api/draft":
-            draft = read_json(self.server.draft_path, {"decisions": {}})
-            self.send_json(HTTPStatus.OK, draft)
+        if parsed.path in {"/api/annotation-state", "/api/collection"}:
+            self.send_json(HTTPStatus.OK, self.server.annotation_state())
             return
         if parsed.path.startswith("/artifact/"):
             self.serve_artifact(parsed.path.removeprefix("/artifact/"))
@@ -609,51 +904,26 @@ class ReviewHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path != "/api/draft":
+        if parsed.path != "/api/annotation-state":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         length = int(self.headers.get("content-length", "0"))
-        payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        decisions = payload.get("decisions")
-        if not isinstance(decisions, dict):
-            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Missing decisions object"})
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except json.JSONDecodeError:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid JSON"})
             return
-        manifest = load_review_manifest(self.server.manifest_path)
-        page_slugs = {page["slug"] for page in manifest["pages"]}
-        clean: dict[str, dict[str, str]] = {}
-        for slug, decision in decisions.items():
-            if slug not in page_slugs or not isinstance(decision, dict):
-                continue
-            value = decision.get("decision", "accept")
-            if value not in {"accept", "needs_review", "reject"}:
-                value = "accept"
-            clean[slug] = {
-                "decision": value,
-                "comment": str(decision.get("comment", "")),
-            }
-        for slug in page_slugs:
-            clean.setdefault(slug, {"decision": "accept", "comment": ""})
-        draft = {
-            "status": "draft",
-            "manifest": str(self.server.manifest_path.relative_to(REPO_ROOT)),
-            "updated_at_epoch": int(time.time()),
-            "decisions": clean,
-        }
-        write_json_atomic(self.server.draft_path, draft)
-        self.send_json(HTTPStatus.OK, {"ok": True, "draft": str(self.server.draft_path)})
+        self.server.replace_annotations(payload.get("annotations"))
+        self.send_json(HTTPStatus.OK, self.server.annotation_state())
 
     def serve_artifact(self, encoded_path: str) -> None:
         relative = Path(posixpath.normpath(unquote(encoded_path)))
         if relative.is_absolute() or ".." in relative.parts:
             self.send_error(HTTPStatus.BAD_REQUEST)
             return
-        artifact_path = (REPO_ROOT / relative).resolve()
-        if not artifact_path.exists() or REPO_ROOT not in artifact_path.parents:
+        artifact_path = safe_artifact_path(str(relative), self.server.artifact_root)
+        if artifact_path is None:
             self.send_error(HTTPStatus.NOT_FOUND)
-            return
-        artifact_root = self.server.artifact_root.resolve()
-        if artifact_path != artifact_root and artifact_root not in artifact_path.parents:
-            self.send_error(HTTPStatus.FORBIDDEN)
             return
         content_type = mimetypes.guess_type(str(artifact_path))[0] or "application/octet-stream"
         self.send_response(HTTPStatus.OK)
@@ -669,15 +939,15 @@ def main() -> int:
     manifest_path = safe_manifest_path(args.manifest)
     server = ReviewServer((args.host, args.port), manifest_path)
     host, port = server.server_address
-    print(f"[review-server] serving {manifest_path}")
-    print(f"[review-server] open http://{host}:{port}/")
-    print(f"[review-server] draft path: {server.draft_path}")
+    print(f"[artifact-viewer] serving {manifest_path}")
+    print(f"[artifact-viewer] open http://{host}:{port}/")
+    print(f"[artifact-viewer] annotation state http://{host}:{port}/api/annotation-state")
     if args.open:
         webbrowser.open(f"http://{host}:{port}/", new=2)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n[review-server] stopped")
+        print("\n[artifact-viewer] stopped")
     finally:
         server.server_close()
     return 0
