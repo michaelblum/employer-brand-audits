@@ -15,6 +15,10 @@
       markdownSavedContent: {},
       markdownDirty: {},
       hoverMarkerTimers: [],
+      workbenchProjection: null,
+      projectedArtifactsById: {},
+      projectedStepsById: {},
+      projectedSlotsByValue: {},
     };
     const $ = (id) => document.getElementById(id);
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -24,6 +28,15 @@
     const artifactAnnotations = (id) => app.annotations[id] || [];
     const artifactIndexById = (id) => app.collection.artifacts.findIndex((item) => item.id === id);
     const annotationById = (artifactId, annotationId) => artifactAnnotations(artifactId).find((note) => note.id === annotationId);
+    const projectedArtifact = (item = artifact()) => app.projectedArtifactsById[item?.id] || null;
+    const projectedStep = (item = artifact()) => {
+      const projected = projectedArtifact(item);
+      return projected ? app.projectedStepsById[projected.produced_by_step_id] || null : null;
+    };
+    const projectedSlot = (item = artifact()) => {
+      const projected = projectedArtifact(item);
+      return projected ? app.projectedSlotsByValue[projected.slot] || null : null;
+    };
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const isImageArtifact = (item = artifact()) => item.type === "image";
     const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
@@ -51,6 +64,33 @@
       if (!epoch) return "";
       return new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     };
+    const formatSlot = (value) => String(value || "").replace(/[._-]/g, " ");
+
+    function indexProjection(payload) {
+      app.workbenchProjection = payload && typeof payload === "object" ? payload : null;
+      app.projectedArtifactsById = {};
+      app.projectedStepsById = {};
+      app.projectedSlotsByValue = {};
+      for (const item of app.workbenchProjection?.artifacts || []) {
+        if (item?.id) app.projectedArtifactsById[item.id] = item;
+      }
+      for (const step of app.workbenchProjection?.workflow?.steps || []) {
+        if (step?.id) app.projectedStepsById[step.id] = step;
+      }
+      for (const slot of app.workbenchProjection?.facets?.slots || []) {
+        if (slot?.value) app.projectedSlotsByValue[slot.value] = slot;
+      }
+    }
+
+    async function fetchWorkbenchProjection() {
+      try {
+        const response = await fetch("/api/workbench-projection", { cache: "no-store" });
+        if (!response.ok) return null;
+        return await response.json();
+      } catch (_error) {
+        return null;
+      }
+    }
 
     function showToast(message) {
       const toast = $("toast");
@@ -312,7 +352,11 @@
 
     function renderTitle() {
       const item = artifact();
-      $("artifact-title").innerHTML = `${escapeHtml(item.name)} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span>`;
+      const projected = projectedArtifact(item);
+      const slot = projectedSlot(item);
+      const slotLabel = slot?.label || projected?.slot;
+      const slotHtml = slotLabel ? `<span class="slot-pill">${escapeHtml(slotLabel)}</span>` : "";
+      $("artifact-title").innerHTML = `${escapeHtml(item.name)} ${slotHtml} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span>`;
     }
 
     function renderImage() {
@@ -457,7 +501,7 @@
       $("overview-popover").innerHTML = app.collection.artifacts.map((item, index) => `
         <button class="artifact-option ${index === app.index ? "active" : ""}" type="button" data-index="${index}">
           <span>${escapeHtml(item.name)}</span>
-          <span class="small">${escapeHtml(item.type || "file")} · ${escapeHtml(item.path)}</span>
+          <span class="small">${escapeHtml(artifactProjectionLine(item))}</span>
         </button>
       `).join("");
       $("overview-popover").querySelectorAll("[data-index]").forEach((button) => {
@@ -468,9 +512,52 @@
       });
     }
 
+    function artifactProjectionLine(item) {
+      const projected = projectedArtifact(item);
+      if (!projected) return `${item.type || "file"} · ${item.path}`;
+      const step = projectedStep(item);
+      const parts = [
+        projected.slot || item.type || "file",
+        projected.source_page?.slug,
+        step?.status,
+      ].filter(Boolean);
+      return `${parts.join(" · ")} · ${item.path}`;
+    }
+
+    function renderWorkflowHeader() {
+      const workflow = app.workbenchProjection?.workflow;
+      if (!workflow) {
+        return "";
+      }
+      const reviewableProjectionCount = app.collection.artifacts
+        .filter((item) => Boolean(projectedArtifact(item))).length;
+      const slotValues = [...new Set(
+        app.collection.artifacts
+          .map((item) => projectedArtifact(item)?.slot)
+          .filter(Boolean)
+      )].sort();
+      return `
+        <div class="workflow-summary">
+          <div class="summary-kicker">${escapeHtml(workflow.status || "unknown")}</div>
+          <div class="summary-title">${escapeHtml(workflow.name || "Workflow")}</div>
+          <div class="summary-grid">
+            <span>${escapeHtml(String((workflow.steps || []).length))} steps</span>
+            <span>${escapeHtml(String(reviewableProjectionCount))} reviewable</span>
+            <span>${escapeHtml(String(slotValues.length))} slots</span>
+          </div>
+          <div class="slot-strip">
+            ${slotValues.map((slot) => `<span>${escapeHtml(formatSlot(slot))}</span>`).join("")}
+          </div>
+        </div>
+      `;
+    }
+
     function renderSidebar() {
-      $("sidebar").innerHTML = app.collection.artifacts.map((item, index) => {
+      const artifactRows = app.collection.artifacts.map((item, index) => {
         const notes = artifactAnnotations(item.id);
+        const projected = projectedArtifact(item);
+        const step = projectedStep(item);
+        const slot = projectedSlot(item);
         const annotationHtml = notes.length
           ? notes.map((note) => `
             <div class="annotation" draggable="true" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
@@ -485,10 +572,18 @@
               <div class="name">${escapeHtml(item.name)}</div>
               <div class="small">${escapeHtml(item.type || "file")}</div>
             </div>
+            ${projected ? `
+              <div class="projection-meta">
+                <span>${escapeHtml(slot?.label || formatSlot(projected.slot))}</span>
+                <span>${escapeHtml(projected.source_page?.slug || "")}</span>
+                <span>${escapeHtml(step?.status || projected.status || "")}</span>
+              </div>
+            ` : ""}
             ${annotationHtml}
           </div>
         `;
       }).join("");
+      $("sidebar").innerHTML = renderWorkflowHeader() + artifactRows;
       $("sidebar").querySelectorAll(".artifact-row[data-index]").forEach((row) => {
         row.addEventListener("click", (event) => {
           if (event.target.closest(".annotation")) return;
@@ -1197,10 +1292,14 @@
     }
 
     async function boot() {
-      const response = await fetch("/api/annotation-state");
-      const payload = await response.json();
+      const [stateResponse, projectionPayload] = await Promise.all([
+        fetch("/api/annotation-state"),
+        fetchWorkbenchProjection(),
+      ]);
+      const payload = await stateResponse.json();
       app.collection = payload.collection;
       app.annotations = payload.annotations || {};
+      indexProjection(projectionPayload);
       if (!app.collection.artifacts.length) {
         $("stage").innerHTML = "<div class='small'>No artifacts found.</div>";
         return;
