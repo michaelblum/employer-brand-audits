@@ -47,6 +47,8 @@ MCP imaging server, and a local review workbench.
 Use `docs/superpowers/project-sop.md` for standing operating rules. The short
 version:
 
+- SOP changes require explicit human approval and an `SOP sweep` as defined in
+  `docs/superpowers/project-sop.md`.
 - At a clear stopping point after real work, close with actionable options.
 - Offer a checkpoint with a meaningful title/comment and push when reasonable
   for a team of one that wants remote visibility and agent analysis on the go.
@@ -58,6 +60,10 @@ version:
 - If the work is tangible, offer a self-guided demo. Agents should refresh or
   prepare surfaces themselves and give the user a short recipe for what to
   inspect, not service-management chores.
+- Handoffs must ask successor sessions to perform an onboarding response before
+  changing code: report entrypoint/handoff paths, the `./eba dev situation
+  --json` onboarding token, concise `Salience`, and any concerns,
+  misalignment, or drift.
 
 ## Browser And Demo Flow
 

@@ -20,6 +20,43 @@ end the response with options for the user:
 - If context pressure is detected or imminent, offer to use the Handoff skill.
 - If recent work is tangible, offer a self-guided demo.
 
+## SOP Change Control
+
+Changes to this SOP require explicit human approval. A request to add, remove,
+or rewrite SOP policy counts as approval only when the user clearly asks for
+that SOP change.
+
+SOP changes also require an `SOP sweep` before finalizing, checkpointing, or
+handing off the change. An `SOP sweep` is a separate session pass or a
+dedicated sub-agent spawn that reviews docs, and code when relevant, for:
+
+- contradictions;
+- overloaded, competing, or ambiguous terms;
+- superseded residue;
+- drift potential;
+- opportunistic refactoring or refinement opportunities.
+
+Report opportunistic refactoring or refinement opportunities separately; do not
+implement them without explicit approval. Record that the `SOP sweep` happened
+in the final response, handoff, or commit message context. Do not treat the
+sweep as authorization to expand scope beyond the approved SOP change.
+
+## Successor Onboarding Gate
+
+Handoffs must not invite a new session to change code immediately. A successor
+session should first respond with:
+
+1. Confirmation of onboarding, including links or paths to the entry point and
+   handoff it used, plus the onboarding token from `./eba dev situation --json`.
+2. A very concise alignment recital: short bulleted facts under a `Salience`
+   heading, with pointers to the handoff and generated onboarding materials
+   read. This should be brochure-short, not a second handoff.
+3. A question asking whether the user sees any concerns, misalignment, or drift
+   to address before further work begins.
+
+Only after that first response should the successor proceed with code changes,
+unless the user explicitly overrides this gate.
+
 ## Self-Guided Demo Policy
 
 When tangible work can be experienced, the agent should prepare the surface
@@ -65,3 +102,5 @@ Handoffs should be compact and successor-facing. Prefer external temp handoffs
 for session relay unless the user asks for a durable repo-local artifact.
 Reference commits, docs, and command output paths rather than restating large
 source content.
+
+Every handoff must include the Successor Onboarding Gate above.

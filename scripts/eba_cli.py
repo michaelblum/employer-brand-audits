@@ -106,6 +106,17 @@ def command_situation(args: argparse.Namespace) -> int:
             "demo": "./eba dev demo",
             "demo_headless": "./eba dev demo --no-browser",
         },
+        "onboarding": {
+            "token": "EBA-AGENTS-SOP-V1",
+            "entrypoint": "AGENTS.md",
+            "sop": "docs/superpowers/project-sop.md",
+            "first_response_gate": [
+                "confirm_entrypoint_and_handoff_paths_read",
+                "report_onboarding_token",
+                "respond_with_salience_alignment",
+                "ask_for_concerns_misalignment_or_drift_before_code_changes",
+            ],
+        },
         "stopping_point_options": [
             "checkpoint_and_push_if_useful",
             "update_issues_labels_epics",
@@ -122,6 +133,7 @@ def command_situation(args: argparse.Namespace) -> int:
         print(f"ahead={payload['git']['ahead']} behind={payload['git']['behind']}")
         review = payload["review_workbench"] or {}
         print(f"review_workbench={review.get('url', 'unavailable')} health={review.get('health', 'unknown')}")
+        print(f"onboarding_token={payload['onboarding']['token']}")
     return 0
 
 
