@@ -46,6 +46,7 @@ WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
 WORKBENCH_ASSETS = {
     "/assets/review-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
     "/assets/review-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
+    "/assets/review-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
 }
 
 

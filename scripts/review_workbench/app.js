@@ -79,19 +79,13 @@
       return new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     };
     const formatSlot = (value) => String(value || "").replace(/[._-]/g, " ");
-    const ICONS = {
-      image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><circle cx="8" cy="10" r="1.6"></circle><path d="m5 17 4.5-4.5 3.2 3.2 2.2-2.2L19 17"></path></svg>',
-      markdown: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M7 15V9l2.5 3L12 9v6"></path><path d="M15 9v6"></path><path d="m13.5 13.5 1.5 1.5 1.5-1.5"></path></svg>',
-      text: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"></path><path d="M4 10h16"></path><path d="M4 14h11"></path><path d="M4 18h8"></path></svg>',
-      log: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h7l3 3v13H7z"></path><path d="M14 4v4h4"></path><path d="M9 12h6"></path><path d="M9 16h6"></path></svg>',
-      unknown: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17h.01"></path><path d="M9.6 9a2.4 2.4 0 1 1 3.7 2 3.2 3.2 0 0 0-1.3 2.4"></path><circle cx="12" cy="12" r="9"></circle></svg>',
-    };
     const ARTIFACT_TYPE_META = {
       image: { icon: "image", className: "image" },
       markdown: { icon: "markdown", className: "markdown" },
       text: { icon: "text", className: "text" },
       log: { icon: "log", className: "log" },
     };
+    const iconHref = (name) => `/assets/review-workbench-icons.svg#icon-artifact-${name}`;
 
     function artifactMatchesFilters(item) {
       const projected = projectedArtifact(item);
@@ -108,7 +102,7 @@
     function artifactTypeIcon(item) {
       const type = artifactTypeLabel(item);
       const meta = ARTIFACT_TYPE_META[type] || { icon: "unknown", className: "unknown" };
-      return `<span class="artifact-type-icon ${escapeHtml(meta.className)}" title="${escapeHtml(type)}" aria-label="${escapeHtml(type)}" role="img">${ICONS[meta.icon] || ICONS.unknown}</span>`;
+      return `<span class="artifact-type-icon ${escapeHtml(meta.className)}" title="${escapeHtml(type)}" aria-label="${escapeHtml(type)}" role="img"><svg aria-hidden="true"><use href="${escapeHtml(iconHref(meta.icon))}"></use></svg></span>`;
     }
 
     function visibleArtifactIndexes() {

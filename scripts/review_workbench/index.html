@@ -30,13 +30,8 @@
         <div class="image-controls" id="image-controls">
           <div class="zoom-control" id="zoom-control">
             <button class="zoom-fit" id="zoom-fit" type="button" aria-label="Smart fit" title="Smart fit">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
-                <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
-                <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
-                <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
-                <path d="M9 12h6"></path>
-                <path d="M12 9v6"></path>
+              <svg aria-hidden="true">
+                <use href="/assets/review-workbench-icons.svg#icon-fit"></use>
               </svg>
             </button>
             <input id="zoom-input" type="text" inputmode="numeric" aria-label="Zoom percentage">
@@ -49,9 +44,8 @@
         <div class="markdown-controls" id="markdown-controls">
           <div class="segmented" role="group" aria-label="Markdown view mode">
             <button id="markdown-preview-mode" class="tool-button" type="button" data-markdown-mode="preview" aria-label="Preview" title="Preview">
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M2.5 10s2.7-4.8 7.5-4.8S17.5 10 17.5 10 14.8 14.8 10 14.8 2.5 10 2.5 10Z"></path>
-                <circle cx="10" cy="10" r="2.2"></circle>
+              <svg aria-hidden="true">
+                <use href="/assets/review-workbench-icons.svg#icon-preview"></use>
               </svg>
             </button>
             <button id="markdown-source-mode" class="tool-button" type="button" data-markdown-mode="source" aria-label="Edit" title="Edit">
@@ -59,16 +53,13 @@
             </button>
           </div>
           <button class="action-button icon-only" id="markdown-revert" type="button" aria-label="Revert" title="Revert">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M3 7v5h5"></path>
-              <path d="M5.1 12a7 7 0 1 0 2-4.9L3 11"></path>
+            <svg aria-hidden="true">
+              <use href="/assets/review-workbench-icons.svg#icon-revert"></use>
             </svg>
           </button>
           <button class="action-button icon-only primary" id="markdown-save" type="button" aria-label="Save" title="Save">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5 4h11l3 3v13H5z"></path>
-              <path d="M8 4v6h8"></path>
-              <path d="M8 20v-6h8v6"></path>
+            <svg aria-hidden="true">
+              <use href="/assets/review-workbench-icons.svg#icon-save"></use>
             </svg>
           </button>
         </div>
@@ -89,8 +80,8 @@
             <textarea id="comment-text" placeholder="Leave a comment"></textarea>
             <button class="dictation-control" id="comment-dictation" type="button" aria-label="Start dictation" title="Start dictation">
               <span class="dictation-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-4a1 1 0 1 1 2 0 7 7 0 0 1-6 6.92V20h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-3.08A7 7 0 0 1 5 10a1 1 0 1 1 2 0 5 5 0 0 0 10 0Z"></path>
+                <svg>
+                  <use href="/assets/review-workbench-icons.svg#icon-dictation"></use>
                 </svg>
               </span>
               <span class="dictation-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>

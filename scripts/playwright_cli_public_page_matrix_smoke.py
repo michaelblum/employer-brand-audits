@@ -23,7 +23,7 @@ TEXT_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "extract-visible-
 SETTLE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "settle-page.js"
 HIDE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "hide-obscuring-elements.js"
 RESTORE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "restore-page.js"
-MOCK_SUMMARY_TEMPLATE = """# {title} Review Summary
+REVIEW_FIXTURE_SUMMARY_TEMPLATE = """# {title} Review Fixture Summary
 
 ## Captured Source
 
@@ -33,8 +33,9 @@ MOCK_SUMMARY_TEMPLATE = """# {title} Review Summary
 
 ## Live Artifact Purpose
 
-This markdown file is emitted by the public-page matrix smoke run so the review
-workbench has a real editable text artifact alongside image artifacts.
+This markdown file is an explicit review fixture emitted by the public-page
+matrix smoke run so the review workbench has an editable text artifact
+alongside image artifacts.
 
 ## Review Checklist
 
@@ -240,10 +241,12 @@ def normalize_capture_artifact(
     manifest.setdefault("image_normalization", {})[key] = normalized
 
 
-def write_mock_markdown_artifact(manifest: dict[str, Any], page: dict[str, str], output_path: Path) -> None:
+def write_review_fixture_markdown_artifact(
+    manifest: dict[str, Any], page: dict[str, str], output_path: Path
+) -> None:
     title = page["slug"].replace("-", " ").title()
     output_path.write_text(
-        MOCK_SUMMARY_TEMPLATE.format(
+        REVIEW_FIXTURE_SUMMARY_TEMPLATE.format(
             title=title,
             url=page["url"],
             target_used=manifest.get("target_used") or "unknown",
@@ -253,6 +256,10 @@ def write_mock_markdown_artifact(manifest: dict[str, Any], page: dict[str, str],
         encoding="utf-8",
     )
     manifest["artifacts"]["summary"] = str(output_path.relative_to(REPO_ROOT))
+    manifest.setdefault("review_fixtures", {})["summary"] = {
+        "path": str(output_path.relative_to(REPO_ROOT)),
+        "purpose": "workbench_markdown_view_edit_annotate_smoke",
+    }
 
 
 def run_page(
@@ -375,7 +382,7 @@ def run_page(
         if manifest["target_used"] is None:
             raise RuntimeError(f"{slug}: no element screenshot target worked")
         normalize_capture_artifact(manifest, "element", element_path, args.normalization_policy)
-        write_mock_markdown_artifact(manifest, page, summary_path)
+        write_review_fixture_markdown_artifact(manifest, page, summary_path)
         restore_result = run_step(
             f"{slug}: restore page",
             command_for(session, "run-code", RESTORE_SNIPPET),
