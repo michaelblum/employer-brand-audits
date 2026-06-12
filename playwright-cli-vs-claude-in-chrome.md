@@ -147,3 +147,37 @@ session. Deterministic outputs are replaced on each run under:
 ```text
 artifacts/playwright-cli-capture-modes/latest/
 ```
+
+Run the real-public-page smoke for one low-risk public careers page:
+
+```bash
+python3 scripts/playwright_cli_public_page_smoke.py
+```
+
+By default, the smoke uses named session `eba-public-page`, opens
+`https://www.mozilla.org/en-US/careers/`, resizes the browser to `1365x900`,
+runs the checked-in settle and hide-obscuring-elements snippets, writes a boxed
+snapshot, extracts visible text, writes viewport and full-page screenshots,
+writes a selector-based `main` element screenshot, restores page mutations, and
+closes the session. Override the page and element selector with:
+
+```bash
+python3 scripts/playwright_cli_public_page_smoke.py --url <public-page-url> --target <selector>
+```
+
+Deterministic outputs are replaced on each run under:
+
+```text
+artifacts/playwright-cli-public-page/latest/
+```
+
+This proves the wrapper can collect the same browser artifact classes from one
+real public page. It does not prove browser parity, anti-bot handling, or audit
+readiness across employer-brand surfaces.
+
+Observed limitation from the default public-page run: Mozilla's page includes
+cookie-consent text in the extracted visible-text output even when the viewport
+screenshot is visually clear after `hide-obscuring-elements.js`. Treat consent
+copy as page noise until the extraction path has a consent-specific filter or a
+stronger visibility predicate. The default `main` selector is page-specific;
+use `--target` for pages with a different stable evidence region.
