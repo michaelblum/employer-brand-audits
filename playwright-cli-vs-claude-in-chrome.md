@@ -181,3 +181,41 @@ screenshot is visually clear after `hide-obscuring-elements.js`. Treat consent
 copy as page noise until the extraction path has a consent-specific filter or a
 stronger visibility predicate. The default `main` selector is page-specific;
 use `--target` for pages with a different stable evidence region.
+
+Run the public-page matrix smoke to exercise the wrapper across several
+low-risk, company-owned public employer-brand pages:
+
+```bash
+python3 scripts/playwright_cli_public_page_matrix_smoke.py
+```
+
+The default matrix covers Mozilla Careers, Automattic Work With Us, Wikimedia
+Foundation Jobs, and 37signals Jobs. For each page it opens a fresh named
+session, resizes to `1365x900`, runs settle and overlay-hiding snippets, writes
+a boxed snapshot, extracts visible text, writes viewport and full-page
+screenshots, writes one selector-based element screenshot, restores mutations,
+closes the session, and records a per-page `manifest.json`. Element screenshot
+selection falls back through the configured target, `main`, `h1`, and `body`,
+recording the target that worked.
+
+Deterministic outputs are replaced on each run under:
+
+```text
+artifacts/playwright-cli-public-page-matrix/latest/
+```
+
+The aggregate manifest is:
+
+```text
+artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+```
+
+Custom page matrices can replace the built-in list:
+
+```bash
+python3 scripts/playwright_cli_public_page_matrix_smoke.py --page slug=https://example.com/careers/
+```
+
+This matrix proves repeatable artifact collection across a small set of public
+pages. It still does not prove browser parity, anti-bot handling, consent
+normalization, lazy-content completeness, or audit readiness.
