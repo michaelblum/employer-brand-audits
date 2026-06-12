@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Playwright CLI Capture Modes Fixture</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: #eef2f6;
+    }
+
+    body {
+      margin: 0;
+      color: #17202a;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+    }
+
+    .fixed-overlay {
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 20;
+      min-height: 72px;
+      padding: 18px 32px;
+      color: #ffffff;
+      background: rgba(18, 34, 56, 0.92);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+    }
+
+    .sticky-rail {
+      position: sticky;
+      top: 72px;
+      z-index: 10;
+      padding: 10px 32px;
+      color: #20303f;
+      background: #f7cf57;
+      border-bottom: 1px solid #c79a18;
+    }
+
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 132px 28px 120px;
+    }
+
+    section {
+      margin: 0 0 44px;
+      padding: 24px;
+      background: #ffffff;
+      border: 1px solid #c7d0da;
+      border-radius: 8px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    .animated-card {
+      width: 260px;
+      min-height: 94px;
+      padding: 18px;
+      color: #ffffff;
+      background: #315f8f;
+      border-radius: 8px;
+      animation: settle-nudge 180ms ease-out 1;
+    }
+
+    @keyframes settle-nudge {
+      from {
+        transform: translateY(16px);
+        opacity: 0.35;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    #frame-target {
+      display: inline-block;
+      color: #153c2f;
+      background: #b9ead8;
+      border: 2px solid #3e8f71;
+      border-radius: 6px;
+    }
+
+    #trim-target {
+      width: 360px;
+      padding: 24px;
+      color: #2f2414;
+      background: linear-gradient(90deg, #d95d39 0 20px, #ffd166 20px calc(100% - 20px), #d95d39 calc(100% - 20px));
+      border: 8px solid #5c4123;
+    }
+
+    #context-target {
+      display: inline-block;
+      padding: 18px 22px;
+      color: #102239;
+      background: #d6e7ff;
+      border: 2px solid #5787c6;
+    }
+
+    .context-neighborhood {
+      padding: 22px;
+      background: #f3f7fb;
+      border: 1px dashed #8294a6;
+    }
+
+    .internal-scroll {
+      width: 520px;
+      height: 190px;
+      overflow: auto;
+      border: 3px solid #435269;
+      background: #f9fafb;
+    }
+
+    .internal-scroll-content {
+      min-height: 720px;
+      padding: 20px;
+      background:
+        linear-gradient(#ffffff, #ffffff) padding-box,
+        repeating-linear-gradient(180deg, #e8eef5 0 42px, #d7e2ed 42px 84px);
+    }
+
+    .spacer {
+      height: 760px;
+      padding: 32px;
+      color: #495667;
+      background: linear-gradient(180deg, #eef2f6, #dce6f1);
+      border: 1px dashed #9aaabd;
+    }
+  </style>
+</head>
+<body>
+  <div class="fixed-overlay" data-capture-overlay>
+    Fixed overlay used to prove obscuring-element removal.
+  </div>
+  <div class="sticky-rail" data-capture-overlay>
+    Sticky rail used to prove cleanup restores page mutations.
+  </div>
+
+  <main>
+    <section>
+      <h1>Capture Modes Fixture</h1>
+      <p>This fixture is local and deterministic. It exercises Playwright CLI capture behavior without a live employer page.</p>
+      <div class="animated-card" id="animated-card">Animated card for settled capture proof.</div>
+    </section>
+
+    <section>
+      <h2>Own-Background Frame</h2>
+      <p id="frame-target">Framed content starts with almost no breathing room.</p>
+    </section>
+
+    <section>
+      <h2>Trim</h2>
+      <div id="trim-target">Trim proof removes the loud outside border and keeps the center content.</div>
+    </section>
+
+    <section>
+      <h2>Context Margin</h2>
+      <div class="context-neighborhood">
+        <p>Context before target.</p>
+        <p id="context-target">Context target</p>
+        <p>Context after target.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Internal Scroll</h2>
+      <div class="internal-scroll" id="internal-scroll">
+        <div class="internal-scroll-content">
+          <h3>Scrollable Container</h3>
+          <p>Top content inside the internal scroller.</p>
+          <p style="margin-top: 260px;">Middle content inside the internal scroller.</p>
+          <p style="margin-top: 260px;">Bottom content inside the internal scroller.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="spacer">
+      Tall page spacer so full-page and viewport captures are visibly different.
+    </div>
+  </main>
+</body>
+</html>

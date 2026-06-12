@@ -129,3 +129,21 @@ Deterministic outputs are replaced on each run under:
 ```text
 artifacts/playwright-cli-smoke/latest/
 ```
+
+Run the local fixture capture-modes smoke for the remaining ADR-008 capture
+proof slice:
+
+```bash
+python3 scripts/playwright_cli_capture_modes_smoke.py
+```
+
+That smoke serves `scripts/playwright-fixtures/capture-modes.html` on an
+ephemeral `127.0.0.1` port, settles an animated element, hides fixed/sticky
+overlays, writes viewport and full-page screenshots, writes custom
+own-background frame / trim / context-margin / internal-scroll screenshots
+through Playwright `run-code`, restores page mutations, and closes the named
+session. Deterministic outputs are replaced on each run under:
+
+```text
+artifacts/playwright-cli-capture-modes/latest/
+```
