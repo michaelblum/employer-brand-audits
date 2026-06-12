@@ -10,7 +10,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from imaging import stitch_with_overlap, crop_to_rect, make_rendition
+from imaging import stitch_with_overlap, crop_to_rect, make_rendition, normalize_image_artifact
 
 app = Server("employer-brand-audit")
 
@@ -33,6 +33,8 @@ _TOOLS = {
                                    "client_height": {"type": "number"}},
                 },
                 "output_path": {"type": "string"},
+                "artifact_subtype": {"type": "string"},
+                "normalization_policy": {"type": "object"},
             },
         },
     },
@@ -48,6 +50,8 @@ _TOOLS = {
                 "output_path": {"type": "string"},
                 "trim": {"type": "object"},
                 "matte": {"type": "object"},
+                "artifact_subtype": {"type": "string"},
+                "normalization_policy": {"type": "object"},
             },
         },
     },
@@ -64,6 +68,19 @@ _TOOLS = {
             },
         },
     },
+    "normalize_image": {
+        "description": "Normalize a composed image artifact by max rendered height and compression policy.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["source_path"],
+            "properties": {
+                "source_path": {"type": "string"},
+                "artifact_subtype": {"type": "string"},
+                "output_path": {"type": "string"},
+                "policy": {"type": "object"},
+            },
+        },
+    },
 }
 
 
@@ -75,12 +92,20 @@ async def handle_call_tool(name, arguments):
     if name == "stitch_images":
         # returns {"output_path", "scale"}
         return stitch_with_overlap(
-            arguments["tiles"], arguments["viewport"], arguments["output_path"],
+            arguments["tiles"],
+            arguments["viewport"],
+            arguments["output_path"],
+            arguments.get("normalization_policy"),
+            arguments.get("artifact_subtype", "stitched_scroll"),
         )
     if name == "crop_image":
         path = crop_to_rect(
             arguments["source_path"], arguments["css_rect"], arguments["inner_width"],
-            arguments["output_path"], arguments.get("trim"), arguments.get("matte"),
+            arguments["output_path"],
+            arguments.get("trim"),
+            arguments.get("matte"),
+            arguments.get("normalization_policy"),
+            arguments.get("artifact_subtype", "crop"),
         )
         return {"output_path": path}
     if name == "make_rendition":
@@ -89,6 +114,13 @@ async def handle_call_tool(name, arguments):
             arguments["output_path"], arguments.get("quality", 80),
         )
         return {"output_path": path}
+    if name == "normalize_image":
+        return normalize_image_artifact(
+            arguments["source_path"],
+            arguments.get("artifact_subtype"),
+            arguments.get("policy"),
+            arguments.get("output_path"),
+        )
     raise ValueError(f"unknown tool: {name}")
 
 

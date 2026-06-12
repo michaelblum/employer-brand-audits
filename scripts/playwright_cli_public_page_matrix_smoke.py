@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from image_normalization_bridge import normalize_image_artifact
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest"
@@ -86,6 +88,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--width", type=int, default=1365, help="Browser width")
     parser.add_argument("--height", type=int, default=900, help="Browser height")
+    parser.add_argument(
+        "--normalization-policy",
+        type=Path,
+        help="Optional JSON policy for composition-time image normalization",
+    )
     return parser.parse_args()
 
 
@@ -189,6 +196,30 @@ def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def relative_result_path(path_value: str) -> str:
+    path = Path(path_value).resolve()
+    if REPO_ROOT in path.parents:
+        return str(path.relative_to(REPO_ROOT))
+    return str(path)
+
+
+def normalize_capture_artifact(
+    manifest: dict[str, Any],
+    key: str,
+    path: Path,
+    policy_path: Path | None,
+) -> None:
+    result = normalize_image_artifact(path, key, policy_path)
+    output_path = relative_result_path(result["output_path"])
+    manifest["artifacts"][key] = output_path
+    normalized = {
+        **result,
+        "source_path": relative_result_path(result["source_path"]),
+        "output_path": output_path,
+    }
+    manifest.setdefault("image_normalization", {})[key] = normalized
+
+
 def run_page(
     *,
     page: dict[str, str],
@@ -288,11 +319,13 @@ def run_page(
             command_for(session, "screenshot", viewport_path),
             log_path,
         )
+        normalize_capture_artifact(manifest, "viewport", viewport_path, args.normalization_policy)
         run_step(
             f"{slug}: write full-page screenshot",
             command_for(session, "screenshot", full_page_path, "--full-page"),
             log_path,
         )
+        normalize_capture_artifact(manifest, "full_page", full_page_path, args.normalization_policy)
         for target in target_candidates:
             candidate_result = run_step(
                 f"{slug}: write element screenshot for {target}",
@@ -305,6 +338,7 @@ def run_page(
                 break
         if manifest["target_used"] is None:
             raise RuntimeError(f"{slug}: no element screenshot target worked")
+        normalize_capture_artifact(manifest, "element", element_path, args.normalization_policy)
         restore_result = run_step(
             f"{slug}: restore page",
             command_for(session, "run-code", RESTORE_SNIPPET),
@@ -331,10 +365,11 @@ def run_page(
             else:
                 closed = True
         manifest["closed"] = closed
+        normalized = manifest.get("image_normalization", {})
         manifest["screenshot_dimensions"] = {
-            "viewport": png_dimensions(viewport_path),
-            "full_page": png_dimensions(full_page_path),
-            "element": png_dimensions(element_path),
+            "viewport": normalized.get("viewport", {}).get("output_dimensions") or png_dimensions(viewport_path),
+            "full_page": normalized.get("full_page", {}).get("output_dimensions") or png_dimensions(full_page_path),
+            "element": normalized.get("element", {}).get("output_dimensions") or png_dimensions(element_path),
         }
         write_json(manifest_path, manifest)
     return manifest

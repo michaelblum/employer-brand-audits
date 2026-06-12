@@ -2,10 +2,13 @@
 """Exercise Playwright CLI browser capture against one real public page."""
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from image_normalization_bridge import normalize_image_artifact
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -43,6 +46,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--width", type=int, default=1365, help="Browser width")
     parser.add_argument("--height", type=int, default=900, help="Browser height")
+    parser.add_argument(
+        "--normalization-policy",
+        type=Path,
+        help="Optional JSON policy for composition-time image normalization",
+    )
     return parser.parse_args()
 
 
@@ -92,6 +100,13 @@ def run_step(
     return completed
 
 
+def normalize_outputs(paths: dict[str, Path], policy_path: Path | None) -> dict[str, dict]:
+    normalized = {}
+    for subtype, path in paths.items():
+        normalized[subtype] = normalize_image_artifact(path, subtype, policy_path)
+    return normalized
+
+
 def main() -> int:
     args = parse_args()
     output_dir = args.output_dir.resolve()
@@ -115,6 +130,7 @@ def main() -> int:
     settle_path = output_dir / "public-page.settle.stdout.txt"
     hide_path = output_dir / "public-page.hide-obscuring.stdout.txt"
     restore_path = output_dir / "public-page.restore-page.stdout.txt"
+    normalization_path = output_dir / "public-page.image-normalization.json"
 
     url_path.write_text(f"{args.url}\n", encoding="utf-8")
 
@@ -171,6 +187,18 @@ def main() -> int:
             command_for(args.session, "screenshot", element_path, "--target", args.target),
             log_path,
         )
+        normalization = normalize_outputs(
+            {
+                "viewport": viewport_path,
+                "full_page": full_page_path,
+                "element": element_path,
+            },
+            args.normalization_policy,
+        )
+        normalization_path.write_text(
+            json.dumps(normalization, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         run_step(
             "restore page",
             command_for(args.session, "run-code", RESTORE_SNIPPET),
@@ -204,6 +232,7 @@ def main() -> int:
         settle_path,
         hide_path,
         restore_path,
+        normalization_path,
         log_path,
     ]:
         status = "exists" if path.exists() else "missing"

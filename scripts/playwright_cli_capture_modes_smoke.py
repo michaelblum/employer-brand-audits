@@ -2,6 +2,7 @@
 """Exercise advanced Playwright CLI capture modes against a local fixture."""
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -9,6 +10,8 @@ import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+from image_normalization_bridge import normalize_image_artifact
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -40,6 +43,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--width", type=int, default=1280, help="Browser width")
     parser.add_argument("--height", type=int, default=900, help="Browser height")
+    parser.add_argument(
+        "--normalization-policy",
+        type=Path,
+        help="Optional JSON policy for composition-time image normalization",
+    )
     return parser.parse_args()
 
 
@@ -87,6 +95,13 @@ def run_step(
         raise RuntimeError(f"{label} failed with exit code {completed.returncode}")
 
     return completed
+
+
+def normalize_outputs(paths: dict[str, Path], policy_path: Path | None) -> dict[str, dict]:
+    normalized = {}
+    for subtype, path in paths.items():
+        normalized[subtype] = normalize_image_artifact(path, subtype, policy_path)
+    return normalized
 
 
 def start_fixture_server() -> tuple[ThreadingHTTPServer, str]:
@@ -212,6 +227,7 @@ def main() -> int:
     restore_stdout_path = output_dir / "fixture.restore-page.stdout.txt"
     capture_modes_stdout_path = output_dir / "fixture.capture-modes.stdout.txt"
     capture_modes_snippet = output_dir / "capture-modes.generated.js"
+    normalization_path = output_dir / "fixture.image-normalization.json"
 
     write_mode_snippet(
         capture_modes_snippet,
@@ -274,6 +290,22 @@ def main() -> int:
             log_path,
             stdout_path=capture_modes_stdout_path,
         )
+        normalization = normalize_outputs(
+            {
+                "viewport": settled_viewport_path,
+                "viewport_overlay_hidden": hide_viewport_path,
+                "full_page": full_page_path,
+                "frame": frame_path,
+                "trim": trim_path,
+                "context": context_path,
+                "internal_scroll": internal_scroll_path,
+            },
+            args.normalization_policy,
+        )
+        normalization_path.write_text(
+            json.dumps(normalization, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         run_step(
             "restore fixture overlays",
             command_for(args.session, "run-code", RESTORE_SNIPPET),
@@ -313,6 +345,7 @@ def main() -> int:
         restore_stdout_path,
         capture_modes_stdout_path,
         capture_modes_snippet,
+        normalization_path,
         log_path,
     ]:
         status = "exists" if path.exists() else "missing"

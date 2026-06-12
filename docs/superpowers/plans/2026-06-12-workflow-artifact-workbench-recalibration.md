@@ -24,6 +24,14 @@ source manifest -> projection adapter -> normalized workbench payload -> rendere
 
 For the current branch, the Playwright public-page matrix manifest is a temporary adapter input. It is not the long-term schema and should not define the renderer's vocabulary.
 
+## Viewer And Artifact-Processing Boundary
+
+Viewer configuration owns centering and interactive zoom bounds. The workbench may compute a per-image effective minimum zoom so a tall normalized artifact can fit inside the current stage, and it may enforce configured zoom-out and zoom-in limits so images do not become impractically tiny or extremely magnified.
+
+Artifact processing owns image normalization. Screenshot, crop, stitched-scroll, full-page, and other composed image outputs are normalized before the manifest points the viewer at them. The default normalization policy caps rendered height at 4,000 px, preserves aspect ratio, and applies configurable compression behavior. Artifact subtypes can override that policy without adding subtype-specific viewer logic.
+
+The viewer must not cap rendered height, recompress, resample, or mutate artifact bytes. It only displays the artifact it receives.
+
 ## Vocabulary
 
 - **Workflow:** A named run or pack with steps and status. For the current matrix adapter, the workflow is the public-page capture matrix.
@@ -59,6 +67,7 @@ The existing matrix manifest remains supported as an adapter input while the cap
 ## Non-Goals
 
 - Do not rewrite the review workbench UI in this pass.
+- Do not move artifact height caps or compression policy into viewer zoom code.
 - Do not alter ADR-001, ADR-002, or ADR-004.
 - Do not implement the full audit manifest schema in the matrix adapter.
 - Do not make the workbench a generic file browser.

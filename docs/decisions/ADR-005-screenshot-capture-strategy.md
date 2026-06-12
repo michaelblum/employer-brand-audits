@@ -51,7 +51,15 @@ Use `playwright-cli snapshot --boxes` to obtain element refs and viewport-relati
 - **Playwright CLI `run-code` snippets** — page-context work returning small JSON or writing files via wrappers: measure rects, classify scroll mode, drive scrolling, hide obscuring elements, suppress scrollbars/rounding, wait for settle, apply and restore frame padding.
 - **Python MCP (Pillow)** — crop from stitched images, stitch tiles with overlap correction, and produce analysis/archive renditions from disk artifacts.
 
-### 5. Frame, trim, and context-margin are three distinct operations
+### 6. Composition-time image normalization
+
+After a screenshot, crop, stitched scroll capture, or other composed image is written to disk, the artifact-processing layer normalizes the image before the manifest points the viewer at it. This normalization is not viewer behavior.
+
+The default normalization policy caps rendered image height at 4,000 px and preserves aspect ratio when downscaling. It also owns compression behavior: codec, quality, compression level, and optimization flags. Artifact subtypes such as `viewport`, `full_page`, `element`, or `internal_scroll` may override these defaults for fidelity, storage, token economics, or downstream pipeline requirements.
+
+The viewer consumes the normalized artifact and its metadata as-is. Viewer zoom may scale the displayed image for inspection, but it must not resize, recompress, cap, or special-case artifact bytes.
+
+### 7. Frame, trim, and context-margin are three distinct operations
 
 Do **not** conflate these into one signed parameter (an earlier draft did):
 

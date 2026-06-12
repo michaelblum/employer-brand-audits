@@ -1,3 +1,9 @@
+    const DEFAULT_VIEWER_CONFIG = {
+      maxZoomOutPercent: 10,
+      maxZoomInPercent: 400,
+      actualSizePercent: 100,
+    };
+
     const app = {
       collection: null,
       annotations: {},
@@ -19,6 +25,10 @@
       projectedArtifactsById: {},
       projectedStepsById: {},
       projectedSlotsByValue: {},
+      viewerConfig: {
+        ...DEFAULT_VIEWER_CONFIG,
+        ...(window.WORKBENCH_VIEWER_CONFIG || {}),
+      },
     };
     const $ = (id) => document.getElementById(id);
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -228,8 +238,30 @@
       return { line_count: content ? lines.length : 0, word_count: words, heading_count: headings.length, headings };
     }
 
+    function formatZoomPercent(value) {
+      const rounded = Math.round(value * 10) / 10;
+      return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
+    }
+
+    function configuredZoomPercent(key, fallback) {
+      const value = Number(app.viewerConfig[key]);
+      return Number.isFinite(value) && value > 0 ? value : fallback;
+    }
+
+    function effectiveMinimumZoomPercent() {
+      const image = $("artifact-image");
+      const configuredZoomOut = configuredZoomPercent("maxZoomOutPercent", 10);
+      if (!image.naturalWidth || !image.naturalHeight) {
+        return configuredZoomOut;
+      }
+      return Math.min(configuredZoomOut, stageFitZoom());
+    }
+
     function clampZoom(value) {
-      return Math.min(400, Math.max(10, Math.round(Number(value) || 100)));
+      const next = Math.round(Number(value) || configuredZoomPercent("actualSizePercent", 100));
+      const minZoom = effectiveMinimumZoomPercent();
+      const maxZoom = Math.max(minZoom, configuredZoomPercent("maxZoomInPercent", 400));
+      return Math.min(maxZoom, Math.max(minZoom, next));
     }
 
     function stageViewportSize() {
@@ -282,7 +314,7 @@
       const image = $("artifact-image");
       app.zoomPercent = clampZoom(value);
       app.zoomMode = mode;
-      $("zoom-input").value = `${app.zoomPercent}%`;
+      $("zoom-input").value = formatZoomPercent(app.zoomPercent);
       if (image.naturalWidth) {
         image.style.width = `${Math.max(1, Math.round(image.naturalWidth * app.zoomPercent / 100))}px`;
       }
@@ -297,7 +329,7 @@
       const smallerThanStageAt100 =
         image.naturalWidth <= stageSize.width && image.naturalHeight <= stageSize.height;
       if (smallerThanStageAt100) {
-        return 100;
+        return configuredZoomPercent("actualSizePercent", 100);
       }
       return Math.min(stageSize.width / image.naturalWidth, stageSize.height / image.naturalHeight) * 100;
     }
@@ -309,7 +341,7 @@
       const smallerThanStageAt100 =
         image.naturalWidth <= stageSize.width && image.naturalHeight <= stageSize.height;
       if (smallerThanStageAt100 && app.zoomMode !== "actual-size") {
-        applyZoom(100, "actual-size");
+        applyZoom(configuredZoomPercent("actualSizePercent", 100), "actual-size");
         return;
       }
       applyZoom(stageFitZoom(), "stage-fit");

@@ -36,3 +36,16 @@ def test_matte_adds_solid_border(solid, tmp_path):
         assert (im.width, im.height) == (120, 120)
         assert im.getpixel((0, 0)) == (0, 0, 0)        # matte corner is black
         assert im.getpixel((60, 60)) == (255, 255, 255)  # center is original white
+
+
+def test_crop_normalizes_with_subtype_policy(solid, tmp_path):
+    src = solid("src.png", 1000, 3000, "white")
+    out = crop_to_rect(
+        src,
+        css_rect={"x": 0, "y": 0, "w": 1000, "h": 3000},
+        inner_width=1000,
+        output_path=str(tmp_path / "c.png"),
+        normalization_policy={"subtypes": {"crop": {"max_rendered_height": 1500}}},
+    )
+    with Image.open(out) as im:
+        assert (im.width, im.height) == (500, 1500)
