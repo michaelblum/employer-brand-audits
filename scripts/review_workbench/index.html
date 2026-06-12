@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Artifacts</title>
+  <link rel="stylesheet" href="/assets/review-workbench.css">
+</head>
+<body>
+  <div class="toolbar primary">
+    <button class="overview-button" id="overview" type="button"><span>☰</span><span>Overview</span></button>
+    <button class="icon-button" id="prev" type="button" title="Previous artifact">‹</button>
+    <div class="artifact-title" id="artifact-title"></div>
+    <button class="icon-button" id="next" type="button" title="Next artifact">›</button>
+    <div class="popover" id="overview-popover" hidden></div>
+    <div class="top-spacer"></div>
+    <div class="group">
+      <button class="icon-button" id="menu-button" type="button" title="Artifact menu">⋮</button>
+      <div class="menu" id="artifact-menu" hidden>
+        <button type="button" id="copy-artifact">Copy</button>
+        <button type="button" id="copy-path">Copy Path</button>
+      </div>
+      <button class="icon-button" id="toggle-sidebar" type="button" title="Toggle sidebar">▣</button>
+    </div>
+  </div>
+  <main class="shell" id="shell">
+    <div class="stage-column">
+      <div class="toolbar secondary">
+        <div class="dimension-readout" id="dimension-readout"></div>
+        <div class="image-controls" id="image-controls">
+          <div class="zoom-control" id="zoom-control">
+            <button class="zoom-fit" id="zoom-fit" type="button" aria-label="Smart fit" title="Smart fit">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+                <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
+                <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+                <path d="M9 12h6"></path>
+                <path d="M12 9v6"></path>
+              </svg>
+            </button>
+            <input id="zoom-input" type="text" inputmode="numeric" aria-label="Zoom percentage">
+            <div class="zoom-steps">
+              <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+              <button id="zoom-out" type="button" aria-label="Zoom out">-</button>
+            </div>
+          </div>
+        </div>
+        <div class="markdown-controls" id="markdown-controls">
+          <div class="segmented" role="group" aria-label="Markdown view mode">
+            <button id="markdown-preview-mode" type="button" data-markdown-mode="preview">Preview</button>
+            <button id="markdown-source-mode" type="button" data-markdown-mode="source">Edit</button>
+          </div>
+          <button class="action-button" id="markdown-revert" type="button">Revert</button>
+          <button class="action-button primary" id="markdown-save" type="button">Save</button>
+        </div>
+      </div>
+      <section class="stage" id="stage">
+        <div class="image-wrap" id="image-wrap">
+          <img id="artifact-image" alt="" draggable="false">
+          <div class="selection" id="selection" hidden></div>
+          <div class="hover-marker" id="hover-marker" hidden>💡</div>
+        </div>
+        <div class="markdown-wrap" id="markdown-wrap" hidden>
+          <div class="markdown-preview" id="markdown-preview"></div>
+          <textarea class="markdown-source" id="markdown-source" spellcheck="true" hidden></textarea>
+          <div class="markdown-marker" id="markdown-marker" hidden></div>
+        </div>
+        <div class="comment-popover" id="comment-popover" hidden>
+          <div class="dictation-field">
+            <textarea id="comment-text" placeholder="Leave a comment"></textarea>
+            <button class="dictation-control" id="comment-dictation" type="button" aria-label="Start dictation" title="Start dictation">
+              <span class="dictation-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-4a1 1 0 1 1 2 0 7 7 0 0 1-6 6.92V20h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-3.08A7 7 0 0 1 5 10a1 1 0 1 1 2 0 5 5 0 0 0 10 0Z"></path>
+                </svg>
+              </span>
+              <span class="dictation-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            </button>
+          </div>
+          <div class="comment-actions">
+            <div class="group">
+              <button class="action-button" id="secondary-comment-action" type="button">Cancel</button>
+              <button class="action-button primary" id="primary-comment-action" type="button">Add Comment</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <aside class="sidebar" id="sidebar"></aside>
+  </main>
+  <div class="toast" id="toast"></div>
+  <script src="/assets/review-workbench.js" defer></script>
