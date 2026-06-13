@@ -136,10 +136,10 @@ def mime_type_for(path_value: str) -> str:
     return mimetypes.guess_type(path_value)[0] or "application/octet-stream"
 
 
-def repository_file_path(path_value: str) -> Path | None:
+def repository_file_path(path_value: str, base_dir: Path | None = None) -> Path | None:
     candidate = Path(path_value)
     if not candidate.is_absolute():
-        candidate = REPO_ROOT / candidate
+        candidate = (base_dir or REPO_ROOT) / candidate
     try:
         resolved = candidate.resolve()
     except OSError:
@@ -149,8 +149,18 @@ def repository_file_path(path_value: str) -> Path | None:
     return resolved
 
 
-def markdown_has_mermaid(path_value: str) -> bool:
-    path = repository_file_path(path_value)
+def repository_relative_path(path_value: str, base_dir: Path | None = None) -> str:
+    path = repository_file_path(path_value, base_dir)
+    if path is None:
+        return path_value
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return path_value
+
+
+def markdown_has_mermaid(path_value: str, base_dir: Path | None = None) -> bool:
+    path = repository_file_path(path_value, base_dir)
     if path is None:
         return False
     try:
@@ -177,6 +187,89 @@ def classify_artifact(key: str, path_value: str) -> dict[str, Any] | None:
     return None
 
 
+def audit_workbench_type(artifact_type: str, path_value: str) -> str:
+    suffix = Path(path_value).suffix.lower()
+    mime_type = mime_type_for(path_value)
+    if artifact_type in {"screenshot", "crop"} or mime_type.startswith("image/"):
+        return "image"
+    if suffix in {".md", ".markdown"} or mime_type == "text/markdown":
+        return "markdown"
+    if suffix == ".json" or mime_type == "application/json":
+        return "json"
+    if mime_type.startswith("text/"):
+        return "text"
+    return artifact_type or "file"
+
+
+def audit_artifact_slot(artifact: dict[str, Any]) -> str:
+    artifact_type = str(artifact.get("type") or "artifact")
+    layer = artifact.get("layer")
+    if isinstance(layer, int):
+        return f"l{layer}.{artifact_type}"
+    return f"artifact.{artifact_type}"
+
+
+def audit_artifact_name(artifact: dict[str, Any]) -> str:
+    card = artifact.get("card")
+    if isinstance(card, dict):
+        summary = str(card.get("summary") or "").strip()
+        if summary:
+            return summary.splitlines()[0][:120]
+    artifact_id = str(artifact.get("id") or "artifact")
+    artifact_type = str(artifact.get("type") or "artifact").replace("_", " ")
+    return f"{artifact_id} {artifact_type}".strip()
+
+
+def derived_workflow_status(steps: list[dict[str, Any]]) -> str:
+    statuses = {str(step.get("status") or "unknown") for step in steps}
+    for status in ("failed", "blocked", "running", "pending"):
+        if status in statuses:
+            return status
+    if statuses == {"complete"}:
+        return "complete"
+    return "unknown"
+
+
+def add_slot_facet(slot_index: dict[str, dict[str, Any]], slot: str, label: str, artifact_id: str) -> None:
+    slot_index.setdefault(
+        slot,
+        {
+            "id": f"facet:slot:{slot}",
+            "kind": "slot",
+            "value": slot,
+            "label": label,
+            "artifact_ids": [],
+        },
+    )
+    slot_index[slot]["artifact_ids"].append(artifact_id)
+
+
+def add_host_facet(
+    host_index: dict[str, dict[str, Any]],
+    host: str | None,
+    artifact_id: str | None = None,
+) -> None:
+    if not host:
+        return
+    host_index.setdefault(
+        host,
+        {
+            "id": f"facet:host:{host}",
+            "kind": "host",
+            "value": host,
+            "page_slugs": [],
+            "artifact_ids": [],
+        },
+    )
+    if artifact_id:
+        host_index[host]["artifact_ids"].append(artifact_id)
+
+
+def audit_url_resource_id(url: str) -> str:
+    safe = re.sub(r"[^a-zA-Z0-9]+", "-", url).strip("-").lower()[:80] or "url"
+    return f"resource:url:{safe}"
+
+
 def local_file_resource(slug: str, key: str, path_value: str, slot: str) -> dict[str, Any]:
     return {
         "id": file_resource_id(slug, key),
@@ -191,8 +284,8 @@ def local_file_resource(slug: str, key: str, path_value: str, slot: str) -> dict
 def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
     """Project a Playwright public-page matrix manifest into workbench concepts.
 
-    This is intentionally an adapter, not an ADR-002 audit manifest parser. TODO:
-    add a sibling ADR-002 adapter once the capture pipeline writes audit manifests.
+    This is intentionally a legacy adapter, not an ADR-002 audit manifest
+    parser. ADR-002 manifests are handled by project_audit_manifest().
     """
     path = Path(manifest_path).expanduser().resolve()
     manifest = read_json(path)
@@ -438,24 +531,268 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
             "slots": sorted(slot_index.values(), key=lambda item: item["value"]),
         },
         "extension_points": {
-            "audit_manifest_adapter": "TODO: project ADR-002 steps/artifacts without matrix assumptions.",
+            "audit_manifest_adapter": "Use project_audit_manifest for ADR-002 steps/artifacts without matrix assumptions.",
             "artifact_provenance": "TODO: replace matrix placeholders with artifact parent_ids when available.",
             "workflow_slots": "TODO: move slot definitions to workflow-pack metadata when packs exist.",
         },
     }
 
 
+def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
+    """Project an ADR-002 audit manifest into workbench concepts.
+
+    This adapter preserves ADR-002's two-relationship rule: step dependencies
+    remain step-to-step edges, while artifact parent_ids remain artifact
+    provenance edges.
+    """
+    path = Path(manifest_path).expanduser().resolve()
+    manifest = read_json(path)
+    if not isinstance(manifest, dict):
+        raise ValueError(f"Expected ADR-002 audit manifest object: {path}")
+    steps_raw = manifest.get("steps")
+    artifacts_raw = manifest.get("artifacts")
+    if not isinstance(steps_raw, list) or not isinstance(artifacts_raw, list):
+        raise ValueError(f"Expected ADR-002 audit manifest with steps[] and artifacts[]: {path}")
+
+    source_manifest = str(path)
+    manifest_dir = path.parent
+    audit_id = str(manifest.get("audit_id") or path.parent.name or path.stem)
+    company = str(manifest.get("company") or audit_id)
+    domain = str(manifest.get("domain") or "")
+    workflow_id = f"workflow:audit:{audit_id}"
+    workflow_steps: list[dict[str, Any]] = []
+    resources: list[dict[str, Any]] = []
+    artifacts: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    host_index: dict[str, dict[str, Any]] = {}
+    slot_index: dict[str, dict[str, Any]] = {}
+    url_resource_ids: dict[str, str] = {}
+
+    if domain:
+        add_host_facet(host_index, domain.lower())
+
+    for step in steps_raw:
+        if not isinstance(step, dict):
+            continue
+        step_id = str(step.get("id") or "")
+        if not step_id:
+            continue
+        parent_step_ids = [
+            str(parent_id)
+            for parent_id in (step.get("parent_step_ids") or [])
+            if parent_id
+        ]
+        workflow_steps.append(
+            {
+                "id": step_id,
+                "name": str(step.get("name") or step_id),
+                "description": str(step.get("description") or ""),
+                "status": str(step.get("status") or "unknown"),
+                "layer": step.get("layer"),
+                "started_at": step.get("started_at"),
+                "completed_at": step.get("completed_at"),
+                "error": step.get("error"),
+                "required_inputs": step.get("required_inputs") if isinstance(step.get("required_inputs"), list) else [],
+                "artifact_ids": [
+                    str(artifact_id)
+                    for artifact_id in (step.get("artifact_ids") or [])
+                    if artifact_id
+                ],
+                "parent_step_ids": parent_step_ids,
+            }
+        )
+        edges.extend(
+            {
+                "id": f"edge:step:{parent_step_id}:{step_id}",
+                "kind": "depends_on",
+                "from": step_id,
+                "to": parent_step_id,
+            }
+            for parent_step_id in parent_step_ids
+        )
+
+    for artifact in artifacts_raw:
+        if not isinstance(artifact, dict):
+            continue
+        artifact_id = str(artifact.get("id") or "")
+        if not artifact_id:
+            continue
+        artifact_type = str(artifact.get("type") or "artifact")
+        file_path = str(artifact.get("file_path") or artifact.get("path") or "")
+        normalized_path = repository_relative_path(file_path, manifest_dir) if file_path else ""
+        params = artifact.get("params") if isinstance(artifact.get("params"), dict) else {}
+        source_url = str(params.get("url") or "")
+        host = page_host(source_url) or (domain.lower() if domain else None)
+        workbench_type = audit_workbench_type(artifact_type, file_path)
+        slot = audit_artifact_slot(artifact)
+        produced_by_step_id = str(artifact.get("produced_by_step_id") or "")
+        parent_ids = [
+            str(parent_id)
+            for parent_id in (artifact.get("parent_ids") or [])
+            if parent_id
+        ]
+        resource_ids: list[str] = []
+
+        if file_path:
+            file_resource = {
+                "id": f"resource:file:{artifact_id}",
+                "type": "file",
+                "slot": "artifact.file",
+                "path": normalized_path,
+                "mime_type": mime_type_for(file_path),
+                "artifact_id": artifact_id,
+            }
+            resources.append(file_resource)
+            resource_ids.append(file_resource["id"])
+            edges.append(
+                {
+                    "id": f"edge:{file_resource['id']}:{artifact_id}",
+                    "kind": "supports",
+                    "from": file_resource["id"],
+                    "to": artifact_id,
+                }
+            )
+
+        if source_url:
+            url_resource_id = url_resource_ids.setdefault(source_url, audit_url_resource_id(source_url))
+            if not any(resource.get("id") == url_resource_id for resource in resources):
+                resources.append(
+                    {
+                        "id": url_resource_id,
+                        "type": "url",
+                        "slot": "source.url",
+                        "url": source_url,
+                        "host": host,
+                    }
+                )
+            resource_ids.append(url_resource_id)
+            edges.append(
+                {
+                    "id": f"edge:{artifact_id}:{url_resource_id}",
+                    "kind": "observes",
+                    "from": artifact_id,
+                    "to": url_resource_id,
+                }
+            )
+
+        add_slot_facet(slot_index, slot, slot.replace(".", " ").title(), artifact_id)
+        add_host_facet(host_index, host, artifact_id)
+
+        capabilities = ["view"]
+        if workbench_type in {"image", "markdown"}:
+            capabilities.append("annotate")
+        if workbench_type == "markdown":
+            capabilities.append("edit")
+
+        facets = {
+            "host": host,
+            "artifact_type": workbench_type,
+            "artifact_kind": artifact_type,
+            "slot": slot,
+            "layer": artifact.get("layer"),
+        }
+        if workbench_type == "markdown" and file_path and markdown_has_mermaid(file_path, manifest_dir):
+            capabilities.append("render")
+            facets["diagram_kind"] = "mermaid"
+
+        artifacts.append(
+            {
+                "id": artifact_id,
+                "name": audit_artifact_name(artifact),
+                "type": workbench_type,
+                "kind": artifact_type,
+                "slot": slot,
+                "layer": artifact.get("layer"),
+                "status": str(artifact.get("status") or "unknown"),
+                "created_at": artifact.get("created_at"),
+                "path": normalized_path,
+                "mime_type": mime_type_for(file_path) if file_path else "application/octet-stream",
+                "produced_by_step_id": produced_by_step_id or None,
+                "parent_ids": parent_ids,
+                "resource_ids": resource_ids,
+                "card": artifact.get("card") if isinstance(artifact.get("card"), dict) else None,
+                "params": params,
+                "facets": facets,
+                "capabilities": capabilities,
+            }
+        )
+
+        if produced_by_step_id:
+            edges.append(
+                {
+                    "id": f"edge:{produced_by_step_id}:{artifact_id}",
+                    "kind": "produced_by",
+                    "from": produced_by_step_id,
+                    "to": artifact_id,
+                }
+            )
+        edges.extend(
+            {
+                "id": f"edge:{artifact_id}:{parent_id}",
+                "kind": "derived_from",
+                "from": artifact_id,
+                "to": parent_id,
+            }
+            for parent_id in parent_ids
+        )
+
+    return {
+        "schema_version": "workbench_projection.v0",
+        "source": {
+            "format": "adr_002_audit_manifest",
+            "manifest_path": source_manifest,
+            "adapter": "project_audit_manifest",
+            "source_schema_version": manifest.get("schema_version"),
+        },
+        "workflow": {
+            "id": workflow_id,
+            "name": f"{company} audit",
+            "status": str(manifest.get("status") or derived_workflow_status(workflow_steps)),
+            "source_manifest": source_manifest,
+            "audit_id": audit_id,
+            "company": manifest.get("company"),
+            "domain": manifest.get("domain"),
+            "template_id": manifest.get("template_id"),
+            "talent_segment": manifest.get("talent_segment"),
+            "steps": workflow_steps,
+        },
+        "resources": resources,
+        "artifacts": artifacts,
+        "artifact_groups": [],
+        "edges": edges,
+        "facets": {
+            "hosts": sorted(host_index.values(), key=lambda item: item["value"]),
+            "slots": sorted(slot_index.values(), key=lambda item: item["value"]),
+        },
+        "extension_points": {
+            "workflow_slots": "TODO: move slot definitions to workflow-pack metadata when packs exist.",
+            "artifact_groups": "TODO: derive audit-native review subjects from real artifact provenance when needed.",
+        },
+    }
+
+
+def project_workbench_manifest(manifest_path: str | Path) -> dict[str, Any]:
+    """Project a supported source manifest into the normalized workbench payload."""
+    path = Path(manifest_path).expanduser().resolve()
+    manifest = read_json(path)
+    if isinstance(manifest, dict) and isinstance(manifest.get("pages"), list):
+        return project_matrix_manifest(path)
+    if isinstance(manifest, dict) and isinstance(manifest.get("steps"), list) and isinstance(manifest.get("artifacts"), list):
+        return project_audit_manifest(path)
+    raise ValueError(f"Unsupported workbench manifest shape: {path}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Dump a normalized workbench projection for a Playwright matrix manifest."
+        description="Dump a normalized workbench projection for a supported source manifest."
     )
-    parser.add_argument("manifest", type=Path, help="Path to aggregate matrix manifest.json")
+    parser.add_argument("manifest", type=Path, help="Path to matrix or ADR-002 audit manifest.json")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    payload = project_matrix_manifest(args.manifest)
+    payload = project_workbench_manifest(args.manifest)
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
 
