@@ -16,9 +16,9 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 try:
-    from workbench_projection import project_matrix_manifest
+    from workbench_projection import project_workbench_manifest
 except ModuleNotFoundError:
-    from scripts.workbench_projection import project_matrix_manifest
+    from scripts.workbench_projection import project_workbench_manifest
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -27,19 +27,6 @@ DEFAULT_PORT = 8765
 DEFAULT_MANIFEST = (
     REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
 )
-IMAGE_ARTIFACT_KEYS = {
-    "viewport": "Viewport",
-    "full_page": "Full Page",
-    "element": "Element",
-}
-MARKDOWN_ARTIFACT_KEYS = {
-    "markdown": "Markdown",
-    "md": "Markdown",
-    "report": "Report",
-    "summary": "Summary",
-    "analysis": "Analysis",
-    "synthesis": "Synthesis",
-}
 
 WORKBENCH_DIR = Path(__file__).resolve().parent / "review_workbench"
 ARTIFACT_PRIMITIVES_DIR = Path(__file__).resolve().parent / "artifact_primitives"
@@ -65,14 +52,14 @@ def read_workbench_html() -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Serve a local artifact viewer for Playwright CLI public-page matrix outputs."
+        description="Serve a local artifact viewer for supported workflow artifact manifests."
     )
     parser.add_argument(
         "manifest",
         nargs="?",
         type=Path,
         default=DEFAULT_MANIFEST,
-        help="Aggregate matrix manifest to view",
+        help="Matrix or ADR-002 audit manifest to view",
     )
     parser.add_argument("--host", default=DEFAULT_HOST, help="Host to bind")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Port to bind")
@@ -89,41 +76,16 @@ def safe_manifest_path(path: Path) -> Path:
     if not manifest_path.exists():
         raise SystemExit(f"Manifest not found: {manifest_path}")
     if manifest_path.name != "manifest.json":
-        raise SystemExit(f"Expected an aggregate manifest.json path: {manifest_path}")
+        raise SystemExit(f"Expected a supported manifest.json path: {manifest_path}")
     if REPO_ROOT not in manifest_path.parents:
         raise SystemExit(f"Manifest must be inside the repository: {manifest_path}")
     return manifest_path
-
-
-def read_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def artifact_id(slug: str, key: str) -> str:
-    return f"{slug}:{key}"
 
 
 def artifact_created_at(path: Path) -> int | None:
     if not path.exists():
         return None
     return int(path.stat().st_mtime)
-
-
-def markdown_artifact_label(key: str) -> str:
-    if key in MARKDOWN_ARTIFACT_KEYS:
-        return MARKDOWN_ARTIFACT_KEYS[key]
-    return key.replace("_", " ").replace("-", " ").title()
-
-
-def is_markdown_artifact(key: str, path: Path) -> bool:
-    suffix = path.suffix.lower()
-    if suffix in {".md", ".markdown"}:
-        return True
-    mime = mimetypes.guess_type(str(path))[0]
-    if mime == "text/markdown":
-        return True
-    normalized_key = key.lower().replace("-", "_")
-    return normalized_key in MARKDOWN_ARTIFACT_KEYS and suffix in {".md", ".markdown", ".txt"}
 
 
 def safe_artifact_path(relative_path: str, artifact_root: Path) -> Path | None:
@@ -136,69 +98,48 @@ def safe_artifact_path(relative_path: str, artifact_root: Path) -> Path | None:
     return candidate
 
 
-def build_collection(manifest_path: Path) -> dict[str, Any]:
-    manifest = read_json(manifest_path)
-    if not isinstance(manifest, dict) or not isinstance(manifest.get("pages"), list):
-        raise SystemExit(f"Invalid matrix manifest: {manifest_path}")
+def reviewable_projected_artifact(artifact: dict[str, Any], artifact_root: Path) -> bool:
+    artifact_type = artifact.get("type")
+    if artifact_type not in {"image", "markdown"}:
+        return False
+    path = safe_artifact_path(str(artifact.get("path", "")), artifact_root)
+    return path is not None
 
+
+def collection_artifact(projected: dict[str, Any], artifact_root: Path) -> dict[str, Any]:
+    path = safe_artifact_path(str(projected.get("path", "")), artifact_root)
+    created_at_epoch = artifact_created_at(path) if path else None
+    item = {
+        "id": str(projected.get("id") or ""),
+        "name": str(projected.get("name") or projected.get("id") or "Artifact"),
+        "type": str(projected.get("type") or "file"),
+        "kind": str(projected.get("kind") or projected.get("type") or "artifact"),
+        "path": str(projected.get("path") or ""),
+        "mime_type": str(projected.get("mime_type") or "application/octet-stream"),
+        "capabilities": projected.get("capabilities") if isinstance(projected.get("capabilities"), list) else ["view"],
+        "source_page": projected.get("source_page") if isinstance(projected.get("source_page"), dict) else None,
+        "dimensions": projected.get("dimensions") if isinstance(projected.get("dimensions"), dict) else None,
+        "created_at_epoch": created_at_epoch,
+    }
+    if path is not None:
+        item["size_bytes"] = path.stat().st_size
+    return item
+
+
+def build_collection(manifest_path: Path, projection: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = projection or project_workbench_manifest(manifest_path)
     artifact_root = manifest_path.parent
-    artifacts: list[dict[str, Any]] = []
-    for page in manifest["pages"]:
-        slug = str(page.get("slug", "artifact"))
-        page_artifacts = page.get("artifacts", {})
-        dimensions = page.get("screenshot_dimensions", {})
-        for key, label in IMAGE_ARTIFACT_KEYS.items():
-            relative_path = page_artifacts.get(key)
-            if not relative_path or safe_artifact_path(relative_path, artifact_root) is None:
-                continue
-            path = safe_artifact_path(relative_path, artifact_root)
-            mime = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
-            artifacts.append(
-                {
-                    "id": artifact_id(slug, key),
-                    "name": f"{slug} {label}",
-                    "type": "image",
-                    "kind": key,
-                    "path": relative_path,
-                    "mime_type": mime,
-                    "capabilities": ["view", "annotate"],
-                    "source_page": {
-                        "slug": slug,
-                        "url": page.get("url"),
-                        "target_used": page.get("target_used"),
-                    },
-                    "dimensions": dimensions.get(key),
-                    "created_at_epoch": artifact_created_at(path),
-                }
-            )
-        for key, relative_path in page_artifacts.items():
-            if key in IMAGE_ARTIFACT_KEYS or not relative_path:
-                continue
-            path = safe_artifact_path(relative_path, artifact_root)
-            if path is None or not is_markdown_artifact(str(key), path):
-                continue
-            mime = mimetypes.guess_type(str(path))[0] or "text/markdown"
-            artifacts.append(
-                {
-                    "id": artifact_id(slug, key),
-                    "name": f"{slug} {markdown_artifact_label(str(key))}",
-                    "type": "markdown",
-                    "kind": str(key),
-                    "path": relative_path,
-                    "mime_type": mime,
-                    "capabilities": ["view", "edit", "annotate"],
-                    "source_page": {
-                        "slug": slug,
-                        "url": page.get("url"),
-                        "target_used": page.get("target_used"),
-                    },
-                    "created_at_epoch": artifact_created_at(path),
-                }
-            )
+    projected_artifacts = payload.get("artifacts") if isinstance(payload.get("artifacts"), list) else []
+    artifacts = [
+        collection_artifact(projected, artifact_root)
+        for projected in projected_artifacts
+        if isinstance(projected, dict) and reviewable_projected_artifact(projected, artifact_root)
+    ]
 
     return {
         "id": f"artifact-collection:{manifest_path.relative_to(REPO_ROOT)}",
         "manifest": str(manifest_path.relative_to(REPO_ROOT)),
+        "source_format": payload.get("source", {}).get("format") if isinstance(payload.get("source"), dict) else None,
         "artifact_count": len(artifacts),
         "created_at_epoch": int(time.time()),
         "artifacts": artifacts,
@@ -286,8 +227,8 @@ class ReviewServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], manifest_path: Path):
         self.manifest_path = manifest_path
         self.artifact_root = manifest_path.parent
-        self.collection = build_collection(manifest_path)
-        self.workbench_projection = project_matrix_manifest(manifest_path)
+        self.workbench_projection = project_workbench_manifest(manifest_path)
+        self.collection = build_collection(manifest_path, self.workbench_projection)
         self.artifacts_by_id = {item["id"]: item for item in self.collection["artifacts"]}
         self.annotations: dict[str, list[dict[str, Any]]] = {
             item["id"]: [] for item in self.collection["artifacts"]

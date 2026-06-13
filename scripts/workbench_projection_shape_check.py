@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from playwright_cli_review_server import build_collection
 from workbench_projection import project_audit_manifest, project_matrix_manifest, project_workbench_manifest
 
 
@@ -351,6 +352,32 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def assert_audit_server_collection(manifest_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    collection = build_collection(manifest_path, payload)
+    artifacts = collection.get("artifacts") or []
+    artifact_ids = {artifact.get("id") for artifact in artifacts}
+    require(
+        collection.get("source_format") == "adr_002_audit_manifest",
+        "Server collection must preserve ADR-002 source format",
+    )
+    require(
+        artifact_ids == {"l1-careers-screenshot", "l2-analysis", "l4-report"},
+        "Server collection must expose only currently reviewable ADR-002 artifacts",
+    )
+    report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-report"), None)
+    screenshot = next((artifact for artifact in artifacts if artifact.get("id") == "l1-careers-screenshot"), None)
+    require(isinstance(report, dict), "ADR-002 report missing from server collection")
+    require(report.get("type") == "markdown", "ADR-002 report collection type drifted")
+    require("render" in (report.get("capabilities") or []), "ADR-002 report render capability missing in collection")
+    require(isinstance(screenshot, dict), "ADR-002 screenshot missing from server collection")
+    require(screenshot.get("type") == "image", "ADR-002 screenshot collection type drifted")
+    require(collection.get("artifact_count") == len(artifacts), "Server collection artifact_count drifted")
+    return {
+        "status": "passed",
+        "artifact_ids": sorted(artifact_ids),
+    }
+
+
 def main() -> int:
     ARTIFACT_TMP_ROOT.mkdir(parents=True, exist_ok=True)
     root = Path(tempfile.mkdtemp(prefix=".workbench-projection-shape-", dir=ARTIFACT_TMP_ROOT))
@@ -373,6 +400,7 @@ def main() -> int:
             "status": "passed",
             "matrix": assert_matrix_projection_shape(matrix_payload),
             "audit_manifest": assert_audit_projection_shape(audit_payload),
+            "audit_server_collection": assert_audit_server_collection(audit_path, audit_payload),
         }
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
