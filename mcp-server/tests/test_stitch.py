@@ -51,3 +51,21 @@ def test_scale_multiplies_overlap(band_tiles, tmp_path):
     assert result["scale"] == 2.0
     with Image.open(result["output_path"]) as im:
         assert (im.width, im.height) == (100, 180)  # 100 + (100-20)
+
+
+def test_stitch_normalizes_composed_height(band_tiles, tmp_path):
+    paths = band_tiles(100, 100)
+    spec = [
+        {"path": paths[0], "scroll_top": 0},
+        {"path": paths[1], "scroll_top": 100},
+        {"path": paths[2], "scroll_top": 200},
+    ]
+    result = stitch_with_overlap(
+        spec,
+        viewport={"inner_width": 100, "inner_height": 100, "client_height": 100},
+        output_path=str(tmp_path / "s.png"),
+        normalization_policy={"subtypes": {"stitched_scroll": {"max_rendered_height": 150}}},
+    )
+    with Image.open(result["output_path"]) as im:
+        assert (im.width, im.height) == (50, 150)
+    assert result["normalization"]["resized"] is True

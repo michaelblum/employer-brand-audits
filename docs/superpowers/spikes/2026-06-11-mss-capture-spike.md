@@ -1,5 +1,7 @@
 # Spike: mss Capture Validation
 
+> Historical note: this spike validated the old server-side OS-capture fallback for Claude-in-Chrome orchestration. [ADR-008](../../decisions/ADR-008-playwright-cli-browser-engine.md) makes Playwright CLI the browser engine. Treat `mss` as fallback context only, not the default capture primitive.
+
 **Date:** 2026-06-11  
 **Status:** Complete — mss confirmed viable; three integration notes documented below.
 

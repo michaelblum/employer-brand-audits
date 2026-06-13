@@ -1,5 +1,7 @@
 # Capture & Image Pipeline Implementation Plan
 
+> Historical note: this plan predates [ADR-008](../../decisions/ADR-008-playwright-cli-browser-engine.md). Its pure Python image operations remain useful, but its Claude-in-Chrome `computer`/`zoom` capture primitive is superseded. New browser automation must use Playwright CLI or thin repo wrappers around it.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build and unit-test the pure-Python image operations the audit's capture path depends on (scale measurement, overlap-stitch, crop, rendition), expose them as MCP tools, and de-risk the browser-side capture primitive with a spike — before any pipeline glue is written.

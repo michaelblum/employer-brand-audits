@@ -4,7 +4,12 @@ from server import handle_call_tool, list_tool_names, _serialize
 
 
 def test_tools_are_registered():
-    assert set(list_tool_names()) == {"stitch_images", "crop_image", "make_rendition"}
+    assert set(list_tool_names()) == {
+        "stitch_images",
+        "crop_image",
+        "make_rendition",
+        "normalize_image",
+    }
 
 
 def test_make_rendition_tool_roundtrip(solid, tmp_path):
@@ -31,3 +36,13 @@ def test_stitch_wire_result_includes_scale(band_tiles, tmp_path):
     payload = json.loads(wire[0].text)
     assert payload["scale"] == 1.0
     assert payload["output_path"].endswith("s.png")
+
+
+def test_normalize_image_tool_roundtrip(solid):
+    src = solid("tall.png", 1000, 5000, "blue")
+    result = asyncio.run(handle_call_tool(
+        "normalize_image",
+        {"source_path": src, "artifact_subtype": "full_page"},
+    ))
+    assert result["output_dimensions"] == {"width": 800, "height": 4000}
+    assert result["resized"] is True

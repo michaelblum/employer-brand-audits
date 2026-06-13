@@ -1,8 +1,15 @@
 from PIL import Image
+from imaging.normalization import normalize_image_artifact
 from imaging.scale import measure_scale
 
 
-def stitch_with_overlap(tiles, viewport, output_path):
+def stitch_with_overlap(
+    tiles,
+    viewport,
+    output_path,
+    normalization_policy=None,
+    artifact_subtype="stitched_scroll",
+):
     """Vertically stitch viewport tiles, trimming the duplicated overlap.
 
     Scale is derived from the first tile (page-as-ruler, ADR-005):
@@ -41,4 +48,9 @@ def stitch_with_overlap(tiles, viewport, output_path):
         canvas.paste(p, (0, y))
         y += p.height
     canvas.save(output_path)
-    return {"output_path": output_path, "scale": scale}
+    normalization = normalize_image_artifact(
+        output_path,
+        artifact_subtype=artifact_subtype,
+        policy=normalization_policy,
+    )
+    return {"output_path": normalization["output_path"], "scale": scale, "normalization": normalization}

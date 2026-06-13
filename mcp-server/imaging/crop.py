@@ -1,8 +1,18 @@
 from PIL import Image
+from imaging.normalization import normalize_image_artifact
 from imaging.scale import _scale_from_width
 
 
-def crop_to_rect(image_path, css_rect, inner_width, output_path, trim=None, matte=None):
+def crop_to_rect(
+    image_path,
+    css_rect,
+    inner_width,
+    output_path,
+    trim=None,
+    matte=None,
+    normalization_policy=None,
+    artifact_subtype="crop",
+):
     """Crop to a CSS rect (scaled by S = width/inner_width), then optional
     trim (crop inward, CSS px) and matte (solid-color border).
 
@@ -28,4 +38,9 @@ def crop_to_rect(image_path, css_rect, inner_width, output_path, trim=None, matt
             out = framed
 
         out.save(output_path)
-    return output_path
+    normalization = normalize_image_artifact(
+        output_path,
+        artifact_subtype=artifact_subtype,
+        policy=normalization_policy,
+    )
+    return normalization["output_path"]
