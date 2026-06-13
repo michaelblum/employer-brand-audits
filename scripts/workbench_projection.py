@@ -266,6 +266,7 @@ def add_host_facet(
 
 
 def audit_url_resource_id(url: str) -> str:
+    # TODO: include a short hash suffix so distinct long URLs cannot collide after slug truncation.
     safe = re.sub(r"[^a-zA-Z0-9]+", "-", url).strip("-").lower()[:80] or "url"
     return f"resource:url:{safe}"
 
@@ -544,6 +545,10 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
     This adapter preserves ADR-002's two-relationship rule: step dependencies
     remain step-to-step edges, while artifact parent_ids remain artifact
     provenance edges.
+
+    TODO: define the missing-file path contract before wiring this adapter to
+    server artifact reads; unresolved audit-relative paths currently remain as
+    authored instead of being rejected or normalized.
     """
     path = Path(manifest_path).expanduser().resolve()
     manifest = read_json(path)
@@ -644,6 +649,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
             }
             resources.append(file_resource)
             resource_ids.append(file_resource["id"])
+            # TODO: settle supports-edge direction before any consumer relies on resource edges.
             edges.append(
                 {
                     "id": f"edge:{file_resource['id']}:{artifact_id}",
@@ -727,6 +733,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
                 }
             )
         edges.extend(
+            # TODO: namespace edge ids by kind/source once edge consumers need stable ids across edge families.
             {
                 "id": f"edge:{artifact_id}:{parent_id}",
                 "kind": "derived_from",

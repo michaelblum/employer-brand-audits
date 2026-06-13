@@ -277,6 +277,7 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     )
     steps = payload.get("workflow", {}).get("steps") or []
     artifacts = payload.get("artifacts") or []
+    resources = payload.get("resources") or []
     edges = payload.get("edges") or []
     groups = payload.get("artifact_groups")
     facets = payload.get("facets") or {}
@@ -288,9 +289,15 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     require(isinstance(groups, list), "ADR-002 projection must emit artifact_groups as a list")
     require(groups == [], "ADR-002 fixture must not derive artifact_groups from provenance parent_ids")
     require("composites" not in facets, "ADR-002 projection must not restore facets.composites")
+    require(payload.get("workflow", {}).get("status") == "complete", "ADR-002 workflow status drifted")
+    require(
+        len([resource for resource in resources if resource.get("type") == "url"]) == 1,
+        "ADR-002 URL resources must be deduplicated",
+    )
     require(isinstance(report, dict), "Missing ADR-002 report artifact")
     require(report.get("type") == "markdown", "ADR-002 report should project as markdown")
     require(report.get("kind") == "report", "ADR-002 artifact semantic type should be preserved as kind")
+    require("diagram" not in report, "ADR-002 Mermaid report must not emit artifact.diagram metadata")
     require("render" in (report.get("capabilities") or []), "ADR-002 Mermaid report should expose render")
     require(
         report.get("facets", {}).get("diagram_kind") == "mermaid",
@@ -299,6 +306,10 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     require(isinstance(screenshot, dict), "Missing ADR-002 screenshot artifact")
     require(screenshot.get("type") == "image", "ADR-002 screenshot should project as image")
     require(screenshot.get("parent_ids") == ["l0-urls"], "ADR-002 artifact parent_ids drifted")
+    for artifact in (report, screenshot):
+        projected_path = Path(str(artifact.get("path") or ""))
+        require(not projected_path.is_absolute(), f"{artifact.get('id')} path must be repo-root-relative")
+        require((REPO_ROOT / projected_path).exists(), f"{artifact.get('id')} path must resolve under repo root")
     require(
         any(
             edge.get("id") == "edge:step:l0-url-discovery:l1-screenshot-capture"
@@ -325,6 +336,13 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
         any(step.get("id") == "l1-screenshot-capture" for step in steps),
         "Missing ADR-002 projected workflow step",
     )
+    step_ids = {step.get("id") for step in steps}
+    artifact_ids = {artifact.get("id") for artifact in artifacts}
+    for edge in edges:
+        if edge.get("kind") == "derived_from":
+            require(edge.get("to") in artifact_ids, "derived_from edges must point to artifact ids")
+        if edge.get("kind") == "depends_on":
+            require(edge.get("to") in step_ids, "depends_on edges must point to step ids")
     return {
         "status": "passed",
         "audit_manifest_adapter": payload.get("source", {}).get("adapter"),
@@ -341,7 +359,12 @@ def main() -> int:
         audit_path = audit_fixture_manifest(root)
         matrix_payload = project_matrix_manifest(matrix_path)
         audit_payload = project_audit_manifest(audit_path)
+        autodetected_matrix_payload = project_workbench_manifest(matrix_path)
         autodetected_audit_payload = project_workbench_manifest(audit_path)
+        require(
+            autodetected_matrix_payload.get("source", {}).get("adapter") == "project_matrix_manifest",
+            "Workbench projection auto-detection did not select the matrix adapter",
+        )
         require(
             autodetected_audit_payload.get("source", {}).get("adapter") == "project_audit_manifest",
             "Workbench projection auto-detection did not select the ADR-002 adapter",
