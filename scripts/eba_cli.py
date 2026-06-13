@@ -24,6 +24,7 @@ COMPILE_TARGETS = [
     "scripts/playwright_cli_review_server.py",
     "scripts/playwright_cli_review_gate.py",
     "scripts/workbench_projection.py",
+    "scripts/workbench_projection_shape_check.py",
     "scripts/eba_cli.py",
 ]
 
@@ -140,6 +141,7 @@ def command_situation(args: argparse.Namespace) -> int:
 def validation_commands() -> list[list[str]]:
     commands = [
         [sys.executable, "-m", "py_compile", *COMPILE_TARGETS],
+        [sys.executable, "scripts/workbench_projection_shape_check.py"],
         ["node", "--check", "scripts/artifact_primitives/mermaid_renderer.js"],
         ["node", "--check", "scripts/review_workbench/app.js"],
         ["node", "--check", "scripts/playwright-snippets/review-workbench-composite-artifact-check.js"],
