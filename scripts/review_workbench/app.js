@@ -25,9 +25,11 @@
       projectedArtifactsById: {},
       projectedStepsById: {},
       projectedSlotsByValue: {},
+      projectedGroupsById: {},
       filters: {
         stepId: null,
         slot: null,
+        compositeId: null,
       },
       viewerConfig: {
         ...DEFAULT_VIEWER_CONFIG,
@@ -51,6 +53,7 @@
       const projected = projectedArtifact(item);
       return projected ? app.projectedSlotsByValue[projected.slot] || null : null;
     };
+    const activeComposite = () => app.filters.compositeId ? app.projectedGroupsById[app.filters.compositeId] || null : null;
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const isImageArtifact = (item = artifact()) => item.type === "image";
     const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
@@ -91,6 +94,10 @@
       const projected = projectedArtifact(item);
       if (app.filters.stepId && projected?.produced_by_step_id !== app.filters.stepId) return false;
       if (app.filters.slot && projected?.slot !== app.filters.slot) return false;
+      if (app.filters.compositeId) {
+        const group = app.projectedGroupsById[app.filters.compositeId];
+        if (!group?.artifact_ids?.includes(item.id)) return false;
+      }
       return true;
     }
 
@@ -123,6 +130,7 @@
       app.projectedArtifactsById = {};
       app.projectedStepsById = {};
       app.projectedSlotsByValue = {};
+      app.projectedGroupsById = {};
       for (const item of app.workbenchProjection?.artifacts || []) {
         if (item?.id) app.projectedArtifactsById[item.id] = item;
       }
@@ -131,6 +139,10 @@
       }
       for (const slot of app.workbenchProjection?.facets?.slots || []) {
         if (slot?.value) app.projectedSlotsByValue[slot.value] = slot;
+      }
+      const groups = app.workbenchProjection?.artifact_groups || app.workbenchProjection?.facets?.composites || [];
+      for (const group of groups) {
+        if (group?.id) app.projectedGroupsById[group.id] = group;
       }
     }
 
@@ -202,6 +214,26 @@
       return ` data-source-line="${index + 1}"`;
     }
 
+    function renderMermaidSourceLines(source, firstLineIndex) {
+      const lines = String(source || "").split("\n");
+      return lines.map((line, offset) => (
+        `<span class="mermaid-source-line"${sourceLineAttribute(firstLineIndex + offset)}>${escapeHtml(line || " ")}</span>`
+      )).join("\n");
+    }
+
+    function renderMermaidBlock(source, fenceStart) {
+      const firstSourceLine = fenceStart + 1;
+      return (
+        `<figure${sourceLineAttribute(fenceStart)} class="markdown-mermaid render-state-source" data-markdown-diagram="mermaid" data-artifact-renderer="mermaid" data-render-state="source">`
+          + "<figcaption>Mermaid diagram</figcaption>"
+          + '<div class="mermaid-render-target" data-mermaid-target aria-label="Mermaid preview"></div>'
+          + '<div class="mermaid-render-status" data-mermaid-status role="status">Mermaid source is preserved for deterministic preview rendering.</div>'
+          + `<pre class="mermaid-source"><code>${renderMermaidSourceLines(source, firstSourceLine)}</code></pre>`
+          + `<template class="mermaid-source-raw">${escapeHtml(source)}</template>`
+        + "</figure>"
+      );
+    }
+
     function renderMarkdown(source) {
       const lines = String(source || "").split("\n");
       let html = "";
@@ -216,7 +248,7 @@
         const fence = line.match(/^```\s*([a-zA-Z0-9_-]+)?\s*$/);
         if (fence) {
           closeList();
-          const language = fence[1] || "";
+          const language = (fence[1] || "").toLowerCase();
           const start = index;
           const body = [];
           index += 1;
@@ -224,7 +256,12 @@
             body.push(lines[index]);
             index += 1;
           }
-          html += `<pre${sourceLineAttribute(start)}><code${language ? ` data-language="${escapeHtml(language)}"` : ""}>${escapeHtml(body.join("\n"))}</code></pre>`;
+          const blockSource = body.join("\n");
+          if (language === "mermaid") {
+            html += renderMermaidBlock(blockSource, start);
+          } else {
+            html += `<pre${sourceLineAttribute(start)}><code${language ? ` data-language="${escapeHtml(language)}"` : ""}>${escapeHtml(blockSource)}</code></pre>`;
+          }
           continue;
         }
         const heading = line.match(/^(#{1,3})\s+(.+)/);
@@ -432,9 +469,14 @@
       const item = artifact();
       const projected = projectedArtifact(item);
       const slot = projectedSlot(item);
+      const workflow = app.workbenchProjection?.workflow;
+      const composite = activeComposite();
       const slotLabel = slot?.label || projected?.slot;
       const slotHtml = slotLabel ? `<span class="slot-pill">${escapeHtml(slotLabel)}</span>` : "";
-      $("artifact-title").innerHTML = `${escapeHtml(item.name)} ${slotHtml} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span>`;
+      const breadcrumbHtml = composite
+        ? `<span class="artifact-breadcrumb">${escapeHtml(workflow?.name || "Workflow")} -&gt; ${escapeHtml(composite.label || composite.id)}</span>`
+        : "";
+      $("artifact-title").innerHTML = `${breadcrumbHtml}<span class="artifact-heading">${escapeHtml(item.name)} ${slotHtml} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span></span>`;
     }
 
     function renderImage() {
@@ -488,6 +530,9 @@
     function renderMarkdownBody(item) {
       const content = app.markdownContent[item.id] || "";
       $("markdown-preview").innerHTML = renderMarkdown(content);
+      if (window.ArtifactPrimitives?.mermaid && app.markdownMode === "preview") {
+        void window.ArtifactPrimitives.mermaid.upgradeMermaidBlocks($("markdown-preview"));
+      }
       $("markdown-source").value = content;
       $("markdown-preview").hidden = app.markdownMode !== "preview";
       $("markdown-source").hidden = app.markdownMode !== "source";
@@ -626,6 +671,13 @@
       return slotValues.map((slot) => app.projectedSlotsByValue[slot] || { value: slot, label: formatSlot(slot) });
     }
 
+    function filterComposites() {
+      return Object.values(app.projectedGroupsById)
+        .filter((group) => Array.isArray(group.artifact_ids)
+          && group.artifact_ids.some((artifactId) => artifactIndexById(artifactId) >= 0))
+        .sort((a, b) => String(a.label || a.id).localeCompare(String(b.label || b.id)));
+    }
+
     function filterSummaryText() {
       const total = app.collection.artifacts.length;
       const visible = visibleArtifactIndexes().length;
@@ -638,6 +690,9 @@
       }
       if (kind === "slot") {
         app.filters.slot = app.filters.slot === value ? null : value;
+      }
+      if (kind === "composite") {
+        app.filters.compositeId = app.filters.compositeId === value ? null : value;
       }
       ensureVisibleArtifactSelected();
       closeEditor();
@@ -652,13 +707,9 @@
       }
       const reviewableProjectionCount = app.collection.artifacts
         .filter((item) => Boolean(projectedArtifact(item))).length;
-      const slotValues = [...new Set(
-        app.collection.artifacts
-          .map((item) => projectedArtifact(item)?.slot)
-          .filter(Boolean)
-      )].sort();
       const steps = filterSteps();
       const slots = filterSlots();
+      const composites = filterComposites();
       return `
         <div class="workflow-summary">
           <div class="summary-kicker">${escapeHtml(workflow.status || "unknown")}</div>
@@ -666,11 +717,11 @@
           <div class="summary-grid">
             <span>${escapeHtml(String((workflow.steps || []).length))} steps</span>
             <span>${escapeHtml(String(reviewableProjectionCount))} reviewable</span>
-            <span>${escapeHtml(String(slotValues.length))} slots</span>
+            <span>${escapeHtml(String(composites.length))} composites</span>
           </div>
           <div class="filter-line">
             <span>${escapeHtml(filterSummaryText())}</span>
-            ${(app.filters.stepId || app.filters.slot) ? '<button type="button" data-filter-kind="clear">Clear</button>' : ""}
+            ${(app.filters.stepId || app.filters.slot || app.filters.compositeId) ? '<button type="button" data-filter-kind="clear">Clear</button>' : ""}
           </div>
           <div class="filter-group" aria-label="Workflow step filters">
             ${steps.map((step) => `
@@ -683,6 +734,13 @@
             ${slots.map((slot) => `
               <button class="${slot.value === app.filters.slot ? "active" : ""}" type="button" data-filter-kind="slot" data-filter-value="${escapeHtml(slot.value)}">
                 ${escapeHtml(slot.label || formatSlot(slot.value))}
+              </button>
+            `).join("")}
+          </div>
+          <div class="filter-group" aria-label="Composite filters">
+            ${composites.map((group) => `
+              <button class="${group.id === app.filters.compositeId ? "active" : ""}" type="button" data-filter-kind="composite" data-filter-value="${escapeHtml(group.id)}">
+                ${escapeHtml(group.label || group.id)}
               </button>
             `).join("")}
           </div>
@@ -730,6 +788,7 @@
           if (button.dataset.filterKind === "clear") {
             app.filters.stepId = null;
             app.filters.slot = null;
+            app.filters.compositeId = null;
             ensureVisibleArtifactSelected();
             render();
             return;

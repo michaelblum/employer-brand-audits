@@ -83,6 +83,23 @@
       font-weight: 700;
       letter-spacing: 0;
     }
+    .artifact-breadcrumb {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1.1;
+    }
+    .artifact-heading {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1.2;
+    }
     .artifact-time {
       color: var(--muted);
       font-weight: 500;
@@ -298,6 +315,52 @@
     .markdown-preview [data-source-line].line-hit {
       outline: 2px solid rgba(45, 108, 223, 0.72);
       background: rgba(45, 108, 223, 0.12);
+    }
+    .markdown-mermaid {
+      margin: 18px 0;
+      padding: 14px;
+      border: 1px solid rgba(31, 41, 55, 0.28);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.56);
+    }
+    .markdown-mermaid figcaption {
+      margin-bottom: 10px;
+      color: #4b5563;
+      font: 750 11px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .mermaid-render-target {
+      min-height: 120px;
+      overflow: auto;
+      display: grid;
+      place-items: center;
+      padding: 12px;
+      border: 1px solid rgba(31, 41, 55, 0.18);
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+    .mermaid-render-target:empty {
+      display: none;
+    }
+    .mermaid-render-target svg {
+      max-width: 100%;
+      height: auto;
+    }
+    .mermaid-render-status {
+      margin: 10px 0;
+      color: #475569;
+      font: 12px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .markdown-mermaid.render-state-error .mermaid-render-status {
+      color: #991b1b;
+    }
+    .mermaid-source {
+      margin: 10px 0 0;
+    }
+    .mermaid-source-line {
+      display: block;
+      min-height: 1.55em;
     }
     .markdown-source {
       width: 100%;

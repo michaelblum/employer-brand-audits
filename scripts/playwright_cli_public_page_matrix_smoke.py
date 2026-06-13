@@ -40,9 +40,18 @@ alongside image artifacts.
 ## Review Checklist
 
 - Preview renders markdown headings and lists.
+- Mermaid preview renders from a fenced source block.
 - Edit mode opens the source text.
 - Save and Revert apply to this file only.
 - Text-range annotations bind to markdown source lines.
+
+## Fixture Diagram
+
+```mermaid
+flowchart TD
+  capture[Capture page artifacts] --> project[Project workbench payload]
+  project --> review[Review in workbench]
+```
 """
 
 DEFAULT_PAGES = [
@@ -259,6 +268,7 @@ def write_review_fixture_markdown_artifact(
     manifest.setdefault("review_fixtures", {})["summary"] = {
         "path": str(output_path.relative_to(REPO_ROOT)),
         "purpose": "workbench_markdown_view_edit_annotate_smoke",
+        "diagram_kind": "mermaid",
     }
 
 

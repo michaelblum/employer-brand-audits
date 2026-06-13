@@ -6,10 +6,14 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MERMAID_FENCE_RE = re.compile(r"^```\s*mermaid\s*$", re.IGNORECASE | re.MULTILINE)
 
 IMAGE_SLOTS = {
     "viewport": {
@@ -124,9 +128,34 @@ def file_resource_id(slug: str, key: str) -> str:
 
 
 def mime_type_for(path_value: str) -> str:
+    if Path(path_value).suffix.lower() == ".mmd":
+        return "text/vnd.mermaid"
     if Path(path_value).suffix.lower() in {".md", ".markdown"}:
         return "text/markdown"
     return mimetypes.guess_type(path_value)[0] or "application/octet-stream"
+
+
+def repository_file_path(path_value: str) -> Path | None:
+    candidate = Path(path_value)
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+    if not resolved.exists() or (resolved != REPO_ROOT and REPO_ROOT not in resolved.parents):
+        return None
+    return resolved
+
+
+def markdown_has_mermaid(path_value: str) -> bool:
+    path = repository_file_path(path_value)
+    if path is None:
+        return False
+    try:
+        return bool(MERMAID_FENCE_RE.search(path.read_text(encoding="utf-8")))
+    except UnicodeDecodeError:
+        return False
 
 
 def classify_artifact(key: str, path_value: str) -> dict[str, Any] | None:
@@ -184,6 +213,7 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
     ]
     resources: list[dict[str, Any]] = []
     artifacts: list[dict[str, Any]] = []
+    artifact_groups: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     host_index: dict[str, dict[str, Any]] = {}
     slot_index: dict[str, dict[str, Any]] = {}
@@ -203,6 +233,7 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
             if isinstance(page.get("screenshot_dimensions"), dict)
             else {}
         )
+        page_reviewable_artifact_ids: list[str] = []
 
         workflow_steps.append(
             {
@@ -328,11 +359,20 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
                     "slot": slot,
                 },
             }
+            if artifact_type in {"image", "markdown"}:
+                page_reviewable_artifact_ids.append(artifact_id)
             if key in IMAGE_SLOTS:
                 artifact["dimensions"] = dimensions.get(key)
                 artifact["capabilities"] = ["view", "annotate"]
             elif artifact_type == "markdown":
                 artifact["capabilities"] = ["view", "edit", "annotate"]
+                if markdown_has_mermaid(path_value):
+                    artifact["capabilities"].append("render")
+                    artifact["facets"]["diagram_kind"] = "mermaid"
+                    artifact["diagram"] = {
+                        "kind": "mermaid",
+                        "source": "markdown_fence",
+                    }
             else:
                 artifact["capabilities"] = ["view"]
             artifacts.append(artifact)
@@ -354,6 +394,28 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
                 ]
             )
 
+        if page_reviewable_artifact_ids:
+            group_id = f"composite:page:{slug}"
+            group = {
+                "id": group_id,
+                "kind": "source_page_bundle",
+                "label": f"{slug} source bundle",
+                "artifact_ids": page_reviewable_artifact_ids,
+                "edge_ids": [f"edge:{group_id}:{artifact_id}" for artifact_id in page_reviewable_artifact_ids],
+                "source": {"kind": "matrix_page", "slug": slug, "url": url, "host": host},
+                "slot": "page.bundle",
+            }
+            artifact_groups.append(group)
+            edges.extend(
+                {
+                    "id": f"edge:{group_id}:{artifact_id}",
+                    "kind": "contains",
+                    "from": group_id,
+                    "to": artifact_id,
+                }
+                for artifact_id in page_reviewable_artifact_ids
+            )
+
     return {
         "schema_version": "workbench_projection.v0",
         "source": {
@@ -370,8 +432,10 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
         },
         "resources": resources,
         "artifacts": artifacts,
+        "artifact_groups": artifact_groups,
         "edges": edges,
         "facets": {
+            "composites": artifact_groups,
             "hosts": sorted(host_index.values(), key=lambda item: item["value"]),
             "slots": sorted(slot_index.values(), key=lambda item: item["value"]),
         },

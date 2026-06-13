@@ -140,7 +140,10 @@ def command_situation(args: argparse.Namespace) -> int:
 def validation_commands() -> list[list[str]]:
     commands = [
         [sys.executable, "-m", "py_compile", *COMPILE_TARGETS],
+        ["node", "--check", "scripts/artifact_primitives/mermaid_renderer.js"],
         ["node", "--check", "scripts/review_workbench/app.js"],
+        ["node", "--check", "scripts/playwright-snippets/review-workbench-composite-artifact-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/review-workbench-mermaid-artifact-check.js"],
     ]
     pytest = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "pytest"
     if pytest.exists():

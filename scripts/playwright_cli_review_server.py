@@ -42,11 +42,20 @@ MARKDOWN_ARTIFACT_KEYS = {
 }
 
 WORKBENCH_DIR = Path(__file__).resolve().parent / "review_workbench"
+ARTIFACT_PRIMITIVES_DIR = Path(__file__).resolve().parent / "artifact_primitives"
 WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
 WORKBENCH_ASSETS = {
     "/assets/review-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
     "/assets/review-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
     "/assets/review-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
+    "/assets/artifact-primitives/mermaid_renderer.js": (
+        ARTIFACT_PRIMITIVES_DIR / "mermaid_renderer.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/vendor/mermaid.min.js": (
+        ARTIFACT_PRIMITIVES_DIR / "vendor" / "mermaid.min.js",
+        "text/javascript",
+    ),
 }
 
 

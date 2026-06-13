@@ -95,7 +95,8 @@ This runs the project’s current focused validation ladder:
 
 - Python compile checks for top-level scripts that participate in capture,
   projection, normalization, and the review server.
-- `node --check scripts/review_workbench/app.js`
+- `node --check` for the review workbench app, shared artifact primitives, and
+  checked-in review workbench smoke snippets.
 - `mcp-server` pytest suite when `mcp-server/.venv` exists.
 - `git diff --check`
 
