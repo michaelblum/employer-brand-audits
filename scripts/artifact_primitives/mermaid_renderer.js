@@ -38,6 +38,7 @@
         securityLevel: "strict",
         ...options.mermaidConfig,
       });
+      // Config is set once per page load; later mermaidConfig values are ignored.
       initialized = true;
     }
   }

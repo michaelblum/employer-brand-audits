@@ -69,6 +69,7 @@ The first normalized payload should distinguish:
 - `workflow`: id, name, status, source manifest, and projected steps.
 - `resources`: source URLs and local supporting files.
 - `artifacts`: reviewable outputs with `slot`, `type`, `kind`, `path`, `mime_type`, `source_page`, and `facets`.
+- `artifact_groups`: canonical flat list of projection-only composite review subjects; `facets.composites` was removed in the cleanup after the Mermaid/composite proof because it duplicated the same list.
 - `edges`: conservative provenance placeholders such as `depends_on`, `observes`, and `produced_by`.
 - `facets`: host and slot indexes for filtering and navigation.
 

@@ -77,7 +77,7 @@ flowchart TD
 def assert_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     artifacts = payload.get("artifacts") or []
     edges = payload.get("edges") or []
-    groups = payload.get("artifact_groups") or payload.get("facets", {}).get("composites") or []
+    groups = payload.get("artifact_groups") or []
     mermaid_id = "fixture-page:summary"
     group_id = "composite:page:fixture-page"
     mermaid = next((artifact for artifact in artifacts if artifact.get("id") == mermaid_id), None)
@@ -89,12 +89,16 @@ def assert_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
         "Mermaid markdown must expose facets.diagram_kind=mermaid",
     )
     require(
-        mermaid.get("diagram") == {"kind": "mermaid", "source": "markdown_fence"},
-        "Mermaid markdown must expose the workbench-only diagram facet",
+        "diagram" not in mermaid,
+        "Mermaid markdown must not emit undocumented artifact.diagram metadata",
     )
 
     group = next((item for item in groups if item.get("id") == group_id), None)
     require(isinstance(group, dict), f"Missing projection-only composite group: {group_id}")
+    require(
+        "composites" not in (payload.get("facets") or {}),
+        "facets.composites must not duplicate the canonical artifact_groups list",
+    )
     require(group.get("kind") == "source_page_bundle", "Composite group kind drifted")
     expected_ids = {
         "fixture-page:element",

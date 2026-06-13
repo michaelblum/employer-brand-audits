@@ -140,7 +140,7 @@
       for (const slot of app.workbenchProjection?.facets?.slots || []) {
         if (slot?.value) app.projectedSlotsByValue[slot.value] = slot;
       }
-      const groups = app.workbenchProjection?.artifact_groups || app.workbenchProjection?.facets?.composites || [];
+      const groups = app.workbenchProjection?.artifact_groups || [];
       for (const group of groups) {
         if (group?.id) app.projectedGroupsById[group.id] = group;
       }
@@ -717,6 +717,7 @@
           <div class="summary-grid">
             <span>${escapeHtml(String((workflow.steps || []).length))} steps</span>
             <span>${escapeHtml(String(reviewableProjectionCount))} reviewable</span>
+            <span>${escapeHtml(String(slots.length))} slots</span>
             <span>${escapeHtml(String(composites.length))} composites</span>
           </div>
           <div class="filter-line">

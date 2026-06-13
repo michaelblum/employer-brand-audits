@@ -117,7 +117,7 @@ Composite artifacts should begin as projection edges and facet groups.
 Initial projection shape:
 
 - A composite is a review subject generated from existing artifacts and edges.
-- The projection may expose `artifact_groups` or `facets.composites` with:
+- The projection exposes canonical `artifact_groups` entries with:
   `id`, `label`, `artifact_ids`, `edge_ids`, `source`, and optional `slot`.
 - Edges should use explicit relationship kinds such as `contains`,
   `composes`, `derived_from`, or `supports`; avoid overloading `parent_ids`
@@ -160,8 +160,8 @@ carry enough hierarchy to make nested navigation honest.
    - invalid source produces an error state;
    - source-line annotation still works;
    - icon use remains through `/assets/review-workbench-icons.svg`.
-7. For composites, add a projection fixture with one `artifact_groups` or
-   `facets.composites` entry, then add a Playwright CLI smoke snippet that
+7. For composites, add a projection fixture with one `artifact_groups` entry,
+   then add a Playwright CLI smoke snippet that
    selects the composite facet, asserts the header breadcrumb includes the
    composite label, asserts the visible artifact rows match the group's
    `artifact_ids`, and asserts no new durable composite artifact row or file is

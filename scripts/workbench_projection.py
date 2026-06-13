@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MERMAID_FENCE_RE = re.compile(r"^```\s*mermaid\s*$", re.IGNORECASE | re.MULTILINE)
+MERMAID_SCAN_MAX_BYTES = 512 * 1024
 
 IMAGE_SLOTS = {
     "viewport": {
@@ -153,8 +154,10 @@ def markdown_has_mermaid(path_value: str) -> bool:
     if path is None:
         return False
     try:
+        if path.stat().st_size > MERMAID_SCAN_MAX_BYTES:
+            return False
         return bool(MERMAID_FENCE_RE.search(path.read_text(encoding="utf-8")))
-    except UnicodeDecodeError:
+    except (OSError, UnicodeDecodeError):
         return False
 
 
@@ -369,10 +372,6 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
                 if markdown_has_mermaid(path_value):
                     artifact["capabilities"].append("render")
                     artifact["facets"]["diagram_kind"] = "mermaid"
-                    artifact["diagram"] = {
-                        "kind": "mermaid",
-                        "source": "markdown_fence",
-                    }
             else:
                 artifact["capabilities"] = ["view"]
             artifacts.append(artifact)
@@ -435,7 +434,6 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
         "artifact_groups": artifact_groups,
         "edges": edges,
         "facets": {
-            "composites": artifact_groups,
             "hosts": sorted(host_index.values(), key=lambda item: item["value"]),
             "slots": sorted(slot_index.values(), key=lambda item: item["value"]),
         },

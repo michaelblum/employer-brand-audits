@@ -6,7 +6,7 @@ async (page) => {
       fetch("/api/workbench-projection", { cache: "no-store" }).then((response) => response.json()),
     ]);
     const collectionIds = new Set((state.collection?.artifacts || []).map((artifact) => artifact.id));
-    const group = (projection.artifact_groups || projection.facets?.composites || []).find((item) => (
+    const group = (projection.artifact_groups || []).find((item) => (
       Array.isArray(item.artifact_ids)
         && item.artifact_ids.length > 1
         && item.artifact_ids.every((artifactId) => collectionIds.has(artifactId))
@@ -39,7 +39,9 @@ async (page) => {
     const visibleRows = [...document.querySelectorAll(".artifact-row[data-index]")];
     const visibleIds = visibleRows.map((row) => {
       const index = Number(row.dataset.index);
-      return collection[index]?.id || row.querySelector(".name")?.textContent?.trim();
+      const id = collection[index]?.id;
+      if (!id) throw new Error(`Visible row has no stable collection id at index ${row.dataset.index}`);
+      return id;
     });
     const expected = [...model.artifactIds].sort();
     const actual = [...visibleIds].sort();
