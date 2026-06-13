@@ -68,7 +68,8 @@ before handing it to the user:
 4. Avoid making the user do agentic management tasks such as restarting
    services, finding ports, or navigating verbose setup instructions.
 
-For the current review workbench, use:
+For the current review workbench, after an active `./eba begin` turn is in
+place, use:
 
 ```bash
 ./eba dev demo
@@ -83,6 +84,9 @@ Agents should prefer `./eba dev ...` for common project mechanisms:
 
 - `./eba dev situation --json` for branch, dirt, ahead/behind, and workbench
   status.
+- `./eba begin --worker-id <stable-id>` and `./eba end --worker-id <stable-id>`
+  for turn-level worker identity, gate packets, corridor checks, and generated
+  work-card/handoff artifacts.
 - `./eba dev validate` for the current validation ladder.
 - `./eba dev demo` for a prepared review-workbench inspection surface.
 
