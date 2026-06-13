@@ -7,6 +7,9 @@ Provider-specific files such as `.claude/CLAUDE.md` should only point here.
 
 - Read this file first.
 - Use `./eba dev situation --json` for current repo and workbench state.
+- If you did not receive an `./eba begin` turn packet at session start, manually
+  run `./eba begin --worker-id <stable-id>` before `./eba dev validate`,
+  `./eba dev demo`, or substantive repo edits.
 - Use `./eba dev validate` before checkpointing substantive code changes.
 - Use `./eba dev demo` when recent work is tangible and the user should be able
   to inspect it directly.
@@ -77,11 +80,15 @@ This starts or reuses the managed workbench, opens the surface when possible,
 and prints the compact inspection recipe. Use `./eba dev demo --no-browser` in
 headless contexts where opening a browser is not appropriate.
 
-Fallback lower-level command:
+For controlled/debug use after the same active `./eba begin` turn gate has
+been satisfied, the lower-level surface command is:
 
 ```bash
 python3 scripts/playwright_cli_review_gate.py surface artifacts/playwright-cli-public-page-matrix/latest/manifest.json
 ```
+
+Do not treat the lower-level command as a bypass around `./eba dev demo`
+gating.
 
 ## Validation
 

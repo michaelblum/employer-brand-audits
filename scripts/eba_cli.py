@@ -10,6 +10,23 @@ import sys
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.eba_control_plane import (
+        ControlPlaneError,
+        assert_dev_command_allowed,
+        begin_turn,
+        end_turn,
+        print_json as print_control_plane_json,
+    )
+except ModuleNotFoundError:
+    from eba_control_plane import (
+        ControlPlaneError,
+        assert_dev_command_allowed,
+        begin_turn,
+        end_turn,
+        print_json as print_control_plane_json,
+    )
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MANIFEST = (
@@ -138,6 +155,18 @@ def command_situation(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_begin(args: argparse.Namespace) -> int:
+    payload = begin_turn(REPO_ROOT, args.worker_id)
+    print_control_plane_json(payload)
+    return 0
+
+
+def command_end(args: argparse.Namespace) -> int:
+    payload = end_turn(REPO_ROOT, args.worker_id)
+    print_control_plane_json(payload)
+    return 0
+
+
 def validation_commands() -> list[list[str]]:
     commands = [
         [sys.executable, "-m", "py_compile", *COMPILE_TARGETS],
@@ -149,7 +178,7 @@ def validation_commands() -> list[list[str]]:
     ]
     pytest = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "pytest"
     if pytest.exists():
-        commands.append([str(pytest), "-q"])
+        commands.append([str(pytest), "-q", "mcp-server/tests"])
     commands.append(["git", "diff", "--check"])
     return commands
 
@@ -218,6 +247,15 @@ def command_demo(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Employer Brand Audits project command surface.")
     subparsers = parser.add_subparsers(dest="family", required=True)
+
+    begin = subparsers.add_parser("begin", help="Begin an agent control-plane turn")
+    begin.add_argument("--worker-id")
+    begin.set_defaults(func=command_begin)
+
+    end = subparsers.add_parser("end", help="End an agent control-plane turn")
+    end.add_argument("--worker-id", required=True)
+    end.set_defaults(func=command_end)
+
     dev = subparsers.add_parser("dev", help="Developer and agent workflow commands")
     dev_subparsers = dev.add_subparsers(dest="command", required=True)
 
@@ -242,7 +280,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    return args.func(args)
+    try:
+        if args.family == "dev":
+            assert_dev_command_allowed(REPO_ROOT, args.command)
+        return args.func(args)
+    except ControlPlaneError as exc:
+        print_control_plane_json(exc.payload)
+        return exc.exit_code
 
 
 if __name__ == "__main__":
