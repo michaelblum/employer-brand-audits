@@ -32,6 +32,26 @@ Artifact processing owns image normalization. Screenshot, crop, stitched-scroll,
 
 The viewer must not cap rendered height, recompress, resample, or mutate artifact bytes. It only displays the artifact it receives.
 
+## Rendering Primitives Boundary
+
+Artifact-type rendering capabilities that may be reused across surfaces live in
+a shared primitive layer, not inside a consuming surface. Use
+`scripts/artifact_primitives/` for browser-delivered artifact renderers and
+their pinned static dependencies. For Mermaid, the first shared primitive is
+`scripts/artifact_primitives/mermaid_renderer.js`.
+
+The review workbench may import or serve these primitives, but
+`scripts/review_workbench/` owns only the shell, stage, sidebar, controls,
+annotation chrome, and workbench-specific state wiring. Report builders, diff
+viewers, composite editors, and future annotation tools should be able to reuse
+the same artifact renderer without importing from the review workbench.
+
+Rendering primitives expose small, data-oriented interfaces, accept host-owned
+DOM containers, and return explicit render status objects. Vendored browser
+dependencies for those primitives live under `scripts/artifact_primitives/vendor/`
+as pinned, pre-built static assets; consuming surfaces must not fetch renderer
+code from a CDN at runtime.
+
 ## Vocabulary
 
 - **Workflow:** A named run or pack with steps and status. For the current matrix adapter, the workflow is the public-page capture matrix.

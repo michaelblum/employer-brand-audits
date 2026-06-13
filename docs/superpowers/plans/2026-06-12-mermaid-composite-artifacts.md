@@ -21,7 +21,10 @@ and is constrained by:
 ## Boundaries
 
 - Python remains routing, orchestration, data prep, and disk IO only.
-- Presentation lives in `scripts/review_workbench/` static assets.
+- Workbench shell presentation lives in `scripts/review_workbench/` static
+  assets.
+- Artifact-type rendering primitives live outside consuming surfaces under
+  `scripts/artifact_primitives/`.
 - Repeated UI markup becomes a primitive before its second use.
 - Mermaid rendering must preserve source deterministically; a failed render
   should keep the source inspectable and annotatable.
@@ -62,12 +65,29 @@ Renderer contract:
 
 - Markdown rendering detects fenced code blocks with language `mermaid`.
 - The generated DOM keeps source line attributes for annotation mooring.
-- The Mermaid preview is rendered by a static workbench JS primitive, not by
-  Python-generated HTML.
-- The renderer shows four states: source preserved, render pending, render
-  complete, render error.
+- The Mermaid preview is rendered by the shared browser primitive
+  `scripts/artifact_primitives/mermaid_renderer.js`, not by Python-generated
+  HTML and not by code owned under `scripts/review_workbench/`.
+- The primitive exports `renderMermaid(source, containerEl, options)`, which
+  returns a promise resolving to `{ ok, state, errorMessage }`, and
+  `upgradeMermaidBlocks(rootEl, options)`, which upgrades Markdown-rendered
+  Mermaid blocks in a host surface.
+- Mermaid itself is loaded from a pinned, pre-built static browser bundle at
+  `scripts/artifact_primitives/vendor/mermaid.min.js`. The repo serves that
+  asset locally to keep audit review repeatable, avoid runtime CDN dependence,
+  and avoid introducing an app-bundler requirement for the current static
+  workbench.
+- Renderer DOM uses
+  `data-artifact-renderer="mermaid"` and
+  `data-render-state="source|pending|complete|error"` on the Mermaid figure.
+  CSS may mirror that with `.render-state-source`, `.render-state-pending`,
+  `.render-state-complete`, and `.render-state-error` when class selectors are
+  more ergonomic.
 - Invalid Mermaid source should produce an inline error state without losing
   edit or annotation capability.
+- The error state renders an inline status element with `role="status"`, the
+  sanitized Mermaid error message, and the raw source fallback in a `<pre>` so
+  the artifact remains inspectable.
 
 Agent-OS pattern to copy, not import: preserve Mermaid source in a figure-like
 block with `data-markdown-diagram="mermaid"` and source stored in an attribute
@@ -84,6 +104,9 @@ Source anchors are first-class for Mermaid V1.
 - Rendered node or edge anchors are a later additive anchor type, for example
   `diagram_node` or `diagram_edge`, only after the renderer can provide stable
   ids from Mermaid source.
+- Source-line anchors remain stable across preview/source mode switches in this
+  pass; the mooring target is the source line metadata, not rendered diagram
+  geometry.
 - Do not introduce direct graph editing or drag-to-rewire behavior. Selection
   can create comments; mutations remain agent-mediated.
 
@@ -122,17 +145,27 @@ carry enough hierarchy to make nested navigation honest.
 
 1. Add a fixture that includes a Markdown artifact with a Mermaid fenced block.
 2. Extend projection output with derived Mermaid capability/facet metadata.
-3. Add a small static renderer primitive under `scripts/review_workbench/`.
-4. Add workbench UI for Mermaid preview/source/error states without Python
+3. Assert projection output shape before touching renderer code: run the
+   projection adapter against the fixture and verify the Mermaid artifact keeps
+   `type: "markdown"`, includes `capabilities` with `render`, and exposes a
+   Mermaid facet such as `diagram_kind: "mermaid"`.
+4. Add the shared static renderer primitive at
+   `scripts/artifact_primitives/mermaid_renderer.js` with its vendored Mermaid
+   dependency at `scripts/artifact_primitives/vendor/mermaid.min.js`.
+5. Add workbench UI for Mermaid preview/source/error states without Python
    inline HTML or SVG.
-5. Add a Playwright CLI smoke snippet that verifies:
+6. Add a Playwright CLI smoke snippet that verifies:
    - the Mermaid row appears with the expected projection metadata;
    - preview/source mode keeps source editable;
    - invalid source produces an error state;
    - source-line annotation still works;
    - icon use remains through `/assets/review-workbench-icons.svg`.
-6. For composites, start with projection-only groups and a sidebar/header
-   proof before creating any persistent composite artifact.
+7. For composites, add a projection fixture with one `artifact_groups` or
+   `facets.composites` entry, then add a Playwright CLI smoke snippet that
+   selects the composite facet, asserts the header breadcrumb includes the
+   composite label, asserts the visible artifact rows match the group's
+   `artifact_ids`, and asserts no new durable composite artifact row or file is
+   created.
 
 ## Non-Goals
 
@@ -148,9 +181,11 @@ carry enough hierarchy to make nested navigation honest.
 ## Implementation Order
 
 1. Projection metadata for Mermaid capability/facets.
-2. Static Mermaid renderer primitive and Markdown integration.
-3. Workbench controls and error state.
-4. Playwright CLI smoke for Mermaid.
-5. Projection-only composite groups.
-6. Composite navigation smoke.
-7. ADR-002 adapter or schema extension only after real audit manifests need it.
+2. Projection shape gate: inspect or assert `/api/workbench-projection` and the
+   CLI projection dump for the Mermaid fixture before touching the renderer.
+3. Static Mermaid renderer primitive and Markdown integration.
+4. Workbench controls and error state.
+5. Playwright CLI smoke for Mermaid.
+6. Projection-only composite groups.
+7. Composite navigation smoke.
+8. ADR-002 adapter or schema extension only after real audit manifests need it.
