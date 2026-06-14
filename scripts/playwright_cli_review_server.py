@@ -38,6 +38,10 @@ WORKBENCH_ASSETS = {
         ARTIFACT_PRIMITIVES_DIR / "mermaid_renderer.js",
         "text/javascript",
     ),
+    "/assets/artifact-primitives/document_renderer.js": (
+        ARTIFACT_PRIMITIVES_DIR / "document_renderer.js",
+        "text/javascript",
+    ),
     "/assets/artifact-primitives/vendor/mermaid.min.js": (
         ARTIFACT_PRIMITIVES_DIR / "vendor" / "mermaid.min.js",
         "text/javascript",
@@ -99,7 +103,7 @@ def safe_artifact_path(relative_path: str, artifact_root: Path) -> Path | None:
 
 def reviewable_projected_artifact(artifact: dict[str, Any], artifact_root: Path) -> bool:
     artifact_type = artifact.get("type")
-    if artifact_type not in {"image", "markdown"}:
+    if artifact_type not in {"image", "markdown", "json", "text", "log", "file"}:
         return False
     path = safe_artifact_path(str(artifact.get("path", "")), artifact_root)
     return path is not None

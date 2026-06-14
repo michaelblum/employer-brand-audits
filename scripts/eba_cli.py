@@ -230,6 +230,7 @@ def validation_commands() -> list[list[str]]:
         [sys.executable, "tests/test_review_workbench_browser_control.py"],
         [sys.executable, "scripts/workbench_projection_shape_check.py"],
         ["node", "--check", "scripts/artifact_primitives/mermaid_renderer.js"],
+        ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
         ["node", "--check", "scripts/review_workbench/app.js"],
         ["node", "--check", "scripts/playwright-snippets/review-workbench-composite-artifact-check.js"],
         ["node", "--check", "scripts/playwright-snippets/review-workbench-layout-regression-check.js"],

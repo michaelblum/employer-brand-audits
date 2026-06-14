@@ -23,6 +23,16 @@ class ReviewWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
 
+    def test_document_renderer_primitive_is_served_and_validated(self) -> None:
+        from scripts.eba_cli import validation_commands
+        from scripts.playwright_cli_review_server import WORKBENCH_ASSETS
+
+        self.assertIn(
+            ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
+            validation_commands(),
+        )
+        self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
+
     def test_browser_open_plan_uses_named_repo_wrapper_session(self) -> None:
         plan = gate.build_workbench_browser_plan(
             "http://127.0.0.1:8765/",

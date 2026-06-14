@@ -22,6 +22,7 @@
       markdownContent: {},
       markdownSavedContent: {},
       markdownDirty: {},
+      documentContent: {},
       artifactDocumentTheme: "dark",
       hoverMarkerTimers: [],
       workbenchProjection: null,
@@ -60,6 +61,7 @@
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const isImageArtifact = (item = artifact()) => item.type === "image";
     const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
+    const isDocumentArtifact = (item = artifact()) => ["json", "text", "log", "file"].includes(item.type);
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
     const imageRectAnchor = (note) => {
@@ -89,8 +91,10 @@
     const ARTIFACT_TYPE_META = {
       image: { icon: "image", className: "image" },
       markdown: { icon: "markdown", className: "markdown" },
+      json: { icon: "text", className: "text" },
       text: { icon: "text", className: "text" },
       log: { icon: "log", className: "log" },
+      file: { icon: "unknown", className: "unknown" },
     };
     const iconHref = (name) => `/assets/review-workbench-icons.svg#icon-artifact-${name}`;
 
@@ -515,6 +519,15 @@
       $("dimension-readout").textContent = `${diagnostics.line_count} lines · ${diagnostics.word_count} words · ${diagnostics.heading_count} headings`;
     }
 
+    function updateDocumentReadout(item) {
+      const content = app.documentContent[item.id] || "";
+      const lines = content ? content.split("\n").length : 0;
+      const size = item.size_bytes ? `${item.size_bytes} bytes` : "";
+      $("dimension-readout").textContent = [item.type || "file", lines ? `${lines} lines` : "", size]
+        .filter(Boolean)
+        .join(" · ");
+    }
+
     function afterImageReady(callback) {
       const image = $("artifact-image");
       if (image.complete && image.naturalWidth) {
@@ -593,6 +606,19 @@
       app.markdownContent[item.id] = content;
       app.markdownSavedContent[item.id] = content;
       app.markdownDirty[item.id] = false;
+      return content;
+    }
+
+    async function loadDocument(item) {
+      if (Object.prototype.hasOwnProperty.call(app.documentContent, item.id)) return app.documentContent[item.id];
+      if (item.type === "file") {
+        app.documentContent[item.id] = "";
+        return "";
+      }
+      const response = await fetch(artifactUrl(item), { cache: "no-store" });
+      if (!response.ok) throw new Error(`Artifact fetch failed: ${response.status}`);
+      const content = await response.text();
+      app.documentContent[item.id] = content;
       return content;
     }
 
@@ -689,6 +715,41 @@
       }
     }
 
+    async function renderDocumentArtifact() {
+      const item = artifact();
+      $("stage").classList.add("markdown-stage");
+      $("stage").scrollTo({ left: 0, top: 0 });
+      $("image-wrap").hidden = true;
+      $("markdown-wrap").hidden = false;
+      $("image-controls").style.display = "none";
+      $("markdown-controls").classList.remove("visible");
+      $("selection").hidden = true;
+      $("markdown-marker").hidden = true;
+      resetHoverMarker();
+      $("comment-popover").hidden = true;
+      $("markdown-preview").hidden = false;
+      $("markdown-source").hidden = true;
+      try {
+        const content = await loadDocument(item);
+        if (!window.ArtifactPrimitives?.document) {
+          throw new Error("Document renderer primitive is not loaded");
+        }
+        window.ArtifactPrimitives.document.renderDocumentArtifact(
+          {
+            ...item,
+            content,
+            url: artifactUrl(item),
+            mimeType: item.mime_type,
+            sizeBytes: item.size_bytes,
+          },
+          markdownPreviewBody(),
+        );
+      } catch (error) {
+        markdownPreviewBody().innerHTML = `<p>Failed to load artifact: ${escapeHtml(error.message)}</p>`;
+      }
+      updateDocumentReadout(item);
+    }
+
     async function saveMarkdownArtifact() {
       const item = artifact();
       if (!isMarkdownArtifact(item)) return;
@@ -730,6 +791,10 @@
     function renderArtifact() {
       if (isMarkdownArtifact()) {
         void renderMarkdownArtifact();
+        return;
+      }
+      if (isDocumentArtifact()) {
+        void renderDocumentArtifact();
         return;
       }
       renderImage();
@@ -1331,7 +1396,7 @@
         placeSelection({ x: point.x, y: point.y, width: 0, height: 0 });
         return;
       }
-      if (app.markdownMode === "preview" && event.target.closest("#markdown-preview")) {
+      if (isMarkdownArtifact() && app.markdownMode === "preview" && event.target.closest("#markdown-preview")) {
         const point = markdownPoint(event);
         app.drag = { type: "markdown", startX: point.x, startY: point.y };
         app.pendingAnchor = null;

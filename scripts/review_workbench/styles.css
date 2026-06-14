@@ -418,6 +418,51 @@
       outline: 2px solid rgba(45, 108, 223, 0.72);
       background: rgba(45, 108, 223, 0.12);
     }
+    .document-artifact {
+      display: grid;
+      gap: 16px;
+      max-width: 100%;
+    }
+    .document-artifact header {
+      display: grid;
+      gap: 10px;
+    }
+    .document-artifact h1 {
+      margin: 0;
+    }
+    .document-artifact-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .document-artifact-meta span {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 4px 8px;
+      border: 1px solid var(--artifact-document-line);
+      border-radius: 999px;
+      color: var(--artifact-document-muted);
+      background: var(--artifact-document-panel-2);
+      font-size: 12px;
+    }
+    .document-artifact-actions a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .document-render-status {
+      margin: 0;
+      color: var(--artifact-document-muted);
+    }
+    .artifact-document-source {
+      max-width: 100%;
+      min-height: 220px;
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
     .markdown-mermaid {
       margin: 18px 0;
       padding: 14px;

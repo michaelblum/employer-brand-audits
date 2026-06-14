@@ -146,7 +146,7 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
         (artifact for artifact in artifacts if artifact.get("id") == "l1-careers-screenshot"),
         None,
     )
-    unsupported = {
+    document_artifacts = {
         artifact.get("id"): artifact.get("type")
         for artifact in artifacts
         if artifact.get("type") in {"json", "text"}
@@ -190,14 +190,14 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     require(screenshot.get("type") == "image", "ADR-002 screenshot should project as image")
     require(screenshot.get("parent_ids") == ["l0-source-urls"], "ADR-002 artifact parent_ids drifted")
     require(
-        unsupported
+        document_artifacts
         == {
             "l0-source-urls": "json",
             "l1-careers-text": "text",
             "l2-kilos-json": "json",
             "l3-synthesis-notes": "text",
         },
-        "Easy-audit unsupported JSON/text projection drifted",
+        "Easy-audit JSON/text projection drifted",
     )
     for artifact in (report, screenshot):
         projected_path = Path(str(artifact.get("path") or ""))
@@ -235,7 +235,7 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
         "audit_manifest_adapter": payload.get("source", {}).get("adapter"),
         "report_artifact_id": report.get("id"),
         "screenshot_artifact_id": screenshot.get("id"),
-        "unsupported_projected_artifact_ids": sorted(unsupported),
+        "document_projected_artifact_ids": sorted(document_artifacts),
     }
 
 
@@ -248,16 +248,37 @@ def assert_audit_server_collection(manifest_path: Path, payload: dict[str, Any])
         "Server collection must preserve ADR-002 source format",
     )
     require(
-        artifact_ids == {"l1-careers-screenshot", "l2-kilos-analysis", "l4-final-report"},
-        "Server collection must expose only currently reviewable ADR-002 artifacts",
+        artifact_ids
+        == {
+            "l0-source-urls",
+            "l1-careers-text",
+            "l1-careers-screenshot",
+            "l2-kilos-json",
+            "l2-kilos-analysis",
+            "l3-synthesis-notes",
+            "l4-final-report",
+        },
+        "Server collection must expose projected ADR-002 image, markdown, JSON, and text artifacts",
     )
     report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-final-report"), None)
     screenshot = next((artifact for artifact in artifacts if artifact.get("id") == "l1-careers-screenshot"), None)
+    source_urls = next((artifact for artifact in artifacts if artifact.get("id") == "l0-source-urls"), None)
+    careers_text = next((artifact for artifact in artifacts if artifact.get("id") == "l1-careers-text"), None)
+    kilos_json = next((artifact for artifact in artifacts if artifact.get("id") == "l2-kilos-json"), None)
+    synthesis_notes = next((artifact for artifact in artifacts if artifact.get("id") == "l3-synthesis-notes"), None)
     require(isinstance(report, dict), "ADR-002 report missing from server collection")
     require(report.get("type") == "markdown", "ADR-002 report collection type drifted")
     require("render" in (report.get("capabilities") or []), "ADR-002 report render capability missing in collection")
     require(isinstance(screenshot, dict), "ADR-002 screenshot missing from server collection")
     require(screenshot.get("type") == "image", "ADR-002 screenshot collection type drifted")
+    require(isinstance(source_urls, dict), "ADR-002 source URLs JSON missing from server collection")
+    require(source_urls.get("type") == "json", "ADR-002 source URLs collection type drifted")
+    require(isinstance(kilos_json, dict), "ADR-002 KILOS JSON missing from server collection")
+    require(kilos_json.get("type") == "json", "ADR-002 KILOS JSON collection type drifted")
+    require(isinstance(careers_text, dict), "ADR-002 careers text missing from server collection")
+    require(careers_text.get("type") == "text", "ADR-002 careers text collection type drifted")
+    require(isinstance(synthesis_notes, dict), "ADR-002 synthesis notes missing from server collection")
+    require(synthesis_notes.get("type") == "text", "ADR-002 synthesis notes collection type drifted")
     require(collection.get("artifact_count") == len(artifacts), "Server collection artifact_count drifted")
     return {
         "status": "passed",
