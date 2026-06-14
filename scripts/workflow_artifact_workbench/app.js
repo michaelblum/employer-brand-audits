@@ -74,6 +74,7 @@
     };
     const formatSlot = (value) => String(value || "").replace(/[._-]/g, " ");
     const iconHref = (name) => `/assets/workflow-artifact-workbench-icons.svg#icon-artifact-${name}`;
+    const interactionOverlay = () => window.ArtifactPrimitives.interactionOverlay;
     const workflowSidebar = () => window.ArtifactPrimitives.workflowSidebar;
     const workflowSidebarContext = () => ({
       artifacts: app.collection.artifacts,
@@ -628,6 +629,18 @@
       placeSelection(displayRectFromNatural(rect));
     }
 
+    function displayRectForAnchor(anchor) {
+      return interactionOverlay().displayRectForAnchor({
+        anchor,
+        imageRegionRect: (rect) => displayRectFromNatural(rect),
+        textRangeRect: (textAnchor) => window.ArtifactPrimitives.markdownInteractions.displayRectFromAnchor({
+          anchor: textAnchor,
+          rootEl: markdownPreviewBody(),
+          wrapEl: $("markdown-wrap"),
+        }),
+      });
+    }
+
     function placePopoverForRect(rect) {
       openComment(displayRectFromNatural(rect));
     }
@@ -640,18 +653,12 @@
       }
       if (anchor?.type === "text_range") {
         $("selection").hidden = true;
-        const displayRect = window.ArtifactPrimitives.markdownInteractions.displayRectFromAnchor({
-          anchor,
-          rootEl: markdownPreviewBody(),
-          wrapEl: $("markdown-wrap"),
-        });
+        const displayRect = displayRectForAnchor(anchor);
         if (!displayRect) return;
-        const marker = $("markdown-marker");
-        marker.style.left = `${displayRect.x}px`;
-        marker.style.top = `${displayRect.y}px`;
-        marker.style.width = `${displayRect.width}px`;
-        marker.style.height = `${displayRect.height}px`;
-        marker.hidden = false;
+        interactionOverlay().placeOverlayBox({
+          overlayEl: $("markdown-marker"),
+          displayRect,
+        });
       }
     }
 
@@ -661,11 +668,7 @@
         return;
       }
       if (anchor?.type === "text_range") {
-        const displayRect = window.ArtifactPrimitives.markdownInteractions.displayRectFromAnchor({
-          anchor,
-          rootEl: markdownPreviewBody(),
-          wrapEl: $("markdown-wrap"),
-        });
+        const displayRect = displayRectForAnchor(anchor);
         if (displayRect) openComment(displayRect, $("markdown-wrap"));
       }
     }
@@ -695,18 +698,12 @@
       }
       if (anchor?.type === "text_range") {
         hideHoverMarker();
-        const displayRect = window.ArtifactPrimitives.markdownInteractions.displayRectFromAnchor({
-          anchor,
-          rootEl: markdownPreviewBody(),
-          wrapEl: $("markdown-wrap"),
-        });
+        const displayRect = displayRectForAnchor(anchor);
         if (!displayRect) return;
-        const marker = $("markdown-marker");
-        marker.style.left = `${displayRect.x}px`;
-        marker.style.top = `${displayRect.y}px`;
-        marker.style.width = `${displayRect.width}px`;
-        marker.style.height = `${displayRect.height}px`;
-        marker.hidden = false;
+        interactionOverlay().placeOverlayBox({
+          overlayEl: $("markdown-marker"),
+          displayRect,
+        });
       }
     }
 
@@ -749,12 +746,17 @@
       });
     }
 
+    function setCommentActionLabels(mode) {
+      const labels = interactionOverlay().editorLabels({ subtype: "annotation", mode });
+      $("secondary-comment-action").textContent = labels.secondary;
+      $("primary-comment-action").textContent = labels.primary;
+    }
+
     function openCreateEditor(displayRect, relativeTo = $("artifact-image")) {
       app.editorMode = "create";
       app.editing = null;
       $("comment-text").value = "";
-      $("secondary-comment-action").textContent = "Cancel";
-      $("primary-comment-action").textContent = "Add Comment";
+      setCommentActionLabels("create");
       openComment(displayRect, relativeTo);
     }
 
@@ -771,8 +773,7 @@
       app.editorMode = "edit";
       app.editing = note;
       $("comment-text").value = note.comment;
-      $("secondary-comment-action").textContent = "Delete";
-      $("primary-comment-action").textContent = "Update";
+      setCommentActionLabels("edit");
       const anchor = note.anchor;
       if (anchor?.type === "image_region" && anchor.rect) {
         afterImageReady(() => {
@@ -914,11 +915,16 @@
     }
 
     async function commitEditor() {
-      const comment = $("comment-text").value.trim();
-      if (!comment) return;
+      const comment = $("comment-text").value;
+      if (interactionOverlay().isBlankComment(comment)) return;
       if (app.editorMode === "edit" && app.editing) {
-        app.editing.comment = comment;
-        app.editing.updated_at_epoch = Math.floor(Date.now() / 1000);
+        app.annotations = interactionOverlay().updateAnnotation({
+          annotations: app.annotations,
+          artifactId: app.editing.artifact_id,
+          noteId: app.editing.id,
+          comment,
+          nowEpoch: Math.floor(Date.now() / 1000),
+        });
         closeEditor();
         await syncAnnotations();
         renderSidebar();
@@ -927,16 +933,16 @@
       }
       if (!app.pendingAnchor) return;
       const item = artifact();
-      const note = {
-        id: `${item.id}-${Date.now().toString(36)}`,
-        artifact_id: item.id,
-        kind: "comment",
+      const note = interactionOverlay().newAnnotation({
+        artifact: item,
         anchor: app.pendingAnchor,
         comment,
-        created_at_epoch: Math.floor(Date.now() / 1000),
-        updated_at_epoch: null,
-      };
-      app.annotations[item.id] = [...artifactAnnotations(item.id), note];
+      });
+      app.annotations = interactionOverlay().appendAnnotation({
+        annotations: app.annotations,
+        artifactId: item.id,
+        note,
+      });
       closeEditor();
       await syncAnnotations();
       renderSidebar();
@@ -947,7 +953,11 @@
       if (app.editorMode === "edit" && app.editing) {
         const artifactId = app.editing.artifact_id;
         const noteId = app.editing.id;
-        app.annotations[artifactId] = artifactAnnotations(artifactId).filter((note) => note.id !== noteId);
+        app.annotations = interactionOverlay().deleteAnnotation({
+          annotations: app.annotations,
+          artifactId,
+          noteId,
+        });
         closeEditor();
         await syncAnnotations();
         renderSidebar();
