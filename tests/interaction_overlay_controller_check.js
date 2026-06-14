@@ -3,17 +3,14 @@ const path = require("node:path");
 
 global.window = { ArtifactPrimitives: {} };
 
-require(path.join(__dirname, "../scripts/artifact_primitives/interaction_overlay.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/interaction_overlay_controller.js"));
 
-const overlay = window.ArtifactPrimitives.interactionOverlay;
 const controllerApi = window.ArtifactPrimitives.interactionOverlayController;
 
 assert.equal(typeof controllerApi.createInteractionOverlayController, "function");
 
 const calls = [];
 const controller = controllerApi.createInteractionOverlayController({
-  overlay,
   effects: {
     editor: {
       setAnnotations: (annotations) => calls.push(["setAnnotations", annotations]),
