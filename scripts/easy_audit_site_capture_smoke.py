@@ -24,6 +24,28 @@ TEXT_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "extract-visible-
 SETTLE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "settle-page.js"
 HIDE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "hide-obscuring-elements.js"
 RESTORE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "restore-page.js"
+LIVE_CAPTURE_REVIEW_ARTIFACTS = {
+    "roles_internal_scroll": {
+        "id": "l1-roles-internal-scroll",
+        "summary": "Roles modal internal scroll capture",
+        "url": "https://acme.example/roles",
+    },
+    "culture_shadow_proof": {
+        "id": "l1-culture-shadow-proof",
+        "summary": "Culture shadow DOM proof capture",
+        "url": "https://acme.example/culture",
+    },
+    "animation_progress": {
+        "id": "l1-animation-progress",
+        "summary": "Animation settle progress capture",
+        "url": "https://acme.example/careers",
+    },
+    "sticky_obscured_target": {
+        "id": "l1-sticky-obscured-target",
+        "summary": "Sticky header overlap diagnostic capture",
+        "url": "https://acme.example/roles",
+    },
+}
 
 
 class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
@@ -110,15 +132,27 @@ def start_site_server(site_dir: Path) -> tuple[ThreadingHTTPServer, str]:
     return server, f"http://{host}:{port}/"
 
 
-def write_extra_capture_snippet(path: Path, *, roles_path: Path, culture_path: Path) -> None:
+def write_extra_capture_snippet(
+    path: Path,
+    *,
+    roles_path: Path,
+    culture_path: Path,
+    progress_path: Path,
+    sticky_path: Path,
+) -> None:
     path.write_text(
         f"""async (page) => {{
   const outputs = {{
     rolesInternalScroll: {str(roles_path.relative_to(REPO_ROOT)).__repr__()},
     cultureShadowProof: {str(culture_path.relative_to(REPO_ROOT)).__repr__()},
+    progressTarget: {str(progress_path.relative_to(REPO_ROOT)).__repr__()},
+    stickyObscuredTarget: {str(sticky_path.relative_to(REPO_ROOT)).__repr__()},
   }};
 
   const baseUrl = page.url().replace(/\\/[^/]*$/, '/');
+  await page.locator('#animation-progress').scrollIntoViewIfNeeded();
+  await page.locator('#animation-progress').screenshot({{ path: outputs.progressTarget }});
+
   await page.goto(baseUrl + 'roles.html');
   await page.locator('#internal-scroll').scrollIntoViewIfNeeded();
   const scroller = page.locator('#internal-scroll');
@@ -133,6 +167,10 @@ def write_extra_capture_snippet(path: Path, *, roles_path: Path, culture_path: P
     el.style.height = previous.height;
     el.style.overflow = previous.overflow;
   }}, previousStyle);
+  await page.evaluate(() => {{
+    document.querySelector('#sticky-obscured-target')?.scrollIntoView({{ block: 'start', inline: 'nearest' }});
+  }});
+  await page.locator('#sticky-obscured-target').screenshot({{ path: outputs.stickyObscuredTarget }});
 
   await page.goto(baseUrl + 'culture.html');
   await page.locator('employee-proof').scrollIntoViewIfNeeded();
@@ -155,6 +193,50 @@ def write_manifest(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def attach_live_capture_artifacts(manifest: dict[str, Any], artifacts: dict[str, str]) -> None:
+    artifact_list = manifest.setdefault("artifacts", [])
+    if not isinstance(artifact_list, list):
+        return
+    existing_ids = {
+        str(artifact.get("id"))
+        for artifact in artifact_list
+        if isinstance(artifact, dict) and artifact.get("id")
+    }
+    l1_step = next(
+        (
+            step
+            for step in manifest.get("steps", [])
+            if isinstance(step, dict) and step.get("id") == "l1-source-capture"
+        ),
+        None,
+    )
+    if l1_step is not None:
+        l1_step.setdefault("artifact_ids", [])
+
+    for key, meta in LIVE_CAPTURE_REVIEW_ARTIFACTS.items():
+        path_value = artifacts.get(key)
+        artifact_id = meta["id"]
+        if not path_value or artifact_id in existing_ids:
+            continue
+        artifact_list.append(
+            {
+                "id": artifact_id,
+                "layer": 1,
+                "type": "screenshot",
+                "status": "complete",
+                "created_at": "2026-06-13T01:03:30Z",
+                "produced_by_step_id": "l1-source-capture",
+                "parent_ids": ["l1-careers-screenshot"],
+                "file_path": path_value,
+                "params": {"url": meta["url"]},
+                "card": {"summary": meta["summary"], "tags": {"layer": "L1", "capture": key}},
+            }
+        )
+        existing_ids.add(artifact_id)
+        if l1_step is not None and isinstance(l1_step.get("artifact_ids"), list):
+            l1_step["artifact_ids"].append(artifact_id)
+
+
 def main() -> int:
     args = parse_args()
     output_dir = args.output_dir.resolve()
@@ -172,6 +254,8 @@ def main() -> int:
     screenshot_path = output_dir / "l1-careers-screenshot.png"
     roles_internal_scroll_path = output_dir / "l1-roles-internal-scroll.png"
     culture_shadow_path = output_dir / "l1-culture-shadow-proof.png"
+    progress_path = output_dir / "l1-animation-progress.png"
+    sticky_path = output_dir / "l1-sticky-obscured-target.png"
     settle_stdout_path = output_dir / "l1-settle.stdout.txt"
     hide_stdout_path = output_dir / "l1-hide-obscuring.stdout.txt"
     restore_stdout_path = output_dir / "l1-restore-page.stdout.txt"
@@ -181,6 +265,8 @@ def main() -> int:
         extra_capture_snippet,
         roles_path=roles_internal_scroll_path,
         culture_path=culture_shadow_path,
+        progress_path=progress_path,
+        sticky_path=sticky_path,
     )
 
     opened = False
@@ -235,8 +321,11 @@ def main() -> int:
             "careers_full_page": str(screenshot_path.relative_to(REPO_ROOT)),
             "roles_internal_scroll": str(roles_internal_scroll_path.relative_to(REPO_ROOT)),
             "culture_shadow_proof": str(culture_shadow_path.relative_to(REPO_ROOT)),
+            "animation_progress": str(progress_path.relative_to(REPO_ROOT)),
+            "sticky_obscured_target": str(sticky_path.relative_to(REPO_ROOT)),
         },
     }
+    attach_live_capture_artifacts(manifest, manifest["live_capture"]["artifacts"])
     write_manifest(manifest_path, manifest)
 
     payload = {

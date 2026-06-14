@@ -102,6 +102,17 @@ def shared_site_css() -> str:
       box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
     }
     .topbar nav { display: flex; gap: 18px; font-size: 14px; }
+    .brand-mark { display: inline-flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 30px;
+      height: 30px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #122238;
+      background: #f7cf57;
+      font-weight: 800;
+    }
     .fixed-overlay {
       position: fixed;
       right: 24px;
@@ -123,14 +134,86 @@ def shared_site_css() -> str:
       border: 1px solid #a8c5e5;
       animation: settle-nudge 220ms ease-out 1;
     }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+    .cta-row a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border: 1px solid #8294a6;
+      background: #fff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .progress-card { margin-top: 24px; padding: 18px; background: #fff; border: 1px solid #a8c5e5; }
+    .progress-shell { height: 22px; overflow: hidden; border: 1px solid #26364a; background: #dbe4ee; }
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #1d7a52, #55c88a);
+      animation: progress-fill 3s linear forwards;
+    }
     @keyframes settle-nudge {
       from { transform: translateY(20px); opacity: 0.35; }
       to { transform: translateY(0); opacity: 1; }
     }
+    @keyframes progress-fill {
+      from { width: 0%; }
+      to { width: 100%; }
+    }
     section { margin: 0 0 44px; padding: 24px; background: #fff; border: 1px solid #c7d0da; }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
     .card { padding: 20px; background: #f7fafc; border: 1px solid #d8e1ea; }
+    .jobs-modal {
+      margin: 0 0 44px;
+      border: 1px solid #435269;
+      background: #fff;
+      box-shadow: 0 16px 34px rgba(18, 34, 56, 0.18);
+    }
+    .jobs-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px;
+      color: #fff;
+      background: #26364a;
+    }
+    .jobs-modal-scroll {
+      max-height: 340px;
+      overflow: auto;
+      padding: 22px;
+    }
+    .role-list { display: grid; gap: 16px; }
+    .role-card {
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr);
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid #d8e1ea;
+      background: #f7fafc;
+    }
+    .role-icon {
+      width: 42px;
+      height: 42px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 999px;
+      color: #fff;
+      background: #1d4d7a;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .role-card h3 { margin: 0 0 6px; }
+    .role-card p { margin: 0 0 8px; }
+    .role-card a { color: #164f8f; font-weight: 700; }
     .sticky-apply { position: sticky; top: 92px; background: #f7cf57; border-color: #c79a18; }
+    .sticky-obscured-target {
+      scroll-margin-top: 0;
+      margin-top: 720px;
+      border: 4px solid #d14b35;
+      background: #fff1ee;
+    }
     .internal-scroll { height: 220px; overflow: auto; border: 3px solid #435269; background: #f9fafb; }
     .internal-scroll-content {
       min-height: 780px;
@@ -154,7 +237,7 @@ def site_page(title: str, body: str) -> str:
 </head>
 <body>
   <header class="topbar" data-capture-sticky>
-    <strong>Acme Robotics Careers</strong>
+    <strong class="brand-mark"><span class="brand-icon">AR</span><span>Acme Robotics Careers</span></strong>
     <nav>
       <a href="index.html">Careers</a>
       <a href="roles.html">Roles</a>
@@ -180,9 +263,63 @@ def write_mock_site(output_dir: Path) -> None:
   <section class="hero">
     <div class="hero-card" id="animated-card">
       <h1>Build robots that work beside people.</h1>
-      <p>Acme Robotics hires engineers, designers, and operators for field-tested autonomy.</p>
+      <p>Acme Robotics hires engineers, designers, and field operators to build dependable autonomy for worksites, warehouses, and remote inspection teams.</p>
+      <div class="cta-row">
+        <a href="roles.html#principal-robotics-engineer"><span aria-hidden="true">ER</span><span>Principal Robotics Engineer</span></a>
+        <a href="culture.html#employee-proof"><span aria-hidden="true">EP</span><span>Employee proof</span></a>
+        <a href="roles.html#interview-plan"><span aria-hidden="true">IP</span><span>Interview plan</span></a>
+      </div>
+      <div class="progress-card" id="animation-progress">
+        <h2>Capture animation diagnostic</h2>
+        <p>The fill below animates from left to right over three seconds. A settled capture should show the bar filled.</p>
+        <div class="progress-shell" aria-label="Three second progress bar">
+          <div class="progress-fill"></div>
+        </div>
+      </div>
     </div>
   </section>
+  <div class="jobs-modal" role="dialog" aria-label="Featured engineering roles">
+    <div class="jobs-modal-header">
+      <strong>Featured roles</strong>
+      <span>Scrollable modal content</span>
+    </div>
+    <div class="jobs-modal-scroll" id="jobs-modal-scroll">
+      <div class="role-list">
+        <article class="role-card" id="principal-robotics-engineer">
+          <span class="role-icon" aria-hidden="true">PR</span>
+          <div>
+            <h3>Principal Robotics Engineer</h3>
+            <p>Own motion planning and reliability loops for robot fleets deployed in active customer sites.</p>
+            <a href="roles.html#principal-robotics-engineer">Read the role profile</a>
+          </div>
+        </article>
+        <article class="role-card">
+          <span class="role-icon" aria-hidden="true">PX</span>
+          <div>
+            <h3>Perception Systems Lead</h3>
+            <p>Lead sensor fusion, dataset review, and field-debugging tools for mixed indoor and outdoor environments.</p>
+            <a href="roles.html#interview-plan">See interview plan</a>
+          </div>
+        </article>
+        <article class="role-card">
+          <span class="role-icon" aria-hidden="true">FR</span>
+          <div>
+            <h3>Field Reliability Engineer</h3>
+            <p>Turn deployment incidents into repeatable tests, service guidance, and product-quality improvements.</p>
+            <a href="culture.html">Explore team culture</a>
+          </div>
+        </article>
+        <article class="role-card">
+          <span class="role-icon" aria-hidden="true">DS</span>
+          <div>
+            <h3>Developer Systems Engineer</h3>
+            <p>Build simulation workflows, trace viewers, and release diagnostics that shorten robot-debug cycles.</p>
+            <a href="roles.html">View all open roles</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </div>
   <section class="grid">
     <div class="card"><h2>Mission</h2><p>Turn complex robotics into dependable worksite systems.</p></div>
     <div class="card"><h2>Benefits</h2><p>Deep work blocks, lab access, field stipends, and transparent leveling.</p></div>
@@ -199,14 +336,22 @@ def write_mock_site(output_dir: Path) -> None:
   <section class="grid">
     <div>
       <h1>Open roles</h1>
-      <div class="card">Senior Robotics Engineer</div>
-      <div class="card">Perception Systems Lead</div>
-      <div class="card">Field Reliability Engineer</div>
+      <div class="card" id="principal-robotics-engineer"><h2>Principal Robotics Engineer</h2><p>Lead planning, controls, and simulation contracts for production robot fleets.</p><a href="index.html#jobs-modal-scroll">Compare role highlights</a></div>
+      <div class="card"><h2>Perception Systems Lead</h2><p>Design sensor review loops and model-quality gates with the autonomy platform team.</p></div>
+      <div class="card"><h2>Field Reliability Engineer</h2><p>Own deployment feedback, field triage, and reliability playbooks.</p></div>
     </div>
     <aside class="card sticky-apply" id="context-target">
       <h2>Apply with context</h2>
       <p>Our process includes a portfolio screen, technical work sample, and onsite systems review.</p>
     </aside>
+  </section>
+  <section class="card" id="interview-plan">
+    <h2>Interview plan</h2>
+    <p>Step 1: recruiter context call. Step 2: technical systems discussion. Step 3: paid work sample. Step 4: onsite field-readiness review.</p>
+  </section>
+  <section class="sticky-obscured-target" id="sticky-obscured-target">
+    <h2>Sticky header overlap diagnostic</h2>
+    <p>This target intentionally has no scroll margin. When capture scrolls directly to it, the sticky header should partially cover the top edge unless the capture script compensates.</p>
   </section>
   <section>
     <h2>Role detail scroller</h2>
