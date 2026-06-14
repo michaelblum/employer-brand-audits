@@ -3,6 +3,8 @@
       maxZoomInPercent: 400,
       actualSizePercent: 100,
     };
+    const ARTIFACT_DOCUMENT_THEME_STORAGE_KEY = "eba.reviewWorkbench.artifactDocumentTheme";
+    const LEGACY_MARKDOWN_THEME_STORAGE_KEY = "eba.reviewWorkbench.markdownTheme";
 
     const app = {
       collection: null,
@@ -20,6 +22,7 @@
       markdownContent: {},
       markdownSavedContent: {},
       markdownDirty: {},
+      artifactDocumentTheme: "dark",
       hoverMarkerTimers: [],
       workbenchProjection: null,
       projectedArtifactsById: {},
@@ -57,6 +60,7 @@
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const isImageArtifact = (item = artifact()) => item.type === "image";
     const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
+    const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
     const imageRectAnchor = (note) => {
       const anchor = annotationAnchor(note);
@@ -234,6 +238,44 @@
       );
     }
 
+    function splitMarkdownTableRow(line) {
+      return String(line || "")
+        .trim()
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((cell) => cell.trim());
+    }
+
+    function isMarkdownTableSeparator(line) {
+      const cells = splitMarkdownTableRow(line);
+      return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+    }
+
+    function renderMarkdownTable(headerLine, separatorLine, rows, firstLineIndex) {
+      const headers = splitMarkdownTableRow(headerLine);
+      const aligns = splitMarkdownTableRow(separatorLine).map((cell) => {
+        if (cell.startsWith(":") && cell.endsWith(":")) return "center";
+        if (cell.endsWith(":")) return "right";
+        return "left";
+      });
+      const headerHtml = headers.map((cell, cellIndex) => (
+        `<th style="text-align: ${aligns[cellIndex] || "left"}">${renderInlineMarkdown(cell)}</th>`
+      )).join("");
+      const bodyHtml = rows.map(({ line, index }) => {
+        const cells = splitMarkdownTableRow(line);
+        return `<tr${sourceLineAttribute(index)}>${headers.map((_header, cellIndex) => (
+          `<td style="text-align: ${aligns[cellIndex] || "left"}">${renderInlineMarkdown(cells[cellIndex] || "")}</td>`
+        )).join("")}</tr>`;
+      }).join("");
+      return (
+        `<div class="artifact-document-table-scroll"${sourceLineAttribute(firstLineIndex)}><table>`
+          + `<thead><tr>${headerHtml}</tr></thead>`
+          + `<tbody>${bodyHtml}</tbody>`
+        + "</table></div>"
+      );
+    }
+
     function renderMarkdown(source) {
       const lines = String(source || "").split("\n");
       let html = "";
@@ -262,6 +304,20 @@
           } else {
             html += `<pre${sourceLineAttribute(start)}><code${language ? ` data-language="${escapeHtml(language)}"` : ""}>${escapeHtml(blockSource)}</code></pre>`;
           }
+          continue;
+        }
+        if (line.includes("|") && lines[index + 1]?.includes("|") && isMarkdownTableSeparator(lines[index + 1])) {
+          closeList();
+          const firstLineIndex = index;
+          const separatorLine = lines[index + 1];
+          const rows = [];
+          index += 2;
+          while (index < lines.length && lines[index].trim() && lines[index].includes("|")) {
+            rows.push({ line: lines[index], index });
+            index += 1;
+          }
+          index -= 1;
+          html += renderMarkdownTable(line, separatorLine, rows, firstLineIndex);
           continue;
         }
         const heading = line.match(/^(#{1,3})\s+(.+)/);
@@ -415,6 +471,23 @@
       return Math.min(stageSize.width / image.naturalWidth, stageSize.height / image.naturalHeight) * 100;
     }
 
+    function smartFitZoom() {
+      const image = $("artifact-image");
+      if (!image.naturalWidth || !image.naturalHeight) return 100;
+      const stageSize = stageViewportSize();
+      const smallerThanStageAt100 =
+        image.naturalWidth <= stageSize.width && image.naturalHeight <= stageSize.height;
+      if (smallerThanStageAt100) {
+        return configuredZoomPercent("actualSizePercent", 100);
+      }
+      const widthFitZoom = stageSize.width / image.naturalWidth * 100;
+      const widthFitHeight = image.naturalHeight * widthFitZoom / 100;
+      if (widthFitHeight > stageSize.height + 1) {
+        return widthFitZoom;
+      }
+      return stageFitZoom();
+    }
+
     function smartFit() {
       const image = $("artifact-image");
       if (!image.naturalWidth || !image.naturalHeight) return;
@@ -425,7 +498,7 @@
         applyZoom(configuredZoomPercent("actualSizePercent", 100), "actual-size");
         return;
       }
-      applyZoom(stageFitZoom(), "stage-fit");
+      applyZoom(smartFitZoom(), "stage-fit");
     }
 
     function updateDimensionReadout() {
@@ -485,6 +558,7 @@
       const item = artifact();
       const image = $("artifact-image");
       $("stage").classList.remove("markdown-stage");
+      $("stage").scrollTo({ left: 0, top: 0 });
       $("image-wrap").hidden = false;
       $("markdown-wrap").hidden = true;
       $("image-controls").style.display = "flex";
@@ -497,7 +571,7 @@
       image.onload = () => {
         updateDimensionReadout();
         if (app.zoomMode === "stage-fit") {
-          applyZoom(stageFitZoom(), "stage-fit");
+          applyZoom(smartFitZoom(), "stage-fit");
         } else if (app.zoomMode === "actual-size") {
           applyZoom(100, "actual-size");
         } else {
@@ -522,19 +596,52 @@
       return content;
     }
 
+    function storedArtifactDocumentTheme() {
+      try {
+        const stored = window.localStorage.getItem(ARTIFACT_DOCUMENT_THEME_STORAGE_KEY)
+          || window.localStorage.getItem(LEGACY_MARKDOWN_THEME_STORAGE_KEY);
+        return stored === "light" ? "light" : "dark";
+      } catch (_error) {
+        return "dark";
+      }
+    }
+
+    function syncArtifactDocumentThemeButton() {
+      const button = $("markdown-theme-toggle");
+      if (!button) return;
+      const isDark = app.artifactDocumentTheme === "dark";
+      button.classList.toggle("active", isDark);
+      button.setAttribute("aria-pressed", String(isDark));
+      button.setAttribute("aria-label", isDark ? "Use light markdown theme" : "Use dark markdown theme");
+      button.title = isDark ? "Use light markdown theme" : "Use dark markdown theme";
+    }
+
+    function setArtifactDocumentTheme(theme) {
+      app.artifactDocumentTheme = theme === "light" ? "light" : "dark";
+      document.body.dataset.artifactDocumentTheme = app.artifactDocumentTheme;
+      try {
+        window.localStorage.setItem(ARTIFACT_DOCUMENT_THEME_STORAGE_KEY, app.artifactDocumentTheme);
+        window.localStorage.removeItem(LEGACY_MARKDOWN_THEME_STORAGE_KEY);
+      } catch (_error) {
+        // Local storage can be unavailable in constrained browser profiles.
+      }
+      syncArtifactDocumentThemeButton();
+    }
+
     function syncMarkdownModeButtons() {
       for (const button of document.querySelectorAll("[data-markdown-mode]")) {
         const active = button.dataset.markdownMode === app.markdownMode;
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", String(active));
       }
+      syncArtifactDocumentThemeButton();
     }
 
     function renderMarkdownBody(item) {
       const content = app.markdownContent[item.id] || "";
-      $("markdown-preview").innerHTML = renderMarkdown(content);
+      markdownPreviewBody().innerHTML = renderMarkdown(content);
       if (window.ArtifactPrimitives?.mermaid && app.markdownMode === "preview") {
-        void window.ArtifactPrimitives.mermaid.upgradeMermaidBlocks($("markdown-preview"));
+        void window.ArtifactPrimitives.mermaid.upgradeMermaidBlocks(markdownPreviewBody());
       }
       $("markdown-source").value = content;
       $("markdown-preview").hidden = app.markdownMode !== "preview";
@@ -546,7 +653,7 @@
     }
 
     function renderMarkdownHighlights() {
-      $("markdown-preview").querySelectorAll(".line-hit").forEach((node) => node.classList.remove("line-hit"));
+      markdownPreviewBody().querySelectorAll(".line-hit").forEach((node) => node.classList.remove("line-hit"));
       if (app.markdownMode !== "preview" || !isMarkdownArtifact()) return;
       for (const note of artifactAnnotations(artifact().id)) {
         const anchor = textRangeAnchor(note);
@@ -578,7 +685,7 @@
       } catch (error) {
         $("markdown-preview").hidden = false;
         $("markdown-source").hidden = true;
-        $("markdown-preview").innerHTML = `<p>Failed to load markdown: ${escapeHtml(error.message)}</p>`;
+        markdownPreviewBody().innerHTML = `<p>Failed to load markdown: ${escapeHtml(error.message)}</p>`;
       }
     }
 
@@ -614,6 +721,10 @@
       app.markdownMode = mode === "source" ? "source" : "preview";
       renderMarkdownBody(artifact());
       if (app.markdownMode === "source") $("markdown-source").focus();
+    }
+
+    function toggleMarkdownTheme() {
+      setArtifactDocumentTheme(app.artifactDocumentTheme === "dark" ? "light" : "dark");
     }
 
     function renderArtifact() {
@@ -894,7 +1005,7 @@
       if (!anchor?.start?.line || !anchor?.end?.line) return [];
       const start = Math.min(anchor.start.line, anchor.end.line);
       const end = Math.max(anchor.start.line, anchor.end.line);
-      return [...$("markdown-preview").querySelectorAll("[data-source-line]")]
+      return [...markdownPreviewBody().querySelectorAll("[data-source-line]")]
         .filter((node) => {
           const line = Number(node.dataset.sourceLine);
           return line >= start && line <= end;
@@ -1087,7 +1198,7 @@
         right: wrapRect.left + displayRect.x + displayRect.width,
         bottom: wrapRect.top + displayRect.y + displayRect.height,
       };
-      const hits = [...$("markdown-preview").querySelectorAll("[data-source-line]")]
+      const hits = [...markdownPreviewBody().querySelectorAll("[data-source-line]")]
         .map((node) => ({ node, rect: node.getBoundingClientRect(), line: Number(node.dataset.sourceLine) }))
         .filter(({ rect }) => rect.right >= selectionRect.left
           && rect.left <= selectionRect.right
@@ -1146,7 +1257,7 @@
 
     function scrollTextRangeIntoView(anchor) {
       if (!anchor?.start?.line) return;
-      const target = $("markdown-preview").querySelector(`[data-source-line="${anchor.start.line}"]`);
+      const target = markdownPreviewBody().querySelector(`[data-source-line="${anchor.start.line}"]`);
       if (target) {
         target.scrollIntoView({ block: "center", inline: "nearest" });
         return;
@@ -1438,6 +1549,7 @@
       });
       $("markdown-preview-mode").addEventListener("click", () => setMarkdownMode("preview"));
       $("markdown-source-mode").addEventListener("click", () => setMarkdownMode("source"));
+      $("markdown-theme-toggle").addEventListener("click", toggleMarkdownTheme);
       $("markdown-save").addEventListener("click", saveMarkdownArtifact);
       $("markdown-revert").addEventListener("click", revertMarkdownArtifact);
       $("markdown-source").addEventListener("input", () => {
@@ -1471,7 +1583,7 @@
         if (!isImageArtifact()) {
           updateMooringOverlays();
         } else if (app.zoomMode === "stage-fit") {
-          applyZoom(stageFitZoom(), "stage-fit");
+          applyZoom(smartFitZoom(), "stage-fit");
         } else {
           updateImageAlignment();
           updateMooringOverlays();
@@ -1517,6 +1629,7 @@
       app.collection = payload.collection;
       app.annotations = payload.annotations || {};
       indexProjection(projectionPayload);
+      setArtifactDocumentTheme(storedArtifactDocumentTheme());
       if (!app.collection.artifacts.length) {
         $("stage").innerHTML = "<div class='small'>No artifacts found.</div>";
         return;

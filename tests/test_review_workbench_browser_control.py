@@ -28,7 +28,7 @@ class ReviewWorkbenchBrowserControlTests(unittest.TestCase):
             "http://127.0.0.1:8765/",
             session="eba-workbench",
             browser="chrome",
-            viewport_size="1440,1000",
+            viewport_size=None,
         )
 
         self.assertEqual(plan["session"], "eba-workbench")
@@ -49,6 +49,16 @@ class ReviewWorkbenchBrowserControlTests(unittest.TestCase):
                 "chrome-profile/workbench",
             ],
         )
+        self.assertIsNone(plan["initial_resize_command"])
+
+    def test_browser_open_plan_keeps_explicit_viewport_resize_available(self) -> None:
+        plan = gate.build_workbench_browser_plan(
+            "http://127.0.0.1:8765/",
+            session="eba-workbench",
+            browser="chrome",
+            viewport_size="1440,1000",
+        )
+
         self.assertEqual(
             plan["initial_resize_command"],
             [
@@ -62,7 +72,7 @@ class ReviewWorkbenchBrowserControlTests(unittest.TestCase):
             ],
         )
 
-    def test_reused_browser_session_does_not_resize_or_reopen(self) -> None:
+    def test_reused_browser_session_syncs_viewport_width_without_reopening(self) -> None:
         commands: list[list[str]] = []
         statuses = [
             {
@@ -90,15 +100,25 @@ class ReviewWorkbenchBrowserControlTests(unittest.TestCase):
             commands.append(command)
             return Result()
 
+        def fake_metrics(session: str) -> dict[str, object]:
+            self.assertEqual(session, "eba-workbench")
+            return {
+                "innerWidth": 1440,
+                "innerHeight": 1000,
+                "outerWidth": 1512,
+            }
+
         original_require_cli = gate.require_session_aware_cli
         original_require_wrapper = gate.require_workbench_browser_wrapper
         original_status = gate.browser_session_status
         original_run = gate.run_browser_command
+        original_metrics = gate.browser_page_metrics
         try:
             gate.require_session_aware_cli = lambda: "playwright-cli"  # type: ignore[assignment]
             gate.require_workbench_browser_wrapper = lambda: gate.BROWSER_WRAPPER  # type: ignore[assignment]
             gate.browser_session_status = fake_status  # type: ignore[assignment]
             gate.run_browser_command = fake_run  # type: ignore[assignment]
+            gate.browser_page_metrics = fake_metrics  # type: ignore[assignment]
 
             with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
                 root = Path(tmp)
@@ -110,7 +130,7 @@ class ReviewWorkbenchBrowserControlTests(unittest.TestCase):
                         "browser_state": root / "review-browser-state.json",
                     },
                     "chrome",
-                    "1440,1000",
+                    None,
                     session="eba-workbench",
                     profile=REPO_ROOT / "chrome-profile" / "workbench",
                 )
@@ -119,12 +139,17 @@ class ReviewWorkbenchBrowserControlTests(unittest.TestCase):
             gate.require_workbench_browser_wrapper = original_require_wrapper  # type: ignore[assignment]
             gate.browser_session_status = original_status  # type: ignore[assignment]
             gate.run_browser_command = original_run  # type: ignore[assignment]
+            gate.browser_page_metrics = original_metrics  # type: ignore[assignment]
 
         self.assertTrue(result["reused"])
         self.assertFalse(result["resized"])
+        self.assertTrue(result["viewport_synced"])
         self.assertEqual(
             commands,
-            [[sys.executable, "scripts/playwright_cli_browser.py", "goto", "http://127.0.0.1:8765/", "--session", "eba-workbench"]],
+            [
+                [sys.executable, "scripts/playwright_cli_browser.py", "goto", "http://127.0.0.1:8765/", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "resize", "1512", "1000", "--session", "eba-workbench"],
+            ],
         )
 
     def test_browser_session_status_reads_session_aware_cli_list(self) -> None:

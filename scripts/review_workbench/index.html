@@ -52,6 +52,11 @@
               <span aria-hidden="true">&lt;/&gt;</span>
             </button>
           </div>
+          <button class="action-button icon-only" id="markdown-theme-toggle" type="button" aria-label="Use light markdown theme" title="Use light markdown theme">
+            <svg aria-hidden="true">
+              <use href="/assets/review-workbench-icons.svg#icon-theme"></use>
+            </svg>
+          </button>
           <button class="action-button icon-only" id="markdown-revert" type="button" aria-label="Revert" title="Revert">
             <svg aria-hidden="true">
               <use href="/assets/review-workbench-icons.svg#icon-revert"></use>
@@ -70,8 +75,10 @@
           <div class="selection" id="selection" hidden></div>
           <div class="hover-marker" id="hover-marker" hidden>💡</div>
         </div>
-        <div class="markdown-wrap" id="markdown-wrap" hidden>
-          <div class="markdown-preview" id="markdown-preview"></div>
+        <div class="artifact-document markdown-wrap" id="markdown-wrap" hidden>
+          <div class="artifact-document-scroll markdown-preview" id="markdown-preview">
+            <div class="artifact-document-body artifact-projection-markdown markdown-preview-body" id="markdown-preview-body"></div>
+          </div>
           <textarea class="markdown-source" id="markdown-source" spellcheck="true" hidden></textarea>
           <div class="markdown-marker" id="markdown-marker" hidden></div>
         </div>

@@ -67,8 +67,11 @@ def parse_args() -> argparse.Namespace:
             )
             subparser.add_argument(
                 "--viewport-size",
-                default="1440,1000",
-                help="Browser viewport size for the workbench window",
+                default=None,
+                help=(
+                    "Optional emulated browser viewport as WIDTH,HEIGHT. "
+                    "Omit for the human workbench so page width follows the Chrome window."
+                ),
             )
         if command == "surface":
             subparser.add_argument(
@@ -263,13 +266,23 @@ def build_workbench_browser_plan(
     *,
     session: str,
     browser: str,
-    viewport_size: str,
+    viewport_size: str | None,
     profile: Path = DEFAULT_BROWSER_PROFILE,
 ) -> dict[str, Any]:
-    width, height = parse_viewport_size(viewport_size)
     wrapper = relative_path(BROWSER_WRAPPER)
     profile_path = relative_path(profile)
     common = ["--session", session]
+    initial_resize_command = None
+    if viewport_size:
+        width, height = parse_viewport_size(viewport_size)
+        initial_resize_command = [
+            sys.executable,
+            wrapper,
+            "resize",
+            width,
+            height,
+            *common,
+        ]
     return {
         "session": session,
         "profile": profile_path,
@@ -294,14 +307,7 @@ def build_workbench_browser_plan(
             url,
             *common,
         ],
-        "initial_resize_command": [
-            sys.executable,
-            wrapper,
-            "resize",
-            width,
-            height,
-            *common,
-        ],
+        "initial_resize_command": initial_resize_command,
     }
 
 
@@ -397,11 +403,74 @@ def run_browser_command(command: list[str], log_handle: Any) -> subprocess.Compl
     return completed
 
 
+def browser_page_metrics(session: str) -> dict[str, Any]:
+    exe = require_session_aware_cli()
+    completed = subprocess.run(
+        [
+            exe,
+            f"-s={session}",
+            "--json",
+            "eval",
+            (
+                "() => ({"
+                "innerWidth: window.innerWidth,"
+                "innerHeight: window.innerHeight,"
+                "outerWidth: window.outerWidth,"
+                "outerHeight: window.outerHeight"
+                "})"
+            ),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return {"error": completed.stderr.strip() or completed.stdout.strip()}
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return {"error": "invalid_json", "stdout": completed.stdout.strip()}
+    result = payload.get("result")
+    if isinstance(result, str):
+        try:
+            parsed = json.loads(result)
+        except json.JSONDecodeError:
+            return {"error": "invalid_result_json", "result": result}
+        if isinstance(parsed, dict):
+            return parsed
+    if isinstance(result, dict):
+        return result
+    return {"error": "missing_result", "payload": payload}
+
+
+def viewport_width_sync_command(session: str, metrics: dict[str, Any]) -> list[str] | None:
+    try:
+        inner_width = int(metrics["innerWidth"])
+        inner_height = int(metrics["innerHeight"])
+        outer_width = int(metrics["outerWidth"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if inner_width <= 0 or inner_height <= 0 or outer_width <= 0:
+        return None
+    if abs(inner_width - outer_width) <= 1:
+        return None
+    return [
+        sys.executable,
+        relative_path(BROWSER_WRAPPER),
+        "resize",
+        str(outer_width),
+        str(inner_height),
+        "--session",
+        session,
+    ]
+
+
 def open_with_playwright(
     url: str,
     paths: dict[str, Path],
     channel: str,
-    viewport_size: str,
+    viewport_size: str | None,
     *,
     session: str = DEFAULT_BROWSER_SESSION,
     profile: Path = DEFAULT_BROWSER_PROFILE,
@@ -421,11 +490,18 @@ def open_with_playwright(
     action_command = plan["goto_command"] if before.get("alive") else plan["open_command"]
     action = "goto" if before.get("alive") else "open"
     resize_result = None
+    viewport_sync_result = None
+    viewport_metrics = None
     with paths["browser_log"].open("a", encoding="utf-8") as log_handle:
         log_handle.write(f"\n## {action} {int(time.time())} {url}\n")
         action_result = run_browser_command(action_command, log_handle)
-        if action == "open":
+        if action == "open" and plan["initial_resize_command"] is not None:
             resize_result = run_browser_command(plan["initial_resize_command"], log_handle)
+        if viewport_size is None and action_result.returncode == 0:
+            viewport_metrics = browser_page_metrics(session)
+            viewport_sync_command = viewport_width_sync_command(session, viewport_metrics)
+            if viewport_sync_command is not None:
+                viewport_sync_result = run_browser_command(viewport_sync_command, log_handle)
     if action_result.returncode != 0:
         raise SystemExit(
             f"Workbench browser {action} failed. See {relative_path(paths['browser_log'])}."
@@ -433,6 +509,10 @@ def open_with_playwright(
     if resize_result is not None and resize_result.returncode != 0:
         raise SystemExit(
             f"Workbench browser resize failed. See {relative_path(paths['browser_log'])}."
+        )
+    if viewport_sync_result is not None and viewport_sync_result.returncode != 0:
+        raise SystemExit(
+            f"Workbench browser viewport sync failed. See {relative_path(paths['browser_log'])}."
         )
     after = browser_session_status(session)
     write_json_atomic(
@@ -450,6 +530,8 @@ def open_with_playwright(
         "session": session,
         "reused": bool(before.get("alive")),
         "resized": resize_result is not None,
+        "viewport_synced": viewport_sync_result is not None,
+        "viewport_metrics": viewport_metrics,
         "status": after,
         "log": str(paths["browser_log"].relative_to(REPO_ROOT)),
         "channel": channel,
