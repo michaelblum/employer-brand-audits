@@ -12,8 +12,8 @@ from typing import Any
 
 REGISTRY_SCHEMA_VERSION = "eba_registry.v1"
 
-ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "demo"}
-ALLOWED_DEV_COMMANDS = {"situation", "validate", "demo"}
+ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "demo", "workbench"}
+ALLOWED_DEV_COMMANDS = {"situation", "validate", "demo", "workbench"}
 DEFAULT_ALLOWED_PATHS = [
     "AGENTS.md",
     "docs/superpowers/project-sop.md",

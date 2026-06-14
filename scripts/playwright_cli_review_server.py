@@ -8,7 +8,6 @@ import posixpath
 import shutil
 import sys
 import time
-import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -66,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--open",
         action="store_true",
-        help="Open the local artifact viewer in the system browser after the server starts",
+        help="Deprecated no-op; use scripts/playwright_cli_review_gate.py surface to open the managed browser session",
     )
     return parser.parse_args()
 
@@ -378,7 +377,11 @@ def main() -> int:
     print(f"[artifact-viewer] annotation state http://{host}:{port}/api/annotation-state")
     print(f"[artifact-viewer] workbench projection http://{host}:{port}/api/workbench-projection")
     if args.open:
-        webbrowser.open(f"http://{host}:{port}/", new=2)
+        print(
+            "[artifact-viewer] --open is a no-op; use "
+            "scripts/playwright_cli_review_gate.py surface for the managed eba-workbench browser session.",
+            file=sys.stderr,
+        )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

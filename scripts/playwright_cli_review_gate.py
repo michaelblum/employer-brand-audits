@@ -5,13 +5,13 @@ import argparse
 import json
 import os
 import signal
+import shutil
 import socket
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
-import webbrowser
 from pathlib import Path
 from typing import Any
 
@@ -23,11 +23,14 @@ DEFAULT_MANIFEST = (
     REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
 )
 SERVER_SCRIPT = REPO_ROOT / "scripts" / "playwright_cli_review_server.py"
+BROWSER_WRAPPER = REPO_ROOT / "scripts" / "playwright_cli_browser.py"
 PID_NAME = "review-server.pid"
 LOG_NAME = "review-server.log"
 STATE_NAME = "review-server-state.json"
-BROWSER_PID_NAME = "review-browser.pid"
+BROWSER_STATE_NAME = "review-browser-state.json"
 BROWSER_LOG_NAME = "review-browser.log"
+DEFAULT_BROWSER_SESSION = "eba-workbench"
+DEFAULT_BROWSER_PROFILE = REPO_ROOT / "chrome-profile" / "workbench"
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,17 +48,29 @@ def parse_args() -> argparse.Namespace:
         if command in {"start", "surface"}:
             subparser.add_argument("--open", action="store_true")
             subparser.add_argument("--timeout", type=float, default=10.0)
-        if command == "surface":
+        if command in {"start", "open", "surface"}:
+            subparser.add_argument(
+                "--browser-session",
+                default=DEFAULT_BROWSER_SESSION,
+                help="Named Playwright CLI session for the workbench browser",
+            )
+            subparser.add_argument(
+                "--profile",
+                type=Path,
+                default=DEFAULT_BROWSER_PROFILE,
+                help="Persistent browser profile for the workbench browser",
+            )
             subparser.add_argument(
                 "--channel",
                 default="chrome",
-                help="Chromium channel for Playwright CLI open, usually chrome",
+                help="Browser channel for the repo Playwright CLI wrapper",
             )
             subparser.add_argument(
                 "--viewport-size",
                 default="1440,1000",
-                help="Browser viewport size passed to Playwright CLI open",
+                help="Browser viewport size for the workbench window",
             )
+        if command == "surface":
             subparser.add_argument(
                 "--no-browser",
                 action="store_true",
@@ -88,7 +103,7 @@ def paths_for(manifest_path: Path) -> dict[str, Path]:
         "pid": artifact_root / PID_NAME,
         "log": artifact_root / LOG_NAME,
         "state": artifact_root / STATE_NAME,
-        "browser_pid": artifact_root / BROWSER_PID_NAME,
+        "browser_state": artifact_root / BROWSER_STATE_NAME,
         "browser_log": artifact_root / BROWSER_LOG_NAME,
     }
 
@@ -184,20 +199,29 @@ def command_quiet(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "quiet", False))
 
 
-def playwright_wrapper_path() -> Path:
-    codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
-    return codex_home / "skills" / "playwright" / "scripts" / "playwright_cli.sh"
+def relative_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(resolved)
 
 
-def require_playwright_wrapper() -> Path:
-    wrapper = playwright_wrapper_path()
-    if not wrapper.exists():
+def parse_viewport_size(value: str) -> tuple[str, str]:
+    parts = [part.strip() for part in value.split(",", 1)]
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        raise SystemExit(f"Expected viewport size as WIDTH,HEIGHT: {value}")
+    return parts[0], parts[1]
+
+
+def require_workbench_browser_wrapper() -> Path:
+    if not BROWSER_WRAPPER.exists():
         raise SystemExit(
-            f"Playwright wrapper not found: {wrapper}. "
-            "Install/enable the local Playwright skill or run surface --no-browser."
+            f"Repo Playwright CLI wrapper not found: {relative_path(BROWSER_WRAPPER)}. "
+            "Repair scripts/playwright_cli_browser.py or run surface --no-browser."
         )
     completed = subprocess.run(
-        [str(wrapper), "--help"],
+        [sys.executable, str(BROWSER_WRAPPER), "--help"],
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
@@ -205,43 +229,232 @@ def require_playwright_wrapper() -> Path:
     )
     if completed.returncode != 0:
         raise SystemExit(
-            "Playwright wrapper failed health check. "
-            f"command={wrapper} --help\n{completed.stderr or completed.stdout}"
+            "Repo Playwright CLI wrapper failed health check. "
+            f"command={sys.executable} {BROWSER_WRAPPER} --help\n{completed.stderr or completed.stdout}"
         )
-    return wrapper
+    return BROWSER_WRAPPER
 
 
-def open_with_playwright(url: str, paths: dict[str, Path], channel: str, viewport_size: str) -> dict[str, Any]:
-    wrapper = require_playwright_wrapper()
-    paths["artifact_root"].mkdir(parents=True, exist_ok=True)
-    log_handle = paths["browser_log"].open("a", encoding="utf-8")
-    log_handle.write(f"\n## open {int(time.time())} {url}\n")
-    log_handle.flush()
-    process = subprocess.Popen(
-        [
-            str(wrapper),
-            "open",
-            "--channel",
-            channel,
-            "--viewport-size",
-            viewport_size,
-            url,
-        ],
+def require_session_aware_cli() -> str:
+    exe = shutil.which("playwright-cli")
+    if not exe:
+        raise SystemExit(
+            "playwright-cli not found on PATH. Install/activate the session-aware Playwright CLI "
+            "or run surface --no-browser."
+        )
+    completed = subprocess.run(
+        [exe, "list", "--json"],
         cwd=REPO_ROOT,
-        stdin=subprocess.DEVNULL,
-        stdout=log_handle,
-        stderr=log_handle,
-        start_new_session=True,
+        text=True,
+        capture_output=True,
+        check=False,
     )
-    log_handle.close()
-    paths["browser_pid"].write_text(f"{process.pid}\n", encoding="utf-8")
+    if completed.returncode != 0:
+        raise SystemExit(
+            "playwright-cli exists but does not expose the required named-session API. "
+            "Expected `playwright-cli list --json` to work; do not use ordinary Playwright for "
+            f"the workbench browser.\n{completed.stderr or completed.stdout}"
+        )
+    return exe
+
+
+def build_workbench_browser_plan(
+    url: str,
+    *,
+    session: str,
+    browser: str,
+    viewport_size: str,
+    profile: Path = DEFAULT_BROWSER_PROFILE,
+) -> dict[str, Any]:
+    width, height = parse_viewport_size(viewport_size)
+    wrapper = relative_path(BROWSER_WRAPPER)
+    profile_path = relative_path(profile)
+    common = ["--session", session]
+    return {
+        "session": session,
+        "profile": profile_path,
+        "browser": browser,
+        "viewport_size": viewport_size,
+        "open_command": [
+            sys.executable,
+            wrapper,
+            "open",
+            url,
+            *common,
+            "--browser",
+            browser,
+            "--persistent",
+            "--profile",
+            profile_path,
+        ],
+        "goto_command": [
+            sys.executable,
+            wrapper,
+            "goto",
+            url,
+            *common,
+        ],
+        "initial_resize_command": [
+            sys.executable,
+            wrapper,
+            "resize",
+            width,
+            height,
+            *common,
+        ],
+    }
+
+
+def browser_session_status_from_list(stdout: str, *, session: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        return {
+            "session": session,
+            "alive": False,
+            "status": "invalid_json",
+        }
+    browsers = payload.get("browsers") if isinstance(payload, dict) else None
+    if not isinstance(browsers, list):
+        return {
+            "session": session,
+            "alive": False,
+            "status": "missing_browsers",
+        }
+    for browser in browsers:
+        if not isinstance(browser, dict) or browser.get("name") != session:
+            continue
+        profile = browser.get("userDataDir")
+        profile_path = relative_path(Path(profile)) if profile else None
+        status = str(browser.get("status") or "unknown")
+        return {
+            "session": session,
+            "alive": status == "open",
+            "status": status,
+            "browser_type": browser.get("browserType"),
+            "headed": browser.get("headed"),
+            "persistent": browser.get("persistent"),
+            "profile": profile_path,
+            "compatible": browser.get("compatible"),
+        }
+    return {
+        "session": session,
+        "alive": False,
+        "status": "not_found",
+        "profile": relative_path(DEFAULT_BROWSER_PROFILE),
+    }
+
+
+def browser_session_status(session: str) -> dict[str, Any]:
+    exe = shutil.which("playwright-cli")
+    if not exe:
+        return {
+            "session": session,
+            "alive": False,
+            "status": "playwright_cli_missing",
+            "profile": relative_path(DEFAULT_BROWSER_PROFILE),
+        }
+    completed = subprocess.run(
+        [exe, "list", "--json"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return {
+            "session": session,
+            "alive": False,
+            "status": "session_api_unavailable",
+            "stderr": completed.stderr.strip(),
+            "profile": relative_path(DEFAULT_BROWSER_PROFILE),
+        }
+    return browser_session_status_from_list(completed.stdout, session=session)
+
+
+def run_browser_command(command: list[str], log_handle: Any) -> subprocess.CompletedProcess[str]:
+    log_handle.write("+ " + " ".join(command) + "\n")
+    log_handle.flush()
+    completed = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.stdout:
+        log_handle.write("\n[stdout]\n")
+        log_handle.write(completed.stdout)
+        if not completed.stdout.endswith("\n"):
+            log_handle.write("\n")
+    if completed.stderr:
+        log_handle.write("\n[stderr]\n")
+        log_handle.write(completed.stderr)
+        if not completed.stderr.endswith("\n"):
+            log_handle.write("\n")
+    log_handle.write(f"\n[exit_code] {completed.returncode}\n")
+    log_handle.flush()
+    return completed
+
+
+def open_with_playwright(
+    url: str,
+    paths: dict[str, Path],
+    channel: str,
+    viewport_size: str,
+    *,
+    session: str = DEFAULT_BROWSER_SESSION,
+    profile: Path = DEFAULT_BROWSER_PROFILE,
+) -> dict[str, Any]:
+    require_session_aware_cli()
+    require_workbench_browser_wrapper()
+    paths["artifact_root"].mkdir(parents=True, exist_ok=True)
+    profile.mkdir(parents=True, exist_ok=True)
+    plan = build_workbench_browser_plan(
+        url,
+        session=session,
+        browser=channel,
+        viewport_size=viewport_size,
+        profile=profile,
+    )
+    before = browser_session_status(session)
+    action_command = plan["goto_command"] if before.get("alive") else plan["open_command"]
+    action = "goto" if before.get("alive") else "open"
+    resize_result = None
+    with paths["browser_log"].open("a", encoding="utf-8") as log_handle:
+        log_handle.write(f"\n## {action} {int(time.time())} {url}\n")
+        action_result = run_browser_command(action_command, log_handle)
+        if action == "open":
+            resize_result = run_browser_command(plan["initial_resize_command"], log_handle)
+    if action_result.returncode != 0:
+        raise SystemExit(
+            f"Workbench browser {action} failed. See {relative_path(paths['browser_log'])}."
+        )
+    if resize_result is not None and resize_result.returncode != 0:
+        raise SystemExit(
+            f"Workbench browser resize failed. See {relative_path(paths['browser_log'])}."
+        )
+    after = browser_session_status(session)
+    write_json_atomic(
+        paths["browser_state"],
+        {
+            "session": session,
+            "profile": plan["profile"],
+            "status": after,
+            "updated_at_epoch": int(time.time()),
+        },
+    )
     return {
         "opened": True,
-        "method": "playwright-cli",
-        "pid": process.pid,
+        "method": "repo-playwright-cli",
+        "session": session,
+        "reused": bool(before.get("alive")),
+        "resized": resize_result is not None,
+        "status": after,
         "log": str(paths["browser_log"].relative_to(REPO_ROOT)),
         "channel": channel,
         "viewport_size": viewport_size,
+        "profile": plan["profile"],
     }
 
 
@@ -279,7 +492,14 @@ def command_start(args: argparse.Namespace) -> int:
         if not healthy:
             raise SystemExit(f"Recorded review server PID {pid} is alive but unhealthy: {status}")
         if args.open:
-            webbrowser.open(url, new=2)
+            open_with_playwright(
+                url,
+                paths,
+                args.channel,
+                args.viewport_size,
+                session=args.browser_session,
+                profile=args.profile,
+            )
         if not command_quiet(args):
             print(f"Artifact viewer already running: {url}")
             print(f"pid={pid}")
@@ -349,7 +569,14 @@ def command_start(args: argparse.Namespace) -> int:
         return 1
 
     if args.open:
-        webbrowser.open(url, new=2)
+        open_with_playwright(
+            url,
+            paths,
+            args.channel,
+            args.viewport_size,
+            session=args.browser_session,
+            profile=args.profile,
+        )
     if not command_quiet(args):
         print(f"Artifact viewer running: {url}")
         print(f"pid={process.pid}")
@@ -380,6 +607,7 @@ def status_payload(args: argparse.Namespace, manifest_path: Path) -> dict[str, A
         "log": str(paths["log"].relative_to(REPO_ROOT)),
         "annotation_state_url": f"{url.rstrip('/')}/api/annotation-state",
         "workbench_projection_url": f"{url.rstrip('/')}/api/workbench-projection",
+        "browser_session": browser_session_status(DEFAULT_BROWSER_SESSION),
     }
 
 
@@ -427,8 +655,15 @@ def command_open(args: argparse.Namespace) -> int:
     healthy, status = health(url)
     if not healthy:
         raise SystemExit(f"Artifact viewer is not healthy at {url}: {status}")
-    webbrowser.open(url, new=2)
-    print(f"Opened {url}")
+    browser = open_with_playwright(
+        url,
+        paths,
+        args.channel,
+        args.viewport_size,
+        session=args.browser_session,
+        profile=args.profile,
+    )
+    print(f"Opened {url} in session={browser['session']} method={browser['method']}")
     return 0
 
 
@@ -489,6 +724,8 @@ def command_surface(args: argparse.Namespace) -> int:
             paths,
             args.channel,
             args.viewport_size,
+            session=args.browser_session,
+            profile=args.profile,
         )
 
     if args.json:
@@ -505,8 +742,9 @@ def command_surface(args: argparse.Namespace) -> int:
         browser = result["browser"]
         if browser["opened"]:
             print(
-                f"browser=playwright-cli pid={browser['pid']} "
-                f"log={browser['log']} channel={browser['channel']}"
+                f"browser={browser['method']} session={browser['session']} "
+                f"reused={str(browser['reused']).lower()} log={browser['log']} "
+                f"channel={browser['channel']} profile={browser['profile']}"
             )
         else:
             print("browser=not_opened")
