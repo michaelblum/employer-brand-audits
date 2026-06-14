@@ -81,18 +81,23 @@ def test_cli_can_be_package_imported() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_validation_commands_scope_mcp_pytest_to_mcp_tests() -> None:
+def test_validation_commands_scope_pytest_to_control_plane_and_mcp_tests() -> None:
     from scripts.eba_cli import validation_commands
 
-    mcp_pytest_commands = [
+    pytest_commands = [
         command
         for command in validation_commands()
-        if command[0].endswith("mcp-server/.venv/bin/pytest")
+        if "pytest" in command or command[0].endswith("/pytest")
     ]
-    if not mcp_pytest_commands:
+    if not pytest_commands:
         pytest.skip("mcp-server pytest venv is not present")
 
-    assert mcp_pytest_commands == [[mcp_pytest_commands[0][0], "-q", "mcp-server/tests"]]
+    venv_python = str(REPO_ROOT / "mcp-server" / ".venv" / "bin" / "python")
+    pytest_bin = str(REPO_ROOT / "mcp-server" / ".venv" / "bin" / "pytest")
+    assert pytest_commands == [
+        [venv_python, "-m", "pytest", "-q", "tests/test_eba_control_plane.py"],
+        [pytest_bin, "-q", "mcp-server/tests"],
+    ]
 
 
 def test_validation_commands_compile_easy_audit_fixture() -> None:
@@ -101,6 +106,16 @@ def test_validation_commands_compile_easy_audit_fixture() -> None:
     compile_command = validation_commands()[0]
 
     assert "scripts/easy_audit_fixture.py" in compile_command
+
+
+def test_ci_runs_eba_validate_inside_turn() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "validate.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "./eba begin --worker-id ci-validate" in workflow
+    assert "./eba dev validate" in workflow
+    assert "./eba end --worker-id ci-validate" in workflow
 
 
 def test_easy_audit_fixture_route_generates_manifest(tmp_path: Path) -> None:
@@ -164,7 +179,16 @@ def test_begin_corridor_covers_dox_boundaries(tmp_path: Path) -> None:
 
     assert begin.returncode == 0, begin.stderr
     allowed_paths = parse_json(begin)["corridor"]["allowed_paths"]
-    for expected in ["AGENTS.md", "data/", "docs/", "mcp-server/", "scripts/", "tests/", ".eba/"]:
+    for expected in [
+        "AGENTS.md",
+        "data/",
+        "docs/",
+        "mcp-server/",
+        "scripts/",
+        "tests/",
+        ".github/",
+        ".eba/",
+    ]:
         assert expected in allowed_paths
 
 

@@ -248,8 +248,12 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-mermaid-artifact-check.js"],
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-interaction-overlay-check.js"],
     ]
+    venv_python = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "python"
     pytest = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "pytest"
     if pytest.exists():
+        commands.append(
+            [str(venv_python), "-m", "pytest", "-q", "tests/test_eba_control_plane.py"]
+        )
         commands.append([str(pytest), "-q", "mcp-server/tests"])
     commands.append(["git", "diff", "--check"])
     return commands

@@ -21,6 +21,7 @@ DEFAULT_ALLOWED_PATHS = [
     "mcp-server/",
     "scripts/",
     "tests/",
+    ".github/",
     ".eba/",
 ]
 INSTRUCTION_BEARING_PATHS = [

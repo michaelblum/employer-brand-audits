@@ -245,6 +245,7 @@ AGENTS.md.
 - `data/AGENTS.md` - static project data such as KILOS framework inputs.
 - `docs/AGENTS.md` - durable architecture, SOP, planning, prompt, and spike
   documents.
+- `.github/AGENTS.md` - GitHub Actions workflows and CI validation entrypoints.
 - `mcp-server/AGENTS.md` - stdio MCP server, imaging package, requirements, and
   MCP-local tests.
 - `scripts/AGENTS.md` - `./eba` command implementation, browser/capture helpers,

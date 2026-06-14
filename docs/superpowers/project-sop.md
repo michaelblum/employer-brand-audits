@@ -135,8 +135,8 @@ appear. Keep it small, typed, and honest; do not add routes that are not wired
 or validated.
 
 The DOX-aware turn corridor intentionally covers durable source and instruction
-trees (`data/`, `docs/`, `mcp-server/`, `scripts/`, and `tests/`) so child
-`AGENTS.md` files and their owning code can move through the same gate.
+trees (`.github/`, `data/`, `docs/`, `mcp-server/`, `scripts/`, and `tests/`)
+so child `AGENTS.md` files and their owning code can move through the same gate.
 Generated and local runtime paths such as `artifacts/`, `.playwright-cli/`, and
 `chrome-profile/` stay outside the corridor.
 

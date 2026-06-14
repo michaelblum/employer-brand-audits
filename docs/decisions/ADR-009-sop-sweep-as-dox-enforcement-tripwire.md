@@ -89,9 +89,10 @@ Two known limits remain until Tier 1 and CI hardening land:
   block.
 
 The durable backstop is CI plus human review of diffs to
-`scripts/eba_control_plane.py`, which is now instruction-bearing. CI should run
-`./eba dev validate` on PRs from a checked-out ref that the in-turn agent is not
-editing and rerunning as its own authority.
+`scripts/eba_control_plane.py`, which is now instruction-bearing.
+`.github/workflows/validate.yml` runs `./eba dev validate`, including the
+control-plane pinning tests, on PRs from a checked-out ref that the in-turn agent
+is not editing and rerunning as its own authority.
 
 ## Staging And Trigger
 
