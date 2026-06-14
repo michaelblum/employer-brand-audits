@@ -12,6 +12,7 @@ from scripts.eba_control_plane import (
     ControlPlaneError,
     begin_turn,
     changed_files,
+    concrete_sop_checks,
     end_turn,
     instruction_bearing,
     path_allowed,
@@ -163,6 +164,18 @@ def test_begin_corridor_covers_dox_boundaries(tmp_path: Path) -> None:
     allowed_paths = parse_json(begin)["corridor"]["allowed_paths"]
     for expected in ["AGENTS.md", "data/", "docs/", "mcp-server/", "scripts/", "tests/", ".eba/"]:
         assert expected in allowed_paths
+
+
+def test_begin_corridor_still_excludes_generated_and_root_runtime_paths(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+
+    begin = eba(repo, "begin", "--worker-id", "worker-test")
+
+    assert begin.returncode == 0, begin.stderr
+    allowed_paths = parse_json(begin)["corridor"]["allowed_paths"]
+    assert not path_allowed("artifacts/easy-audit/latest/manifest.json", allowed_paths)
+    assert not path_allowed("chrome-profile/Local State", allowed_paths)
+    assert not path_allowed("eba", allowed_paths)
 
 
 def test_begin_twice_for_same_worker_blocks(tmp_path: Path) -> None:
@@ -318,3 +331,19 @@ def test_end_blocks_when_sop_sweep_detects_weakened_hard_invariant(
     assert sweep["status"] == "blocked"
     assert sweep["reason"] == "sop_sweep_failed"
     assert "agents_base64_boundary" in sweep["failed_checks"]
+
+
+def test_adr_008_sop_check_tolerates_supersession_note(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+    adr = repo / "docs" / "decisions" / "ADR-008-playwright-cli-browser-engine.md"
+    adr.write_text(
+        adr.read_text(encoding="utf-8").replace(
+            "**Status:** Accepted",
+            "**Status:** Superseded by ADR-009",
+        ),
+        encoding="utf-8",
+    )
+
+    check = next(check for check in concrete_sop_checks(repo) if check["name"] == "adr_008_browser_boundary")
+
+    assert check["status"] == "passed"

@@ -365,6 +365,25 @@ def required_text_check(
     }
 
 
+def adr_008_browser_boundary_check(repo_root: Path) -> dict[str, Any]:
+    path = "docs/decisions/ADR-008-playwright-cli-browser-engine.md"
+    target = repo_root / path
+    text = target.read_text(encoding="utf-8") if target.exists() else ""
+    normalized = re.sub(r"\s+", " ", text).lower()
+    missing = []
+    if "**status:** accepted" not in normalized and "**status:** superseded" not in normalized:
+        missing.append("**Status:** Accepted or **Status:** Superseded")
+    required_boundary = "Playwright CLI is the browser engine for automated audits."
+    if re.sub(r"\s+", " ", required_boundary).lower() not in normalized:
+        missing.append(required_boundary)
+    return {
+        "name": "adr_008_browser_boundary",
+        "path": path,
+        "status": "passed" if not missing else "failed",
+        "missing": missing,
+    }
+
+
 def concrete_sop_checks(repo_root: Path) -> list[dict[str, Any]]:
     checks = [
         required_text_check(
@@ -409,15 +428,7 @@ def concrete_sop_checks(repo_root: Path) -> list[dict[str, Any]]:
             path="docs/superpowers/project-sop.md",
             required=["./eba begin", "./eba end", "./eba dev demo", "active `./eba begin` turn"],
         ),
-        required_text_check(
-            repo_root,
-            name="adr_008_browser_boundary",
-            path="docs/decisions/ADR-008-playwright-cli-browser-engine.md",
-            required=[
-                "**Status:** Accepted",
-                "Playwright CLI is the browser engine for automated audits.",
-            ],
-        ),
+        adr_008_browser_boundary_check(repo_root),
     ]
     policy_path = state_root(repo_root) / "policy.json"
     checks.append(

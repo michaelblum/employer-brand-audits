@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import argparse
+import contextlib
+import io
 import struct
 import sys
 import tempfile
@@ -12,6 +15,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from scripts.easy_audit_fixture import generate_easy_audit_fixture
+from scripts import easy_audit_site_capture_smoke as capture_smoke
 from scripts.easy_audit_site_capture_smoke import attach_live_capture_artifacts, write_extra_capture_snippet
 
 
@@ -123,6 +127,74 @@ class EasyAuditFixtureTests(unittest.TestCase):
         self.assertIn("l1-sticky-obscured-target", artifact_ids)
         self.assertIn("l1-animation-progress", manifest["steps"][0]["artifact_ids"])
         self.assertIn("l1-sticky-obscured-target", manifest["steps"][0]["artifact_ids"])
+
+    def test_live_capture_artifacts_skip_missing_files(self) -> None:
+        manifest = {
+            "steps": [
+                {"id": "l1-source-capture", "artifact_ids": ["l1-careers-screenshot"]},
+            ],
+            "artifacts": [
+                {"id": "l1-careers-screenshot", "type": "screenshot"},
+            ],
+        }
+        artifacts = {
+            "animation_progress": "artifacts/easy-audit/latest/missing-progress.png",
+            "sticky_obscured_target": "artifacts/easy-audit/latest/missing-sticky.png",
+        }
+
+        attach_live_capture_artifacts(manifest, artifacts)
+
+        artifact_ids = [artifact["id"] for artifact in manifest["artifacts"]]
+        self.assertNotIn("l1-animation-progress", artifact_ids)
+        self.assertNotIn("l1-sticky-obscured-target", artifact_ids)
+        self.assertNotIn("l1-animation-progress", manifest["steps"][0]["artifact_ids"])
+        self.assertNotIn("l1-sticky-obscured-target", manifest["steps"][0]["artifact_ids"])
+
+    def test_failed_live_capture_main_does_not_mark_missing_artifacts_complete(self) -> None:
+        class Server:
+            def shutdown(self) -> None:
+                pass
+
+            def server_close(self) -> None:
+                pass
+
+        (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            output_dir = Path(tmp) / "easy-audit"
+            original_parse_args = capture_smoke.parse_args
+            original_which = capture_smoke.shutil.which
+            original_start_site_server = capture_smoke.start_site_server
+            original_run_step = capture_smoke.run_step
+            try:
+                capture_smoke.parse_args = lambda: argparse.Namespace(  # type: ignore[assignment]
+                    output_dir=output_dir,
+                    session="eba-live-capture",
+                    width="1280",
+                    height="900",
+                    json=True,
+                )
+                capture_smoke.shutil.which = lambda name: "playwright-cli"  # type: ignore[assignment]
+                capture_smoke.start_site_server = lambda site_dir: (Server(), "http://127.0.0.1:1/")  # type: ignore[assignment]
+
+                def fake_run_step(*args: object, **kwargs: object) -> object:
+                    raise RuntimeError("simulated capture failure")
+
+                capture_smoke.run_step = fake_run_step  # type: ignore[assignment]
+
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    exit_code = capture_smoke.main()
+            finally:
+                capture_smoke.parse_args = original_parse_args  # type: ignore[assignment]
+                capture_smoke.shutil.which = original_which  # type: ignore[assignment]
+                capture_smoke.start_site_server = original_start_site_server  # type: ignore[assignment]
+                capture_smoke.run_step = original_run_step  # type: ignore[assignment]
+
+            self.assertEqual(exit_code, 1)
+            manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["live_capture"]["status"], "failed")
+            artifact_ids = [artifact["id"] for artifact in manifest["artifacts"]]
+            self.assertNotIn("l1-animation-progress", artifact_ids)
+            self.assertNotIn("l1-sticky-obscured-target", artifact_ids)
 
 
 if __name__ == "__main__":

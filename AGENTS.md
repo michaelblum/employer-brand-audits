@@ -10,6 +10,8 @@ Provider-specific files such as `.claude/CLAUDE.md` should only point here.
 - If you did not receive an `./eba begin` turn packet at session start, manually
   run `./eba begin --worker-id <stable-id>` before `./eba dev validate`,
   `./eba dev demo`, or substantive repo edits.
+- Before editing, follow the DOX Read Before Editing chain for the paths you
+  expect to touch.
 - Use `./eba dev validate` before checkpointing substantive code changes.
 - Use `./eba dev demo` when recent work is tangible and the user should be able
   to inspect it directly.
@@ -137,7 +139,7 @@ ADRs, and the `./eba` command surface.
 
 ## DOX Framework
 
-- DOX is highly performant AGENTS.md hierarchy installed here
+- DOX is a lightweight AGENTS.md hierarchy installed here
 - Agent must follow DOX instructions across any edits
 
 ## Core Contract

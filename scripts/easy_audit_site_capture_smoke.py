@@ -218,6 +218,11 @@ def attach_live_capture_artifacts(manifest: dict[str, Any], artifacts: dict[str,
         artifact_id = meta["id"]
         if not path_value or artifact_id in existing_ids:
             continue
+        artifact_path = Path(path_value)
+        if not artifact_path.is_absolute():
+            artifact_path = REPO_ROOT / artifact_path
+        if not artifact_path.exists():
+            continue
         artifact_list.append(
             {
                 "id": artifact_id,

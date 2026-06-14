@@ -300,6 +300,15 @@ def port_accepts_connection(host: str, port: int) -> bool:
         return sock.connect_ex((host, port)) == 0
 
 
+def wait_for_port_release(host: str, port: int, timeout: float = 5.0) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not port_accepts_connection(host, port):
+            return True
+        time.sleep(0.1)
+    return not port_accepts_connection(host, port)
+
+
 def wait_for_health(url: str, timeout: float) -> tuple[bool, str]:
     deadline = time.time() + timeout
     last_status = "not_checked"
@@ -690,6 +699,7 @@ def command_start(args: argparse.Namespace) -> int:
         asset_health = workbench_asset_health(url)
         if not asset_health["healthy"]:
             stop_status = stop_owned_pid(pid, paths)
+            wait_for_port_release(args.host, args.port)
             if not command_quiet(args):
                 print(
                     "Restarting artifact viewer because workbench assets are stale: "

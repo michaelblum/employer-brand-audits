@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import contextlib
 import io
+import argparse
 import sys
 import tempfile
 import unittest
@@ -362,6 +363,73 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(len(start_calls), 1)
+
+    def test_stale_asset_restart_waits_for_owned_port_release(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest = Path(tmp) / "manifest.json"
+            manifest.write_text('{"artifacts": []}\n', encoding="utf-8")
+            port_checks = [True, False, False]
+
+            class Process:
+                pid = 456
+
+                def poll(self) -> None:
+                    return None
+
+                def terminate(self) -> None:
+                    raise AssertionError("healthy fake process should not terminate")
+
+            original_read_pid = gate.read_pid
+            original_pid_alive = gate.pid_alive
+            original_is_owned = gate.is_owned_workbench_server
+            original_health = gate.health
+            original_asset_health = gate.workbench_asset_health
+            original_stop_owned_pid = gate.stop_owned_pid
+            original_port_accepts_connection = gate.port_accepts_connection
+            original_popen = gate.subprocess.Popen
+            original_wait_for_health = gate.wait_for_health
+            try:
+                gate.read_pid = lambda path: 123  # type: ignore[assignment]
+                gate.pid_alive = lambda pid: True  # type: ignore[assignment]
+                gate.is_owned_workbench_server = lambda pid, path: True  # type: ignore[assignment]
+                gate.health = lambda url: (True, "200")  # type: ignore[assignment]
+                gate.workbench_asset_health = lambda url: {  # type: ignore[assignment]
+                    "healthy": False,
+                    "status": "asset_fingerprint_mismatch",
+                }
+                gate.stop_owned_pid = lambda pid, paths: "killed"  # type: ignore[assignment]
+                gate.port_accepts_connection = lambda host, port: port_checks.pop(0)  # type: ignore[assignment]
+                gate.subprocess.Popen = lambda *args, **kwargs: Process()  # type: ignore[assignment]
+                gate.wait_for_health = lambda url, timeout: (True, "200")  # type: ignore[assignment]
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = gate.command_start(
+                        argparse.Namespace(
+                            manifest=manifest,
+                            host="127.0.0.1",
+                            port=8765,
+                            timeout=1.0,
+                            open=False,
+                            channel="chrome",
+                            viewport_size=None,
+                            browser_session="eba-workbench",
+                            profile=REPO_ROOT / "chrome-profile" / "workbench",
+                            quiet=True,
+                        )
+                    )
+            finally:
+                gate.read_pid = original_read_pid  # type: ignore[assignment]
+                gate.pid_alive = original_pid_alive  # type: ignore[assignment]
+                gate.is_owned_workbench_server = original_is_owned  # type: ignore[assignment]
+                gate.health = original_health  # type: ignore[assignment]
+                gate.workbench_asset_health = original_asset_health  # type: ignore[assignment]
+                gate.stop_owned_pid = original_stop_owned_pid  # type: ignore[assignment]
+                gate.port_accepts_connection = original_port_accepts_connection  # type: ignore[assignment]
+                gate.subprocess.Popen = original_popen  # type: ignore[assignment]
+                gate.wait_for_health = original_wait_for_health  # type: ignore[assignment]
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(port_checks, [])
 
     def test_eba_workbench_control_commands_are_authorized_and_stable(self) -> None:
         from scripts.eba_cli import workbench_browser_command
