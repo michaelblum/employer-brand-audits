@@ -42,6 +42,8 @@ assert.equal(typeof controller.runDraftCompletion, "function");
 assert.equal(typeof controller.openCreateEditor, "function");
 assert.equal(typeof controller.openExistingEditor, "function");
 assert.equal(typeof controller.closeEditor, "function");
+assert.equal(typeof controller.showAnnotationMarker, "function");
+assert.equal(typeof controller.selectAnnotation, "function");
 
 (async () => {
   await controller.runEditorIntent({
@@ -118,6 +120,23 @@ assert.equal(typeof controller.closeEditor, "function");
         ensureMarkdownPreview: () => shellCalls.push(["ensureMarkdownPreview"]),
         scrollTextRangeIntoView: (anchor) => shellCalls.push(["scrollTextRangeIntoView", anchor]),
         renderMarkdownHighlights: () => shellCalls.push(["renderMarkdownHighlights"]),
+      },
+      annotationTarget: {
+        setActiveMarker: (marker) => shellCalls.push(["setActiveMarker", marker]),
+        setArtifact: (artifactIndex) => shellCalls.push(["setArtifact", artifactIndex]),
+        setIndex: (artifactIndex) => shellCalls.push(["setIndex", artifactIndex]),
+        render: () => shellCalls.push(["render"]),
+        requestAnimationFrame: (callback) => {
+          shellCalls.push(["targetRequestAnimationFrame"]);
+          callback();
+        },
+        afterImageReady: (callback) => {
+          shellCalls.push(["targetAfterImageReady"]);
+          callback();
+        },
+        isImageArtifact: () => true,
+        placeMarkerForAnchor: (anchor) => shellCalls.push(["placeMarkerForAnchor", anchor]),
+        openExistingEditor: (note) => shellCalls.push(["openExistingEditor", note]),
       },
     },
   });
@@ -203,6 +222,83 @@ assert.equal(typeof controller.closeEditor, "function");
     ["hideSelection"],
     ["hideMarkdownMarker"],
   ]);
+
+  const annotationNote = { id: "note-3", anchor: imageAnchor, comment: "Marker note" };
+  assert.equal(
+    shellController.showAnnotationMarker({
+      artifactId: "hero",
+      annotationId: "note-3",
+      artifactIndex: 2,
+      currentIndex: 1,
+      note: annotationNote,
+    }),
+    true,
+  );
+  assert.deepEqual(shellCalls.splice(0), [
+    ["setActiveMarker", { artifactId: "hero", annotationId: "note-3" }],
+    ["setArtifact", 2],
+    ["setActiveMarker", { artifactId: "hero", annotationId: "note-3" }],
+    ["targetRequestAnimationFrame"],
+    ["targetAfterImageReady"],
+    ["placeMarkerForAnchor", imageAnchor],
+  ]);
+
+  assert.equal(
+    shellController.showAnnotationMarker({
+      artifactId: "hero",
+      annotationId: "note-3",
+      artifactIndex: 1,
+      currentIndex: 1,
+      note: annotationNote,
+    }),
+    true,
+  );
+  assert.deepEqual(shellCalls.splice(0), [
+    ["setActiveMarker", { artifactId: "hero", annotationId: "note-3" }],
+    ["placeMarkerForAnchor", imageAnchor],
+  ]);
+
+  assert.equal(
+    shellController.selectAnnotation({
+      artifactId: "hero",
+      annotationId: "note-3",
+      artifactIndex: 2,
+      currentIndex: 1,
+      note: annotationNote,
+    }),
+    true,
+  );
+  assert.deepEqual(shellCalls.splice(0), [
+    ["setIndex", 2],
+    ["render"],
+    ["targetRequestAnimationFrame"],
+    ["openExistingEditor", annotationNote],
+  ]);
+
+  assert.equal(
+    shellController.selectAnnotation({
+      artifactId: "hero",
+      annotationId: "note-3",
+      artifactIndex: 1,
+      currentIndex: 1,
+      note: annotationNote,
+    }),
+    true,
+  );
+  assert.deepEqual(shellCalls.splice(0), [
+    ["openExistingEditor", annotationNote],
+  ]);
+
+  assert.equal(
+    shellController.selectAnnotation({
+      artifactId: "hero",
+      annotationId: "missing",
+      artifactIndex: 1,
+      currentIndex: 1,
+      note: null,
+    }),
+    false,
+  );
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

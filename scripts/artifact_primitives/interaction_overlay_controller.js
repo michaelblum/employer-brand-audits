@@ -75,6 +75,7 @@
   } = {}) {
     const editorEffects = effects.editor || {};
     const editorShellEffects = effects.editorShell || {};
+    const annotationTargetEffects = effects.annotationTarget || {};
     const draftStartEffects = effects.draftStart || {};
     const draftCompletionEffects = effects.draftCompletion || {};
 
@@ -199,6 +200,94 @@
         if (typeof editorShellEffects.hideSelection === "function") editorShellEffects.hideSelection();
         if (typeof editorShellEffects.hideMarkdownMarker === "function") {
           editorShellEffects.hideMarkdownMarker();
+        }
+        return true;
+      },
+      showAnnotationMarker({
+        artifactId,
+        annotationId,
+        artifactIndex,
+        currentIndex,
+        note,
+      } = {}) {
+        if (!overlay) return false;
+        const target = overlay.annotationOverlayTarget({
+          artifactId,
+          annotationId,
+          artifactIndex,
+          currentIndex,
+          note,
+        });
+        if (!target) return false;
+        if (typeof annotationTargetEffects.setActiveMarker === "function") {
+          annotationTargetEffects.setActiveMarker(target.activeMarker);
+        }
+        if (target.requiresArtifactSwitch) {
+          if (typeof annotationTargetEffects.setArtifact === "function") {
+            annotationTargetEffects.setArtifact(target.artifactIndex);
+          }
+          if (typeof annotationTargetEffects.setActiveMarker === "function") {
+            annotationTargetEffects.setActiveMarker(target.activeMarker);
+          }
+          if (typeof annotationTargetEffects.requestAnimationFrame === "function") {
+            annotationTargetEffects.requestAnimationFrame(() => {
+              const placeMarker = () => {
+                if (typeof annotationTargetEffects.placeMarkerForAnchor === "function") {
+                  annotationTargetEffects.placeMarkerForAnchor(target.note.anchor);
+                }
+              };
+              if (
+                typeof annotationTargetEffects.isImageArtifact === "function"
+                && annotationTargetEffects.isImageArtifact()
+                && typeof annotationTargetEffects.afterImageReady === "function"
+              ) {
+                annotationTargetEffects.afterImageReady(placeMarker);
+              } else {
+                placeMarker();
+              }
+            });
+          }
+          return true;
+        }
+        if (typeof annotationTargetEffects.placeMarkerForAnchor === "function") {
+          annotationTargetEffects.placeMarkerForAnchor(target.note.anchor);
+        }
+        return true;
+      },
+      selectAnnotation({
+        artifactId,
+        annotationId,
+        artifactIndex,
+        currentIndex,
+        note,
+      } = {}) {
+        if (!overlay) return false;
+        const target = overlay.annotationOverlayTarget({
+          artifactId,
+          annotationId,
+          artifactIndex,
+          currentIndex,
+          note,
+        });
+        if (!target) return false;
+        if (target.requiresArtifactSwitch) {
+          if (typeof annotationTargetEffects.setIndex === "function") {
+            annotationTargetEffects.setIndex(target.artifactIndex);
+          }
+          if (typeof annotationTargetEffects.render === "function") {
+            annotationTargetEffects.render();
+          }
+          if (typeof annotationTargetEffects.requestAnimationFrame === "function") {
+            annotationTargetEffects.requestAnimationFrame(() => {
+              if (typeof annotationTargetEffects.openExistingEditor === "function") {
+                annotationTargetEffects.openExistingEditor(target.note);
+              }
+            });
+          }
+          return true;
+        }
+        if (typeof annotationTargetEffects.openExistingEditor === "function") {
+          annotationTargetEffects.openExistingEditor(target.note);
         }
         return true;
       },

@@ -121,6 +121,17 @@
                 },
                 renderMarkdownHighlights,
               },
+              annotationTarget: {
+                setActiveMarker: (marker) => { app.activeMarker = marker; },
+                setArtifact,
+                setIndex: (index) => { app.index = index; },
+                render,
+                requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+                afterImageReady,
+                isImageArtifact,
+                placeMarkerForAnchor,
+                openExistingEditor,
+              },
               draftStart: {
                 setDrag: (drag) => { app.drag = drag; },
                 setPendingAnchor: (pendingAnchor) => { app.pendingAnchor = pendingAnchor; },
@@ -790,25 +801,13 @@
     function showAnnotationMarker(artifactId, annotationId) {
       const note = annotationById(artifactId, annotationId);
       const index = artifactIndexById(artifactId);
-      const target = interactionOverlay().annotationOverlayTarget({
+      overlayController().showAnnotationMarker({
         artifactId,
         annotationId,
         artifactIndex: index,
         currentIndex: app.index,
         note,
       });
-      if (!target) return;
-      app.activeMarker = target.activeMarker;
-      if (target.requiresArtifactSwitch) {
-        setArtifact(target.artifactIndex);
-        app.activeMarker = target.activeMarker;
-        window.requestAnimationFrame(() => {
-          if (isImageArtifact()) afterImageReady(() => placeMarkerForAnchor(target.note.anchor));
-          else placeMarkerForAnchor(target.note.anchor);
-        });
-        return;
-      }
-      placeMarkerForAnchor(target.note.anchor);
     }
 
     function naturalRect(displayRect) {
@@ -858,21 +857,13 @@
     function selectAnnotation(artifactId, annotationId) {
       const index = artifactIndexById(artifactId);
       const note = annotationById(artifactId, annotationId);
-      const target = interactionOverlay().annotationOverlayTarget({
+      overlayController().selectAnnotation({
         artifactId,
         annotationId,
         artifactIndex: index,
         currentIndex: app.index,
         note,
       });
-      if (!target) return;
-      if (target.requiresArtifactSwitch) {
-        app.index = target.artifactIndex;
-        render();
-        window.requestAnimationFrame(() => openExistingEditor(target.note));
-        return;
-      }
-      openExistingEditor(target.note);
     }
 
     function applyOverlayDraftStart(draft, placeDraftSelection) {
