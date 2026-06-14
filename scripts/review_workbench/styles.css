@@ -180,6 +180,10 @@
       padding: 32px;
       background: #101012;
     }
+    .stage.markdown-stage {
+      overflow: hidden;
+      place-items: stretch center;
+    }
     .image-controls {
       width: 100%;
       display: flex;
@@ -265,7 +269,8 @@
     .markdown-wrap {
       position: relative;
       width: min(980px, 100%);
-      min-height: 100%;
+      height: 100%;
+      min-height: 0;
       align-self: stretch;
       justify-self: center;
       display: grid;
@@ -279,6 +284,7 @@
     }
     .markdown-wrap[hidden] { display: none; }
     .markdown-preview {
+      min-height: 0;
       overflow: auto;
       padding: 36px 44px 72px;
       background: #f4f0e8;
@@ -365,7 +371,7 @@
     .markdown-source {
       width: 100%;
       height: 100%;
-      min-height: 60vh;
+      min-height: 0;
       resize: none;
       border: 0;
       outline: 0;

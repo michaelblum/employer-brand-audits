@@ -337,7 +337,7 @@
     }
 
     function clampZoom(value) {
-      const next = Math.round(Number(value) || configuredZoomPercent("actualSizePercent", 100));
+      const next = Number(value) || configuredZoomPercent("actualSizePercent", 100);
       const minZoom = effectiveMinimumZoomPercent();
       const maxZoom = Math.max(minZoom, configuredZoomPercent("maxZoomInPercent", 400));
       return Math.min(maxZoom, Math.max(minZoom, next));
@@ -367,9 +367,11 @@
       if (!image.naturalWidth) return;
       const stageSize = stageViewportSize();
       const imageSize = renderedImageSize();
+      const fitTolerance = 1;
       $("image-wrap").classList.toggle(
         "centered",
-        imageSize.width <= stageSize.width && imageSize.height <= stageSize.height
+        imageSize.width <= stageSize.width + fitTolerance
+          && imageSize.height <= stageSize.height + fitTolerance
       );
     }
 
@@ -395,7 +397,7 @@
       app.zoomMode = mode;
       $("zoom-input").value = formatZoomPercent(app.zoomPercent);
       if (image.naturalWidth) {
-        image.style.width = `${Math.max(1, Math.round(image.naturalWidth * app.zoomPercent / 100))}px`;
+        image.style.width = `${Math.max(1, image.naturalWidth * app.zoomPercent / 100)}px`;
       }
       updateImageAlignment();
       updateMooringOverlays();
@@ -482,6 +484,7 @@
     function renderImage() {
       const item = artifact();
       const image = $("artifact-image");
+      $("stage").classList.remove("markdown-stage");
       $("image-wrap").hidden = false;
       $("markdown-wrap").hidden = true;
       $("image-controls").style.display = "flex";
@@ -561,6 +564,7 @@
 
     async function renderMarkdownArtifact() {
       const item = artifact();
+      $("stage").classList.add("markdown-stage");
       $("image-wrap").hidden = true;
       $("markdown-wrap").hidden = false;
       $("image-controls").style.display = "none";
