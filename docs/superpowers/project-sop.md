@@ -41,6 +41,29 @@ implement them without explicit approval. Record that the `SOP sweep` happened
 in the final response, handoff, or commit message context. Do not treat the
 sweep as authorization to expand scope beyond the approved SOP change.
 
+## DOX Operating Policy
+
+DOX is the repository's `AGENTS.md` hierarchy. It is the local-contract layer
+for instructions, ownership, and durable workflow rules; this SOP remains the
+standing process layer.
+
+Before editing, agents must re-read the applicable DOX chain in the current
+session: the root `AGENTS.md`, then every child `AGENTS.md` found from the repo
+root to each path they expect to touch. If a parent lists a child whose scope
+contains the target path, read that child before editing.
+
+Every meaningful change requires a DOX pass before closeout:
+
+- update the nearest owning `AGENTS.md` when purpose, ownership, workflow,
+  contracts, required inputs or outputs, permissions, artifacts, or durable user
+  preferences change;
+- refresh affected Child DOX Index entries;
+- remove stale or contradictory instructions;
+- report any applicable docs intentionally left unchanged and why.
+
+DOX changes that alter this SOP or project-wide operating rules still require
+the SOP Change Control process above, including an `SOP sweep`.
+
 ## Successor Onboarding Gate
 
 Handoffs must not invite a new session to change code immediately. A successor
@@ -97,8 +120,8 @@ Agents should prefer `./eba dev ...` for common project mechanisms:
 - `./eba dev situation --json` for branch, dirt, ahead/behind, and workbench
   status.
 - `./eba begin --worker-id <stable-id>` and `./eba end --worker-id <stable-id>`
-  for turn-level worker identity, gate packets, corridor checks, and generated
-  work-card/handoff artifacts.
+  for turn-level worker identity, gate packets, DOX-aware corridor checks, and
+  generated work-card/handoff artifacts.
 - `./eba dev validate` for the current validation ladder.
 - `./eba dev demo` for a prepared workflow artifact workbench inspection surface.
 - `./eba dev workbench` for managed `eba-workbench` refresh, tab, snapshot, and

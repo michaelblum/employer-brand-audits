@@ -16,8 +16,9 @@ ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "demo", "workbench"}
 ALLOWED_DEV_COMMANDS = {"situation", "validate", "demo", "workbench"}
 DEFAULT_ALLOWED_PATHS = [
     "AGENTS.md",
-    "docs/superpowers/project-sop.md",
-    "docs/superpowers/plans/",
+    "data/",
+    "docs/",
+    "mcp-server/",
     "scripts/",
     "tests/",
     ".eba/",
@@ -323,6 +324,8 @@ def path_allowed(path: str, allowed_paths: list[str]) -> bool:
 
 def instruction_bearing(path: str) -> bool:
     normalized = path.replace("\\", "/").lstrip("/")
+    if normalized == "AGENTS.md" or normalized.endswith("/AGENTS.md"):
+        return True
     for candidate in INSTRUCTION_BEARING_PATHS:
         normalized_candidate = candidate.replace("\\", "/").strip("/")
         if normalized == normalized_candidate or normalized.startswith(normalized_candidate + "/"):

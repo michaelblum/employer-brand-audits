@@ -13,6 +13,7 @@ from scripts.eba_control_plane import (
     begin_turn,
     changed_files,
     end_turn,
+    instruction_bearing,
     path_allowed,
 )
 
@@ -153,6 +154,17 @@ def test_begin_creates_turn_packet_and_allows_validate(tmp_path: Path) -> None:
     )
 
 
+def test_begin_corridor_covers_dox_boundaries(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+
+    begin = eba(repo, "begin", "--worker-id", "worker-test")
+
+    assert begin.returncode == 0, begin.stderr
+    allowed_paths = parse_json(begin)["corridor"]["allowed_paths"]
+    for expected in ["AGENTS.md", "data/", "docs/", "mcp-server/", "scripts/", "tests/", ".eba/"]:
+        assert expected in allowed_paths
+
+
 def test_begin_twice_for_same_worker_blocks(tmp_path: Path) -> None:
     repo = copy_repo(tmp_path)
     assert eba(repo, "begin", "--worker-id", "worker-test").returncode == 0
@@ -219,6 +231,13 @@ def test_changed_files_preserves_untracked_path_with_spaces_and_quotes(
 
     assert special_path in changes
     assert path_allowed(special_path, ["scripts/"])
+
+
+def test_instruction_bearing_detects_child_agents_files() -> None:
+    assert instruction_bearing("AGENTS.md")
+    assert instruction_bearing("scripts/AGENTS.md")
+    assert instruction_bearing("mcp-server/imaging/AGENTS.md")
+    assert not instruction_bearing("scripts/workflow_artifact_workbench/app.js")
 
 
 def test_corrupt_registry_fails_closed(tmp_path: Path) -> None:
