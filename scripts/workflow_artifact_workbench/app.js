@@ -75,6 +75,42 @@
     const formatSlot = (value) => String(value || "").replace(/[._-]/g, " ");
     const iconHref = (name) => `/assets/workflow-artifact-workbench-icons.svg#icon-artifact-${name}`;
     const interactionOverlay = () => window.ArtifactPrimitives.interactionOverlay;
+    let overlayControllerInstance = null;
+    function overlayController() {
+      if (!overlayControllerInstance) {
+        overlayControllerInstance = window.ArtifactPrimitives.interactionOverlayController
+          .createInteractionOverlayController({
+            overlay: interactionOverlay(),
+            effects: {
+              editor: {
+                setAnnotations: (annotations) => { app.annotations = annotations; },
+                closeEditor,
+                syncAnnotations,
+                renderSidebar,
+                showToast,
+              },
+              draftStart: {
+                setDrag: (drag) => { app.drag = drag; },
+                setPendingAnchor: (pendingAnchor) => { app.pendingAnchor = pendingAnchor; },
+                setPopoverHidden: (hidden) => { $("comment-popover").hidden = hidden; },
+              },
+              draftCompletion: {
+                setDrag: (drag) => { app.drag = drag; },
+                hideSelection: () => { $("selection").hidden = true; },
+                hideMarkdownMarker: () => { $("markdown-marker").hidden = true; },
+                setPendingAnchor: (pendingAnchor) => { app.pendingAnchor = pendingAnchor; },
+                renderMarkdownHighlights,
+                setPopoverHidden: (hidden) => { $("comment-popover").hidden = hidden; },
+                openCreateEditor: (displayRect, relativeTo) => openCreateEditor(
+                  displayRect,
+                  relativeTo === "markdown" ? $("markdown-wrap") : $("artifact-image"),
+                ),
+              },
+            },
+          });
+      }
+      return overlayControllerInstance;
+    }
     const workflowSidebar = () => window.ArtifactPrimitives.workflowSidebar;
     const workflowSidebarContext = () => ({
       artifacts: app.collection.artifacts,
@@ -853,13 +889,7 @@
     }
 
     function applyOverlayDraftStart(draft, placeDraftSelection) {
-      interactionOverlay().runOverlayDraftStart({
-        draft,
-        setDrag: (drag) => { app.drag = drag; },
-        setPendingAnchor: (pendingAnchor) => { app.pendingAnchor = pendingAnchor; },
-        setPopoverHidden: (hidden) => { $("comment-popover").hidden = hidden; },
-        placeSelection: placeDraftSelection,
-      });
+      overlayController().runDraftStart(draft, placeDraftSelection);
     }
 
     function startDrag(event) {
@@ -914,19 +944,7 @@
     }
 
     function applyOverlayDraftCompletion(intent) {
-      return interactionOverlay().runOverlayDraftCompletion({
-        intent,
-        setDrag: (drag) => { app.drag = drag; },
-        hideSelection: () => { $("selection").hidden = true; },
-        hideMarkdownMarker: () => { $("markdown-marker").hidden = true; },
-        setPendingAnchor: (pendingAnchor) => { app.pendingAnchor = pendingAnchor; },
-        renderMarkdownHighlights,
-        setPopoverHidden: (hidden) => { $("comment-popover").hidden = hidden; },
-        openCreateEditor: (displayRect, relativeTo) => openCreateEditor(
-          displayRect,
-          relativeTo === "markdown" ? $("markdown-wrap") : $("artifact-image"),
-        ),
-      });
+      return overlayController().runDraftCompletion(intent);
     }
 
     function endDrag(event) {
@@ -961,14 +979,7 @@
     }
 
     async function applyOverlayEditorIntent(intent) {
-      await interactionOverlay().runOverlayEditorIntent({
-        intent,
-        setAnnotations: (annotations) => { app.annotations = annotations; },
-        closeEditor,
-        syncAnnotations,
-        renderSidebar,
-        showToast,
-      });
+      await overlayController().runEditorIntent(intent);
     }
 
     async function commitEditor() {
