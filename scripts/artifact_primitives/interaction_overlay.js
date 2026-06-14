@@ -340,6 +340,55 @@
     return true;
   }
 
+  function runOverlayDraftStart({
+    draft,
+    setDrag,
+    setPendingAnchor,
+    setPopoverHidden,
+    placeSelection,
+  } = {}) {
+    if (!draft) return false;
+    if (typeof setDrag === "function") setDrag(draft.drag);
+    if (typeof setPendingAnchor === "function") setPendingAnchor(draft.pendingAnchor);
+    if (typeof setPopoverHidden === "function") setPopoverHidden(draft.popoverHidden);
+    if (typeof placeSelection === "function") placeSelection(draft.displayRect);
+    return true;
+  }
+
+  function runOverlayDraftCompletion({
+    intent,
+    setDrag,
+    hideSelection,
+    hideMarkdownMarker,
+    setPendingAnchor,
+    renderMarkdownHighlights,
+    setPopoverHidden,
+    openCreateEditor,
+  } = {}) {
+    if (!intent) return false;
+    if (intent.action === "resolve-anchor") return false;
+    if (typeof setDrag === "function") setDrag(intent.drag);
+    if (intent.action === "discard") {
+      if (intent.hideSelection && typeof hideSelection === "function") hideSelection();
+      if (intent.hideMarkdownMarker && typeof hideMarkdownMarker === "function") {
+        hideMarkdownMarker();
+      }
+      return true;
+    }
+    if (intent.action === "create") {
+      if (typeof setPendingAnchor === "function") setPendingAnchor(intent.pendingAnchor);
+      if (intent.renderMarkdownHighlights && typeof renderMarkdownHighlights === "function") {
+        renderMarkdownHighlights();
+      }
+      if (intent.hidePopover && typeof setPopoverHidden === "function") setPopoverHidden(true);
+      if (typeof openCreateEditor === "function") {
+        openCreateEditor(intent.displayRect, intent.relativeTo);
+      }
+      return true;
+    }
+    return false;
+  }
+
   ROOT.interactionOverlay = {
     annotationOverlayTarget,
     appendAnnotation,
@@ -359,6 +408,8 @@
     newAnnotation,
     normalizeComment,
     placeOverlayBox,
+    runOverlayDraftCompletion,
+    runOverlayDraftStart,
     runOverlayEditorIntent,
     secondaryOverlayEditorIntent,
     updateAnnotation,

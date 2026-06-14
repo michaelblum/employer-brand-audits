@@ -853,11 +853,13 @@
     }
 
     function applyOverlayDraftStart(draft, placeDraftSelection) {
-      if (!draft) return;
-      app.drag = draft.drag;
-      app.pendingAnchor = draft.pendingAnchor;
-      $("comment-popover").hidden = draft.popoverHidden;
-      placeDraftSelection(draft.displayRect);
+      interactionOverlay().runOverlayDraftStart({
+        draft,
+        setDrag: (drag) => { app.drag = drag; },
+        setPendingAnchor: (pendingAnchor) => { app.pendingAnchor = pendingAnchor; },
+        setPopoverHidden: (hidden) => { $("comment-popover").hidden = hidden; },
+        placeSelection: placeDraftSelection,
+      });
     }
 
     function startDrag(event) {
@@ -912,24 +914,19 @@
     }
 
     function applyOverlayDraftCompletion(intent) {
-      if (!intent) return true;
-      app.drag = intent.drag;
-      if (intent.action === "discard") {
-        if (intent.hideSelection) $("selection").hidden = true;
-        if (intent.hideMarkdownMarker) $("markdown-marker").hidden = true;
-        return true;
-      }
-      if (intent.action === "create") {
-        app.pendingAnchor = intent.pendingAnchor;
-        if (intent.renderMarkdownHighlights) renderMarkdownHighlights();
-        if (intent.hidePopover) $("comment-popover").hidden = true;
-        openCreateEditor(
-          intent.displayRect,
-          intent.relativeTo === "markdown" ? $("markdown-wrap") : $("artifact-image"),
-        );
-        return true;
-      }
-      return false;
+      return interactionOverlay().runOverlayDraftCompletion({
+        intent,
+        setDrag: (drag) => { app.drag = drag; },
+        hideSelection: () => { $("selection").hidden = true; },
+        hideMarkdownMarker: () => { $("markdown-marker").hidden = true; },
+        setPendingAnchor: (pendingAnchor) => { app.pendingAnchor = pendingAnchor; },
+        renderMarkdownHighlights,
+        setPopoverHidden: (hidden) => { $("comment-popover").hidden = hidden; },
+        openCreateEditor: (displayRect, relativeTo) => openCreateEditor(
+          displayRect,
+          relativeTo === "markdown" ? $("markdown-wrap") : $("artifact-image"),
+        ),
+      });
     }
 
     function endDrag(event) {

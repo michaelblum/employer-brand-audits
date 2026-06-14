@@ -26,6 +26,8 @@ assert.equal(typeof overlay.secondaryOverlayEditorIntent, "function");
 assert.equal(typeof overlay.beginOverlayDraft, "function");
 assert.equal(typeof overlay.completeOverlayDraft, "function");
 assert.equal(typeof overlay.runOverlayEditorIntent, "function");
+assert.equal(typeof overlay.runOverlayDraftStart, "function");
+assert.equal(typeof overlay.runOverlayDraftCompletion, "function");
 
 assert.deepEqual(overlay.editorLabels({ subtype: "annotation", mode: "create" }), {
   primary: "Add Comment",
@@ -622,3 +624,80 @@ assert.deepEqual(
   console.error(error);
   process.exitCode = 1;
 });
+
+const draftStartLog = [];
+const draftStartHandled = overlay.runOverlayDraftStart({
+  draft: {
+    drag: { type: "image", startX: 1, startY: 2 },
+    pendingAnchor: null,
+    popoverHidden: true,
+    displayRect: { x: 1, y: 2, width: 0, height: 0 },
+  },
+  setDrag: (drag) => draftStartLog.push(["setDrag", drag]),
+  setPendingAnchor: (pendingAnchor) => draftStartLog.push(["setPendingAnchor", pendingAnchor]),
+  setPopoverHidden: (hidden) => draftStartLog.push(["setPopoverHidden", hidden]),
+  placeSelection: (displayRect) => draftStartLog.push(["placeSelection", displayRect]),
+});
+assert.equal(draftStartHandled, true);
+assert.deepEqual(draftStartLog, [
+  ["setDrag", { type: "image", startX: 1, startY: 2 }],
+  ["setPendingAnchor", null],
+  ["setPopoverHidden", true],
+  ["placeSelection", { x: 1, y: 2, width: 0, height: 0 }],
+]);
+assert.equal(overlay.runOverlayDraftStart({ draft: null }), false);
+
+const draftDiscardLog = [];
+const draftDiscardHandled = overlay.runOverlayDraftCompletion({
+  intent: {
+    action: "discard",
+    drag: null,
+    hideSelection: true,
+    hideMarkdownMarker: true,
+  },
+  setDrag: (drag) => draftDiscardLog.push(["setDrag", drag]),
+  hideSelection: () => draftDiscardLog.push(["hideSelection"]),
+  hideMarkdownMarker: () => draftDiscardLog.push(["hideMarkdownMarker"]),
+});
+assert.equal(draftDiscardHandled, true);
+assert.deepEqual(draftDiscardLog, [
+  ["setDrag", null],
+  ["hideSelection"],
+  ["hideMarkdownMarker"],
+]);
+
+const draftCreateLog = [];
+const draftCreateHandled = overlay.runOverlayDraftCompletion({
+  intent: {
+    action: "create",
+    drag: null,
+    pendingAnchor: textAnchor,
+    displayRect: { x: 4, y: 5, width: 40, height: 20 },
+    relativeTo: "markdown",
+    renderMarkdownHighlights: true,
+    hidePopover: true,
+  },
+  setDrag: (drag) => draftCreateLog.push(["setDrag", drag]),
+  setPendingAnchor: (pendingAnchor) => draftCreateLog.push(["setPendingAnchor", pendingAnchor]),
+  renderMarkdownHighlights: () => draftCreateLog.push(["renderMarkdownHighlights"]),
+  setPopoverHidden: (hidden) => draftCreateLog.push(["setPopoverHidden", hidden]),
+  openCreateEditor: (displayRect, relativeTo) => draftCreateLog.push(["openCreateEditor", displayRect, relativeTo]),
+});
+assert.equal(draftCreateHandled, true);
+assert.deepEqual(draftCreateLog, [
+  ["setDrag", null],
+  ["setPendingAnchor", textAnchor],
+  ["renderMarkdownHighlights"],
+  ["setPopoverHidden", true],
+  ["openCreateEditor", { x: 4, y: 5, width: 40, height: 20 }, "markdown"],
+]);
+
+assert.equal(
+  overlay.runOverlayDraftCompletion({
+    intent: { action: "resolve-anchor", drag: null },
+    setDrag: () => {
+      throw new Error("resolve-anchor intent should not mutate draft state");
+    },
+  }),
+  false,
+);
