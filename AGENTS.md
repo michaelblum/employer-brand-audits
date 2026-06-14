@@ -20,15 +20,15 @@ Provider-specific files such as `.claude/CLAUDE.md` should only point here.
 
 This project is a provider-flexible agent workflow prototype for Employer Brand
 Audits. It has a Python mechanical layer, Playwright CLI browser capture, an
-MCP imaging server, and a local workflow artifact workbench. Current files and
-commands still use `review workbench` for the implementation/demo surface; treat
-that as an alias, not the canonical product concept.
+MCP imaging server, and a local workflow artifact workbench. Legacy server and
+gate filenames still use older wording, but the static implementation surface is
+`scripts/workflow_artifact_workbench/`.
 
 - MCP server and image processing: `mcp-server/`
 - MCP tests: `mcp-server/tests/`
 - Browser automation: Playwright CLI and thin repo wrappers only
 - Workflow artifact workbench implementation: `scripts/playwright_cli_review_server.py`,
-  `scripts/playwright_cli_review_gate.py`, and `scripts/review_workbench/`
+  `scripts/playwright_cli_review_gate.py`, and `scripts/workflow_artifact_workbench/`
 - Command surface for agents: `./eba dev ...`
 
 ## Hard Invariants
@@ -75,7 +75,7 @@ version:
 
 ## Browser And Demo Flow
 
-For the current review-workbench implementation of the workflow artifact
+For the current workflow-artifact-workbench implementation of the workflow artifact
 workbench, prefer the command surface:
 
 ```bash
@@ -123,11 +123,11 @@ Default validation:
 This runs the project’s current focused validation ladder:
 
 - Python compile checks for top-level scripts that participate in capture,
-  projection, normalization, and the current review server implementation.
+  projection, normalization, and the current workbench server implementation.
 - Projection shape checks for the normalized Mermaid/composite workbench
   contract.
-- `node --check` for the review workbench app, shared artifact primitives, and
-  checked-in review workbench smoke snippets.
+- `node --check` for the workflow artifact workbench app, shared artifact primitives, and
+  checked-in workflow artifact workbench smoke snippets.
 - `mcp-server` pytest suite when `mcp-server/.venv` exists.
 - `git diff --check`
 

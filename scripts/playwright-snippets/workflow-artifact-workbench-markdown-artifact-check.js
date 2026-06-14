@@ -20,7 +20,7 @@ async (page) => {
       && !markdownWrap.hidden
       && imageWrap.hidden
       && /Review (Fixture )?Summary/.test(preview?.textContent || "")
-      && document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href")?.includes("review-workbench-icons.svg");
+      && document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href")?.includes("workflow-artifact-workbench-icons.svg");
   }, { timeout: 3000 });
 
   return await page.evaluate(() => {

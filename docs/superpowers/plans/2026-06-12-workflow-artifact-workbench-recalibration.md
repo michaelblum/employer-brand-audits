@@ -4,7 +4,7 @@
 
 ## Direction
 
-The current review workbench implementation should become a renderer over
+The current workflow artifact workbench implementation should become a renderer over
 workflow artifact manifests, not a purpose-built viewer for one Playwright
 public-page matrix. Employer Brand Audit remains the flagship workflow pack,
 but the durable product and architecture direction is a workflow artifact
@@ -47,13 +47,13 @@ The viewer must not cap rendered height, recompress, resample, or mutate artifac
 
 - **Workflow artifact workbench** is the canonical direction for docs, plans,
   issues, and future architecture.
-- **Review workbench** is the current implementation/demo name for
-  `scripts/review_workbench/`, the managed local surface, and related CLI
-  wrappers. Treat it as an alias until a rename is explicitly approved.
-- **Review server** and **review gate** are implementation names around the
-  current static surface and Playwright CLI validation path. They should not
-  define artifact-model terminology.
-- Do not rename files, modules, commands, issues, or the repository as part of
+- **Workflow artifact workbench implementation** lives in
+  `scripts/workflow_artifact_workbench/`. The earlier static-surface directory
+  name has been retired.
+- Legacy lower-level server and gate filenames remain compatibility wrappers
+  around the current static surface and Playwright CLI validation path. They
+  should not define artifact-model terminology.
+- Do not rename CLI commands, branches, issues, or the repository as part of
   this recalibration plan. Propose those as separate migration work with their
   own compatibility and automation checks.
 
@@ -65,12 +65,12 @@ a shared primitive layer, not inside a consuming surface. Use
 their pinned static dependencies. For Mermaid, the first shared primitive is
 `scripts/artifact_primitives/mermaid_renderer.js`.
 
-The review workbench may import or serve these primitives, but
-`scripts/review_workbench/` owns only the shell, stage, sidebar, controls,
+The workflow artifact workbench may import or serve these primitives, but
+`scripts/workflow_artifact_workbench/` owns only the shell, stage, sidebar, controls,
 interaction or annotation chrome, and workbench-specific state wiring. Report
 builders, diff viewers, composite editors, and future overlay tools should be
-able to reuse the same artifact renderer without importing from the review
-workbench.
+able to reuse the same artifact renderer without importing from the workflow
+artifact workbench shell.
 
 Rendering primitives expose small, data-oriented interfaces, accept host-owned
 DOM containers, and return explicit render status objects. Vendored browser
@@ -136,9 +136,8 @@ The existing matrix manifest remains supported as an adapter input while the cap
 
 ## Non-Goals
 
-- Do not rewrite the review workbench UI in this pass.
-- Do not rename `scripts/review_workbench/`, CLI commands, branches, issues, or
-  the repository in this pass.
+- Do not rewrite the workflow artifact workbench UI in this pass.
+- Do not rename CLI commands, branches, issues, or the repository in this pass.
 - Do not update GitHub issues or labels without explicit approval.
 - Do not move artifact height caps or compression policy into viewer zoom code.
 - Do not alter ADR-001, ADR-002, or ADR-004.
@@ -162,7 +161,7 @@ This inventory records stale or overloaded terminology without authorizing broad
 edits. Keep changes scoped and verify the current repo gate before modifying
 ADRs, specs, SOP, issue trackers, or module names.
 
-- `AGENTS.md` may describe the local surface as a review workbench because that
+- `AGENTS.md` may describe the local surface as a workflow artifact workbench because that
   is the current implementation name. Pair that with the alias boundary above so
   startup instructions do not redefine the product concept.
 - `docs/superpowers/specs/2026-06-10-employer-brand-audit-design.md` remains the
@@ -189,7 +188,7 @@ explicit approval.
   current open workbench epic exists, link it from #2 and translate older
   overlay language into the interaction-overlay vocabulary above.
 - **Issue #10:** Title is already aligned around workbench render paths, but the
-  body still frames the frontend as a review workbench. Prefer wording around
+  body still frames the frontend as a workflow artifact workbench. Prefer wording around
   artifact views, normalized projection fields, and workflow artifact workbench
   shell adoption.
 - **Issue #4:** The Claude-in-Chrome `computer`/`zoom` spike is superseded by

@@ -106,7 +106,7 @@ def test_easy_audit_fixture_route_generates_manifest(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     payload = parse_json(result)
-    assert payload["review_workbench"]["manifest"] == "artifacts/easy-audit/latest/manifest.json"
+    assert payload["workflow_artifact_workbench"]["manifest"] == "artifacts/easy-audit/latest/manifest.json"
     assert (repo / "artifacts" / "easy-audit" / "latest" / "manifest.json").exists()
 
 

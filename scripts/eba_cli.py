@@ -95,7 +95,7 @@ def parse_ahead_behind() -> dict[str, int | None]:
     return {"behind": int(parts[0]), "ahead": int(parts[1])}
 
 
-def review_status(manifest: Path) -> dict[str, Any] | None:
+def workbench_status(manifest: Path) -> dict[str, Any] | None:
     if not manifest.exists():
         return None
     result = run([
@@ -173,7 +173,7 @@ def command_situation(args: argparse.Namespace) -> int:
             **status,
             **parse_ahead_behind(),
         },
-        "review_workbench": review_status(manifest),
+        "workflow_artifact_workbench": workbench_status(manifest),
         "command_surface": {
             "validate": "./eba dev validate",
             "demo": "./eba dev demo",
@@ -205,8 +205,8 @@ def command_situation(args: argparse.Namespace) -> int:
         print(f"branch={status['branch_line']}")
         print(f"dirty_files={len(status['dirty_files'])}")
         print(f"ahead={payload['git']['ahead']} behind={payload['git']['behind']}")
-        review = payload["review_workbench"] or {}
-        print(f"review_workbench={review.get('url', 'unavailable')} health={review.get('health', 'unknown')}")
+        workbench = payload["workflow_artifact_workbench"] or {}
+        print(f"workflow_artifact_workbench={workbench.get('url', 'unavailable')} health={workbench.get('health', 'unknown')}")
         print(f"onboarding_token={payload['onboarding']['token']}")
     return 0
 
@@ -227,15 +227,17 @@ def validation_commands() -> list[list[str]]:
     commands = [
         [sys.executable, "-m", "py_compile", *COMPILE_TARGETS],
         [sys.executable, "tests/test_easy_audit_fixture.py"],
-        [sys.executable, "tests/test_review_workbench_browser_control.py"],
+        [sys.executable, "tests/test_workflow_artifact_workbench_browser_control.py"],
         [sys.executable, "scripts/workbench_projection_shape_check.py"],
         ["node", "--check", "scripts/artifact_primitives/mermaid_renderer.js"],
+        ["node", "--check", "scripts/artifact_primitives/markdown_renderer.js"],
+        ["node", "--check", "scripts/artifact_primitives/image_viewer.js"],
         ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
-        ["node", "--check", "scripts/review_workbench/app.js"],
-        ["node", "--check", "scripts/playwright-snippets/review-workbench-composite-artifact-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/review-workbench-document-artifact-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/review-workbench-layout-regression-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/review-workbench-mermaid-artifact-check.js"],
+        ["node", "--check", "scripts/workflow_artifact_workbench/app.js"],
+        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-composite-artifact-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-document-artifact-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-layout-regression-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-mermaid-artifact-check.js"],
     ]
     pytest = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "pytest"
     if pytest.exists():
@@ -398,7 +400,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--json", action="store_true")
     validate.set_defaults(func=command_validate)
 
-    demo = dev_subparsers.add_parser("demo", help="Prepare the review workbench demo surface")
+    demo = dev_subparsers.add_parser("demo", help="Prepare the workflow artifact workbench demo surface")
     demo.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
     demo.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and demo a named fixture")
     demo.add_argument("--no-browser", action="store_true")

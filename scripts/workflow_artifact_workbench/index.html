@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EBA Workbench</title>
-  <link rel="stylesheet" href="/assets/review-workbench.css">
+  <link rel="stylesheet" href="/assets/workflow-artifact-workbench.css">
 </head>
 <body>
   <div class="toolbar primary">
@@ -31,7 +31,7 @@
           <div class="zoom-control" id="zoom-control">
             <button class="zoom-fit" id="zoom-fit" type="button" aria-label="Smart fit" title="Smart fit">
               <svg aria-hidden="true">
-                <use href="/assets/review-workbench-icons.svg#icon-fit"></use>
+                <use href="/assets/workflow-artifact-workbench-icons.svg#icon-fit"></use>
               </svg>
             </button>
             <input id="zoom-input" type="text" inputmode="numeric" aria-label="Zoom percentage">
@@ -45,7 +45,7 @@
           <div class="segmented" role="group" aria-label="Markdown view mode">
             <button id="markdown-preview-mode" class="tool-button" type="button" data-markdown-mode="preview" aria-label="Preview" title="Preview">
               <svg aria-hidden="true">
-                <use href="/assets/review-workbench-icons.svg#icon-preview"></use>
+                <use href="/assets/workflow-artifact-workbench-icons.svg#icon-preview"></use>
               </svg>
             </button>
             <button id="markdown-source-mode" class="tool-button" type="button" data-markdown-mode="source" aria-label="Edit" title="Edit">
@@ -54,17 +54,17 @@
           </div>
           <button class="action-button icon-only" id="markdown-theme-toggle" type="button" aria-label="Use light markdown theme" title="Use light markdown theme">
             <svg aria-hidden="true">
-              <use href="/assets/review-workbench-icons.svg#icon-theme"></use>
+              <use href="/assets/workflow-artifact-workbench-icons.svg#icon-theme"></use>
             </svg>
           </button>
           <button class="action-button icon-only" id="markdown-revert" type="button" aria-label="Revert" title="Revert">
             <svg aria-hidden="true">
-              <use href="/assets/review-workbench-icons.svg#icon-revert"></use>
+              <use href="/assets/workflow-artifact-workbench-icons.svg#icon-revert"></use>
             </svg>
           </button>
           <button class="action-button icon-only primary" id="markdown-save" type="button" aria-label="Save" title="Save">
             <svg aria-hidden="true">
-              <use href="/assets/review-workbench-icons.svg#icon-save"></use>
+              <use href="/assets/workflow-artifact-workbench-icons.svg#icon-save"></use>
             </svg>
           </button>
         </div>
@@ -88,7 +88,7 @@
             <button class="dictation-control" id="comment-dictation" type="button" aria-label="Start dictation" title="Start dictation">
               <span class="dictation-icon" aria-hidden="true">
                 <svg>
-                  <use href="/assets/review-workbench-icons.svg#icon-dictation"></use>
+                  <use href="/assets/workflow-artifact-workbench-icons.svg#icon-dictation"></use>
                 </svg>
               </span>
               <span class="dictation-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
@@ -108,5 +108,7 @@
   <div class="toast" id="toast"></div>
   <script src="/assets/artifact-primitives/vendor/mermaid.min.js" defer></script>
   <script src="/assets/artifact-primitives/mermaid_renderer.js" defer></script>
+  <script src="/assets/artifact-primitives/markdown_renderer.js" defer></script>
+  <script src="/assets/artifact-primitives/image_viewer.js" defer></script>
   <script src="/assets/artifact-primitives/document_renderer.js" defer></script>
-  <script src="/assets/review-workbench.js" defer></script>
+  <script src="/assets/workflow-artifact-workbench.js" defer></script>

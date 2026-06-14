@@ -34,7 +34,7 @@ REVIEW_FIXTURE_SUMMARY_TEMPLATE = """# {title} Review Fixture Summary
 ## Live Artifact Purpose
 
 This markdown file is an explicit review fixture emitted by the public-page
-matrix smoke run so the review workbench has an editable text artifact
+matrix smoke run so the workflow artifact workbench has an editable text artifact
 alongside image artifacts.
 
 ## Review Checklist

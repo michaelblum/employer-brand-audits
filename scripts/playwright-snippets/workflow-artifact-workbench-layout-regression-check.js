@@ -1,6 +1,6 @@
 async (page) => {
-  await page.evaluate(() => window.localStorage.removeItem("eba.reviewWorkbench.artifactDocumentTheme"));
-  await page.evaluate(() => window.localStorage.removeItem("eba.reviewWorkbench.markdownTheme"));
+  await page.evaluate(() => window.localStorage.removeItem("eba.workflowArtifactWorkbench.artifactDocumentTheme"));
+  await page.evaluate(() => window.localStorage.removeItem("eba.workflowArtifactWorkbench.markdownTheme"));
   await page.reload();
   const model = await page.evaluate(async () => {
     const state = await fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json());

@@ -21,7 +21,7 @@ and is constrained by:
 ## Boundaries
 
 - Python remains routing, orchestration, data prep, and disk IO only.
-- Workbench shell presentation lives in `scripts/review_workbench/` static
+- Workbench shell presentation lives in `scripts/workflow_artifact_workbench/` static
   assets.
 - Artifact-type rendering primitives live outside consuming surfaces under
   `scripts/artifact_primitives/`.
@@ -70,7 +70,7 @@ Renderer contract:
   annotation mooring.
 - The Mermaid preview is rendered by the shared browser primitive
   `scripts/artifact_primitives/mermaid_renderer.js`, not by Python-generated
-  HTML and not by code owned under `scripts/review_workbench/`.
+  HTML and not by code owned under `scripts/workflow_artifact_workbench/`.
 - The primitive exports `renderMermaid(source, containerEl, options)`, which
   returns a promise resolving to `{ ok, state, errorMessage }`, and
   `upgradeMermaidBlocks(rootEl, options)`, which upgrades Markdown-rendered
@@ -163,7 +163,7 @@ carry enough hierarchy to make nested navigation honest.
    - preview/source mode keeps source editable;
    - invalid source produces an error state;
    - source-line annotation or overlay anchoring still works;
-   - icon use remains through `/assets/review-workbench-icons.svg`.
+   - icon use remains through `/assets/workflow-artifact-workbench-icons.svg`.
 7. For composites, add a projection fixture with one `artifact_groups` entry,
    then add a Playwright CLI smoke snippet that
    selects the composite facet, asserts the header breadcrumb includes the

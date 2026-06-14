@@ -14,12 +14,12 @@ sys.path.insert(0, str(REPO_ROOT))
 from scripts import playwright_cli_review_gate as gate
 
 
-class ReviewWorkbenchBrowserControlTests(unittest.TestCase):
+class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
     def test_browser_control_tests_are_part_of_validation_surface(self) -> None:
         from scripts.eba_cli import validation_commands
 
         self.assertIn(
-            [sys.executable, "tests/test_review_workbench_browser_control.py"],
+            [sys.executable, "tests/test_workflow_artifact_workbench_browser_control.py"],
             validation_commands(),
         )
 
@@ -31,7 +31,17 @@ class ReviewWorkbenchBrowserControlTests(unittest.TestCase):
             ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
             validation_commands(),
         )
+        self.assertIn(
+            ["node", "--check", "scripts/artifact_primitives/markdown_renderer.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifact_primitives/image_viewer.js"],
+            validation_commands(),
+        )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-primitives/markdown_renderer.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-primitives/image_viewer.js", WORKBENCH_ASSETS)
 
     def test_browser_open_plan_uses_named_repo_wrapper_session(self) -> None:
         plan = gate.build_workbench_browser_plan(

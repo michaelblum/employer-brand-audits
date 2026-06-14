@@ -27,15 +27,23 @@ DEFAULT_MANIFEST = (
     REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
 )
 
-WORKBENCH_DIR = Path(__file__).resolve().parent / "review_workbench"
+WORKBENCH_DIR = Path(__file__).resolve().parent / "workflow_artifact_workbench"
 ARTIFACT_PRIMITIVES_DIR = Path(__file__).resolve().parent / "artifact_primitives"
 WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
 WORKBENCH_ASSETS = {
-    "/assets/review-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
-    "/assets/review-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
-    "/assets/review-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
+    "/assets/workflow-artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
+    "/assets/workflow-artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
+    "/assets/workflow-artifact-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
     "/assets/artifact-primitives/mermaid_renderer.js": (
         ARTIFACT_PRIMITIVES_DIR / "mermaid_renderer.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/markdown_renderer.js": (
+        ARTIFACT_PRIMITIVES_DIR / "markdown_renderer.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/image_viewer.js": (
+        ARTIFACT_PRIMITIVES_DIR / "image_viewer.js",
         "text/javascript",
     ),
     "/assets/artifact-primitives/document_renderer.js": (
