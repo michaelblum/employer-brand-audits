@@ -78,6 +78,18 @@ place, use:
 Use `./eba dev demo --no-browser` only when opening a browser is inappropriate
 or unavailable.
 
+For routine browser control after the same active turn is in place, use the
+managed workbench control surface:
+
+```bash
+./eba dev workbench refresh
+./eba dev workbench tabs
+./eba dev workbench tab-select <index>
+```
+
+Agents should reuse the managed `eba-workbench` session when available. Reuse
+must not resize or reposition the browser window.
+
 ## Command Surface
 
 Agents should prefer `./eba dev ...` for common project mechanisms:
@@ -89,6 +101,8 @@ Agents should prefer `./eba dev ...` for common project mechanisms:
   work-card/handoff artifacts.
 - `./eba dev validate` for the current validation ladder.
 - `./eba dev demo` for a prepared review-workbench inspection surface.
+- `./eba dev workbench` for managed `eba-workbench` refresh, tab, snapshot, and
+  interaction controls.
 
 Update the command surface as the project evolves and new repeated mechanisms
 appear. Keep it small, typed, and honest; do not add routes that are not wired
@@ -108,3 +122,8 @@ Reference commits, docs, and command output paths rather than restating large
 source content.
 
 Every handoff must include the Successor Onboarding Gate above.
+
+After writing a handoff, the agent's chat response should include a ready-to-use
+successor prompt that points to the handoff file and restates the onboarding
+commands and first-response requirements. Do not end with only the handoff file
+path unless the user explicitly asks for path-only output.

@@ -67,6 +67,9 @@ version:
   changing code: report entrypoint/handoff paths, the `./eba dev situation
   --json` onboarding token, concise `Salience`, and any concerns,
   misalignment, or drift.
+- After writing a handoff, follow the Handoff Boundary in
+  `docs/superpowers/project-sop.md`: provide a ready-to-use successor prompt in
+  chat, not just the handoff path.
 
 ## Browser And Demo Flow
 
@@ -79,6 +82,22 @@ For the review workbench, prefer the command surface:
 This starts or reuses the managed workbench, opens the surface when possible,
 and prints the compact inspection recipe. Use `./eba dev demo --no-browser` in
 headless contexts where opening a browser is not appropriate.
+
+For routine browser control after the same active `./eba begin` turn gate has
+been satisfied, use the managed workbench control surface:
+
+```bash
+./eba dev workbench reset
+./eba dev workbench refresh
+./eba dev workbench tabs
+./eba dev workbench tab-select <index>
+```
+
+`reset` starts or reuses the managed `eba-workbench` browser session. Reusing an
+existing session must navigate in place and must not resize or reposition the
+window; if a human has moved the workbench to a display, agents should leave it
+there. Use the same `./eba dev workbench` surface for snapshot/click/fill/press
+operations instead of raw browser-control tools.
 
 For controlled/debug use after the same active `./eba begin` turn gate has
 been satisfied, the lower-level surface command is:
