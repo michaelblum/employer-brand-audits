@@ -226,6 +226,11 @@ Default section order:
 4. Remove stale or contradictory text
 5. Run existing verification when relevant
 6. Report any docs intentionally left unchanged and why
+7. Run `./eba end --worker-id <id>` to actually close and gate the turn
+
+DOX Closeout is the in-turn doc-and-verification pass; it is not the turn gate.
+The corridor and SOP sweep run only at `./eba end`; finishing these steps
+without it leaves the turn open and ungated.
 
 ## User Preferences
 

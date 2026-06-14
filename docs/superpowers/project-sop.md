@@ -61,6 +61,9 @@ Every meaningful change requires a DOX pass before closeout:
 - remove stale or contradictory instructions;
 - report any applicable docs intentionally left unchanged and why.
 
+The DOX pass and Closeout are in-turn steps, not the turn gate. The corridor and
+SOP sweep run only at `./eba end`.
+
 DOX changes that alter this SOP or project-wide operating rules still require
 the SOP Change Control process above, including an `SOP sweep`.
 

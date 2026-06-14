@@ -30,7 +30,24 @@ INSTRUCTION_BEARING_PATHS = [
     ".eba/",
     "docs/superpowers/project-sop.md",
     "docs/decisions/",
+    "scripts/eba_control_plane.py",
 ]
+
+# Tier-0 immutable floor: invariants the gate enforces in code regardless of
+# what the DOX hierarchy declares. Tier-1 (ADR-009) layers DOX-declared
+# invariants on top; this set must never shrink.
+PROTECTED_SOP_CHECKS = frozenset(
+    {
+        "agents_turn_gate",
+        "agents_browser_boundary",
+        "agents_base64_boundary",
+        "agents_provider_attribution",
+        "sop_change_control",
+        "sop_turn_commands",
+        "adr_008_browser_boundary",
+        "no_mutable_hard_policy",
+    }
+)
 
 
 class ControlPlaneError(Exception):
@@ -384,6 +401,16 @@ def adr_008_browser_boundary_check(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def gate_integrity_check(produced_names: set[str]) -> dict[str, Any]:
+    missing = sorted(PROTECTED_SOP_CHECKS - produced_names)
+    return {
+        "name": "sop_gate_integrity",
+        "path": "scripts/eba_control_plane.py",
+        "status": "passed" if not missing else "failed",
+        "missing": missing,
+    }
+
+
 def concrete_sop_checks(repo_root: Path) -> list[dict[str, Any]]:
     checks = [
         required_text_check(
@@ -439,6 +466,7 @@ def concrete_sop_checks(repo_root: Path) -> list[dict[str, Any]]:
             "missing": [],
         }
     )
+    checks.append(gate_integrity_check({check["name"] for check in checks}))
     return checks
 
 
@@ -449,9 +477,24 @@ def sop_sweep(repo_root: Path, changes: list[str]) -> dict[str, Any]:
         if instruction_bearing(path) and not generated_control_plane_state(path)
     ]
     skipped_generated_state = [path for path in changes if generated_control_plane_state(path)]
-    if not checked:
-        return {"status": "passed", "checked_files": [], "skipped_generated_state": skipped_generated_state}
     checks = concrete_sop_checks(repo_root)
+    integrity_check = next(check for check in checks if check["name"] == "sop_gate_integrity")
+    if not checked:
+        return {
+            "status": "passed" if integrity_check["status"] == "passed" else "blocked",
+            "checked_files": [],
+            "skipped_generated_state": skipped_generated_state,
+            "checks": [integrity_check],
+            **(
+                {}
+                if integrity_check["status"] == "passed"
+                else {
+                    "failed_checks": [integrity_check["name"]],
+                    "reason": "sop_sweep_failed",
+                    "next_step": "restore the hard invariants or ask the human to approve the policy change",
+                }
+            ),
+        }
     failed_checks = [check["name"] for check in checks if check["status"] == "failed"]
     if not failed_checks:
         return {

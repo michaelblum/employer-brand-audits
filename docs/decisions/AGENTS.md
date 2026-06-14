@@ -16,6 +16,9 @@ artifact, and image-processing choices.
 - Superseded ADRs stay as records and must point to the active replacement.
 - ADR-008 is the active browser-engine boundary: Playwright CLI is the browser
   engine for automated audits.
+- ADR-009 is the active architecture for treating the SOP sweep as DOX's
+  enforcement tripwire. Read it before changing control-plane invariants,
+  instruction-bearing detection, or the sweep's check structure.
 - ADRs should describe stable decisions and consequences, not session diaries.
 
 ## Work Guidance

@@ -10,10 +10,12 @@ import pytest
 
 from scripts.eba_control_plane import (
     ControlPlaneError,
+    PROTECTED_SOP_CHECKS,
     begin_turn,
     changed_files,
     concrete_sop_checks,
     end_turn,
+    gate_integrity_check,
     instruction_bearing,
     path_allowed,
 )
@@ -251,6 +253,27 @@ def test_instruction_bearing_detects_child_agents_files() -> None:
     assert instruction_bearing("scripts/AGENTS.md")
     assert instruction_bearing("mcp-server/imaging/AGENTS.md")
     assert not instruction_bearing("scripts/workflow_artifact_workbench/app.js")
+
+
+def test_eba_control_plane_is_instruction_bearing() -> None:
+    assert instruction_bearing("scripts/eba_control_plane.py")
+
+
+def test_sop_gate_protects_its_check_set(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+
+    checks = concrete_sop_checks(repo)
+
+    assert PROTECTED_SOP_CHECKS <= {check["name"] for check in checks}
+    integrity = next(check for check in checks if check["name"] == "sop_gate_integrity")
+    assert integrity["status"] == "passed"
+
+
+def test_gate_integrity_trips_when_a_protected_check_is_missing() -> None:
+    result = gate_integrity_check({"agents_turn_gate"})
+
+    assert result["status"] == "failed"
+    assert "no_mutable_hard_policy" in result["missing"]
 
 
 def test_corrupt_registry_fails_closed(tmp_path: Path) -> None:
