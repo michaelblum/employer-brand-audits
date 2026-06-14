@@ -303,7 +303,7 @@ def command_demo(args: argparse.Namespace) -> int:
             print("1. Confirm the workflow header shows the Acme Robotics audit, not the public-page matrix.")
             print("2. Inspect the projected L0-L4 workflow steps and provenance edges in the sidebar.")
             print("3. Open the final report and confirm the Mermaid diagram renders from markdown.")
-            print("4. Open the screenshot artifact; JSON/text artifacts should remain projected but not reviewable yet.")
+            print("4. Open the JSON/text artifacts and confirm they render as inspectable document views.")
         else:
             print("1. Review the workflow header in the right sidebar.")
             print("2. Toggle page and slot filter chips; previous/next should follow the filtered set.")
