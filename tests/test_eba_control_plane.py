@@ -91,6 +91,25 @@ def test_validation_commands_scope_mcp_pytest_to_mcp_tests() -> None:
     assert mcp_pytest_commands == [[mcp_pytest_commands[0][0], "-q", "mcp-server/tests"]]
 
 
+def test_validation_commands_compile_easy_audit_fixture() -> None:
+    from scripts.eba_cli import validation_commands
+
+    compile_command = validation_commands()[0]
+
+    assert "scripts/easy_audit_fixture.py" in compile_command
+
+
+def test_easy_audit_fixture_route_generates_manifest(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+
+    result = eba(repo, "dev", "situation", "--fixture", "easy-audit", "--json")
+
+    assert result.returncode == 0, result.stderr
+    payload = parse_json(result)
+    assert payload["review_workbench"]["manifest"] == "artifacts/easy-audit/latest/manifest.json"
+    assert (repo / "artifacts" / "easy-audit" / "latest" / "manifest.json").exists()
+
+
 def test_situation_remains_available_without_begin(tmp_path: Path) -> None:
     repo = copy_repo(tmp_path)
 
