@@ -89,6 +89,38 @@
                 renderSidebar,
                 showToast,
               },
+              editorShell: {
+                setEditorSession: (session) => { Object.assign(app, session); },
+                setCommentValue: (value) => { $("comment-text").value = value; },
+                setActionLabels: (labels) => {
+                  $("secondary-comment-action").textContent = labels.secondary;
+                  $("primary-comment-action").textContent = labels.primary;
+                },
+                openComment: (displayRect, relativeTo) => openComment(
+                  displayRect,
+                  relativeTo === "markdown" ? $("markdown-wrap") : $("artifact-image"),
+                ),
+                hidePopover: () => { $("comment-popover").hidden = true; },
+                hideSelection: () => { $("selection").hidden = true; },
+                hideMarkdownMarker: () => { $("markdown-marker").hidden = true; },
+                afterImageReady,
+                scrollRectIntoView,
+                requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+                placeSelectionForAnchor,
+                placePopoverForAnchor,
+                ensureMarkdownPreview: () => {
+                  app.markdownMode = "preview";
+                  renderMarkdownBody(artifact());
+                },
+                scrollTextRangeIntoView: (anchor) => {
+                  window.ArtifactPrimitives.markdownInteractions.scrollTextRangeIntoView({
+                    anchor,
+                    previewBodyEl: markdownPreviewBody(),
+                    sourceEl: $("markdown-source"),
+                  });
+                },
+                renderMarkdownHighlights,
+              },
               draftStart: {
                 setDrag: (drag) => { app.drag = drag; },
                 setPendingAnchor: (pendingAnchor) => { app.pendingAnchor = pendingAnchor; },
@@ -795,19 +827,12 @@
       });
     }
 
-    function setCommentActionLabels(mode) {
-      const labels = interactionOverlay().editorLabels({ subtype: "annotation", mode });
-      $("secondary-comment-action").textContent = labels.secondary;
-      $("primary-comment-action").textContent = labels.primary;
-    }
-
     function openCreateEditor(displayRect, relativeTo = $("artifact-image")) {
-      Object.assign(app, interactionOverlay().createEditorSession({
-        anchor: app.pendingAnchor,
-      }));
-      $("comment-text").value = "";
-      setCommentActionLabels("create");
-      openComment(displayRect, relativeTo);
+      overlayController().openCreateEditor({
+        pendingAnchor: app.pendingAnchor,
+        displayRect,
+        relativeTo: relativeTo === $("markdown-wrap") ? "markdown" : "image",
+      });
     }
 
     function scrollRectIntoView(rect) {
@@ -820,52 +845,14 @@
     }
 
     function openExistingEditor(note) {
-      const plan = interactionOverlay().existingOverlayEditorPlan({
+      overlayController().openExistingEditor({
         note,
         markdownMode: app.markdownMode,
       });
-      if (!plan) return;
-      Object.assign(app, {
-        editorMode: plan.editorMode,
-        editing: plan.editing,
-        pendingAnchor: plan.pendingAnchor,
-      });
-      $("comment-text").value = plan.comment;
-      setCommentActionLabels(plan.actionMode);
-      const anchor = plan.anchor;
-      if (plan.placement?.type === "image_region") {
-        afterImageReady(() => {
-          scrollRectIntoView(plan.placement.rect);
-          window.requestAnimationFrame(() => {
-            placeSelectionForAnchor(anchor);
-            placePopoverForAnchor(anchor);
-          });
-        });
-        return;
-      }
-      if (plan.placement?.type === "text_range") {
-        if (plan.placement.ensurePreview) {
-          app.markdownMode = "preview";
-          renderMarkdownBody(artifact());
-        }
-        window.ArtifactPrimitives.markdownInteractions.scrollTextRangeIntoView({
-          anchor,
-          previewBodyEl: markdownPreviewBody(),
-          sourceEl: $("markdown-source"),
-        });
-        window.requestAnimationFrame(() => {
-          renderMarkdownHighlights();
-          placeSelectionForAnchor(anchor);
-          placePopoverForAnchor(anchor);
-        });
-      }
     }
 
     function closeEditor() {
-      Object.assign(app, interactionOverlay().closedEditorSession());
-      $("comment-popover").hidden = true;
-      $("selection").hidden = true;
-      $("markdown-marker").hidden = true;
+      overlayController().closeEditor();
     }
 
     function selectAnnotation(artifactId, annotationId) {

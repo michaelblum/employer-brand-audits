@@ -39,6 +39,9 @@ const controller = controllerApi.createInteractionOverlayController({
 assert.equal(typeof controller.runEditorIntent, "function");
 assert.equal(typeof controller.runDraftStart, "function");
 assert.equal(typeof controller.runDraftCompletion, "function");
+assert.equal(typeof controller.openCreateEditor, "function");
+assert.equal(typeof controller.openExistingEditor, "function");
+assert.equal(typeof controller.closeEditor, "function");
 
 (async () => {
   await controller.runEditorIntent({
@@ -85,6 +88,120 @@ assert.equal(typeof controller.runDraftCompletion, "function");
     ["renderMarkdownHighlights"],
     ["setPopoverHidden", true],
     ["openCreateEditor", { x: 4, y: 5, width: 40, height: 20 }, "markdown"],
+  ]);
+
+  require(path.join(__dirname, "../scripts/artifact_primitives/interaction_overlay.js"));
+  const shellCalls = [];
+  const overlay = window.ArtifactPrimitives.interactionOverlay;
+  const shellController = controllerApi.createInteractionOverlayController({
+    overlay,
+    effects: {
+      editorShell: {
+        setEditorSession: (session) => shellCalls.push(["setEditorSession", session]),
+        setCommentValue: (value) => shellCalls.push(["setCommentValue", value]),
+        setActionLabels: (labels) => shellCalls.push(["setActionLabels", labels]),
+        openComment: (displayRect, relativeTo) => shellCalls.push(["openComment", displayRect, relativeTo]),
+        hidePopover: () => shellCalls.push(["hidePopover"]),
+        hideSelection: () => shellCalls.push(["hideSelection"]),
+        hideMarkdownMarker: () => shellCalls.push(["hideMarkdownMarker"]),
+        afterImageReady: (callback) => {
+          shellCalls.push(["afterImageReady"]);
+          callback();
+        },
+        scrollRectIntoView: (rect) => shellCalls.push(["scrollRectIntoView", rect]),
+        requestAnimationFrame: (callback) => {
+          shellCalls.push(["requestAnimationFrame"]);
+          callback();
+        },
+        placeSelectionForAnchor: (anchor) => shellCalls.push(["placeSelectionForAnchor", anchor]),
+        placePopoverForAnchor: (anchor) => shellCalls.push(["placePopoverForAnchor", anchor]),
+        ensureMarkdownPreview: () => shellCalls.push(["ensureMarkdownPreview"]),
+        scrollTextRangeIntoView: (anchor) => shellCalls.push(["scrollTextRangeIntoView", anchor]),
+        renderMarkdownHighlights: () => shellCalls.push(["renderMarkdownHighlights"]),
+      },
+    },
+  });
+
+  const imageAnchor = {
+    type: "image_region",
+    coordinate_space: "natural_image",
+    rect: { x: 10, y: 20, width: 30, height: 40 },
+  };
+  const textAnchor = {
+    type: "text_range",
+    coordinate_space: "markdown_source",
+    start: { line: 2, column: 1 },
+    end: { line: 3, column: 8 },
+  };
+
+  assert.equal(
+    shellController.openCreateEditor({
+      pendingAnchor: imageAnchor,
+      displayRect: { x: 1, y: 2, width: 30, height: 40 },
+      relativeTo: "image",
+    }),
+    true,
+  );
+  assert.deepEqual(shellCalls.splice(0), [
+    ["setEditorSession", { editorMode: "create", editing: null, pendingAnchor: imageAnchor }],
+    ["setCommentValue", ""],
+    ["setActionLabels", { primary: "Add Comment", secondary: "Cancel" }],
+    ["openComment", { x: 1, y: 2, width: 30, height: 40 }, "image"],
+  ]);
+
+  assert.equal(
+    shellController.openExistingEditor({
+      note: { id: "note-1", anchor: imageAnchor, comment: "Crop this" },
+      markdownMode: "source",
+    }),
+    true,
+  );
+  assert.deepEqual(shellCalls.splice(0), [
+    ["setEditorSession", {
+      editorMode: "edit",
+      editing: { id: "note-1", anchor: imageAnchor, comment: "Crop this" },
+      pendingAnchor: null,
+    }],
+    ["setCommentValue", "Crop this"],
+    ["setActionLabels", { primary: "Update", secondary: "Delete" }],
+    ["afterImageReady"],
+    ["scrollRectIntoView", imageAnchor.rect],
+    ["requestAnimationFrame"],
+    ["placeSelectionForAnchor", imageAnchor],
+    ["placePopoverForAnchor", imageAnchor],
+  ]);
+
+  assert.equal(
+    shellController.openExistingEditor({
+      note: { id: "note-2", anchor: textAnchor, comment: "Source note" },
+      markdownMode: "source",
+    }),
+    true,
+  );
+  assert.deepEqual(shellCalls.splice(0), [
+    ["setEditorSession", {
+      editorMode: "edit",
+      editing: { id: "note-2", anchor: textAnchor, comment: "Source note" },
+      pendingAnchor: null,
+    }],
+    ["setCommentValue", "Source note"],
+    ["setActionLabels", { primary: "Update", secondary: "Delete" }],
+    ["ensureMarkdownPreview"],
+    ["scrollTextRangeIntoView", textAnchor],
+    ["requestAnimationFrame"],
+    ["renderMarkdownHighlights"],
+    ["placeSelectionForAnchor", textAnchor],
+    ["placePopoverForAnchor", textAnchor],
+  ]);
+
+  assert.equal(shellController.openExistingEditor({ note: null }), false);
+
+  assert.equal(shellController.closeEditor(), true);
+  assert.deepEqual(shellCalls.splice(0), [
+    ["setEditorSession", { editorMode: "create", editing: null, pendingAnchor: null }],
+    ["hidePopover"],
+    ["hideSelection"],
+    ["hideMarkdownMarker"],
   ]);
 })().catch((error) => {
   console.error(error);
