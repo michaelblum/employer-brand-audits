@@ -21,6 +21,8 @@ const overlay = window.ArtifactPrimitives.interactionOverlay;
   "mooredEditorAnchor",
   "placeOverlayBox",
   "secondaryOverlayEditorIntent",
+  "supportedOverlaySubtypes",
+  "overlaySubtypeModel",
 ].forEach((name) => {
   assert.equal(typeof overlay[name], "function", `${name} should be public`);
 });
@@ -67,6 +69,16 @@ const persistedNote = {
   updated_at_epoch: null,
 };
 const persistedAnnotations = { hero: [persistedNote] };
+
+assert.deepEqual(overlay.supportedOverlaySubtypes(), ["annotation"]);
+assert.deepEqual(overlay.overlaySubtypeModel("annotation"), {
+  subtype: "annotation",
+  editorModes: ["create", "edit"],
+  anchorTypes: ["image_region", "text_range"],
+  draftTypes: ["image", "markdown"],
+  intentActions: ["append", "update", "delete", "cancel"],
+});
+assert.equal(overlay.overlaySubtypeModel("unknown"), null);
 
 assert.deepEqual(overlay.editorLabels({ subtype: "annotation", mode: "create" }), {
   primary: "Add Comment",

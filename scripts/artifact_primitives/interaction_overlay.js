@@ -1,5 +1,31 @@
 (function () {
   const ROOT = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
+  const ANNOTATION_OVERLAY_SUBTYPE = "annotation";
+  const OVERLAY_SUBTYPE_MODELS = {
+    [ANNOTATION_OVERLAY_SUBTYPE]: {
+      subtype: ANNOTATION_OVERLAY_SUBTYPE,
+      editorModes: ["create", "edit"],
+      anchorTypes: ["image_region", "text_range"],
+      draftTypes: ["image", "markdown"],
+      intentActions: ["append", "update", "delete", "cancel"],
+    },
+  };
+
+  function overlaySubtypeModel(subtype = ANNOTATION_OVERLAY_SUBTYPE) {
+    const model = OVERLAY_SUBTYPE_MODELS[subtype];
+    if (!model) return null;
+    return {
+      subtype: model.subtype,
+      editorModes: [...model.editorModes],
+      anchorTypes: [...model.anchorTypes],
+      draftTypes: [...model.draftTypes],
+      intentActions: [...model.intentActions],
+    };
+  }
+
+  function supportedOverlaySubtypes() {
+    return Object.keys(OVERLAY_SUBTYPE_MODELS);
+  }
 
   function normalizeComment(value) {
     return String(value || "").trim();
@@ -9,14 +35,22 @@
     return !normalizeComment(value);
   }
 
-  function editorLabels({ subtype = "annotation", mode } = {}) {
-    if (subtype !== "annotation") {
-      return { primary: "Apply", secondary: "Cancel" };
-    }
+  function annotationEditorLabels({ mode } = {}) {
     if (mode === "edit") {
       return { primary: "Update", secondary: "Delete" };
     }
     return { primary: "Add Comment", secondary: "Cancel" };
+  }
+
+  function editorLabels({ subtype = ANNOTATION_OVERLAY_SUBTYPE, mode } = {}) {
+    const model = overlaySubtypeModel(subtype);
+    if (!model) {
+      return { primary: "Apply", secondary: "Cancel" };
+    }
+    if (model.subtype === ANNOTATION_OVERLAY_SUBTYPE) {
+      return annotationEditorLabels({ mode });
+    }
+    return { primary: "Apply", secondary: "Cancel" };
   }
 
   function epochFromMilliseconds(value) {
@@ -144,7 +178,7 @@
   } = {}) {
     if (artifactIndex < 0 || !note) return null;
     return {
-      subtype: "annotation",
+      subtype: ANNOTATION_OVERLAY_SUBTYPE,
       artifactId,
       annotationId,
       artifactIndex,
@@ -164,7 +198,7 @@
       placement = { type: "text_range", ensurePreview: markdownMode !== "preview" };
     }
     return {
-      subtype: "annotation",
+      subtype: ANNOTATION_OVERLAY_SUBTYPE,
       ...editEditorSession({ note }),
       actionMode: "edit",
       comment: note.comment || "",
@@ -192,7 +226,7 @@
     renderSidebar = true,
   } = {}) {
     const effect = {
-      subtype: "annotation",
+      subtype: ANNOTATION_OVERLAY_SUBTYPE,
       action,
       annotations,
       closeEditor: true,
@@ -335,5 +369,7 @@
     mooredEditorAnchor,
     placeOverlayBox,
     secondaryOverlayEditorIntent,
+    supportedOverlaySubtypes,
+    overlaySubtypeModel,
   };
 }());
