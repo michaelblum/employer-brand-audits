@@ -102,7 +102,7 @@ async (page) => {
       && Boolean(figure.querySelector(".mermaid-source"));
   }, { timeout: 5000 });
 
-  return await page.evaluate(({ sourceLineAnchorSurvivedModeSwitch, validRenderCompleted }) => {
+  const result = await page.evaluate(({ sourceLineAnchorSurvivedModeSwitch, validRenderCompleted }) => {
     const figure = document.querySelector("[data-artifact-renderer='mermaid']");
     return {
       artifactTitle: document.querySelector("#artifact-title")?.textContent?.trim(),
@@ -115,4 +115,9 @@ async (page) => {
       activeIconHref: document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href"),
     };
   }, { sourceLineAnchorSurvivedModeSwitch, validRenderCompleted });
+
+  await page.reload();
+  await page.waitForSelector(".artifact-row[data-index]", { timeout: 5000 });
+
+  return result;
 }
