@@ -68,7 +68,7 @@ before handing it to the user:
 4. Avoid making the user do agentic management tasks such as restarting
    services, finding ports, or navigating verbose setup instructions.
 
-For the current review workbench, after an active `./eba begin` turn is in
+For the current workflow artifact workbench, after an active `./eba begin` turn is in
 place, use:
 
 ```bash
@@ -100,7 +100,7 @@ Agents should prefer `./eba dev ...` for common project mechanisms:
   for turn-level worker identity, gate packets, corridor checks, and generated
   work-card/handoff artifacts.
 - `./eba dev validate` for the current validation ladder.
-- `./eba dev demo` for a prepared review-workbench inspection surface.
+- `./eba dev demo` for a prepared workflow artifact workbench inspection surface.
 - `./eba dev workbench` for managed `eba-workbench` refresh, tab, snapshot, and
   interaction controls.
 
