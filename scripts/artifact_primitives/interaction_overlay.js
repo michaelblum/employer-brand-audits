@@ -321,6 +321,25 @@
     };
   }
 
+  async function runOverlayEditorIntent({
+    intent,
+    setAnnotations,
+    closeEditor,
+    syncAnnotations,
+    renderSidebar,
+    showToast,
+  } = {}) {
+    if (!intent) return false;
+    if (typeof setAnnotations === "function") setAnnotations(intent.annotations);
+    if (intent.closeEditor && typeof closeEditor === "function") closeEditor();
+    if (intent.syncAnnotations && typeof syncAnnotations === "function") {
+      await syncAnnotations();
+    }
+    if (intent.renderSidebar && typeof renderSidebar === "function") renderSidebar();
+    if (intent.toast && typeof showToast === "function") showToast(intent.toast);
+    return true;
+  }
+
   ROOT.interactionOverlay = {
     annotationOverlayTarget,
     appendAnnotation,
@@ -340,6 +359,7 @@
     newAnnotation,
     normalizeComment,
     placeOverlayBox,
+    runOverlayEditorIntent,
     secondaryOverlayEditorIntent,
     updateAnnotation,
   };

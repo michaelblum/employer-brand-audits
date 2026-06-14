@@ -25,6 +25,7 @@ assert.equal(typeof overlay.commitOverlayEditorIntent, "function");
 assert.equal(typeof overlay.secondaryOverlayEditorIntent, "function");
 assert.equal(typeof overlay.beginOverlayDraft, "function");
 assert.equal(typeof overlay.completeOverlayDraft, "function");
+assert.equal(typeof overlay.runOverlayEditorIntent, "function");
 
 assert.deepEqual(overlay.editorLabels({ subtype: "annotation", mode: "create" }), {
   primary: "Add Comment",
@@ -571,3 +572,53 @@ assert.deepEqual(
     hidePopover: true,
   },
 );
+
+(async () => {
+  const callLog = [];
+  const handled = await overlay.runOverlayEditorIntent({
+    intent: {
+      annotations: { hero: [] },
+      closeEditor: true,
+      syncAnnotations: true,
+      renderSidebar: true,
+      toast: "Saved",
+    },
+    setAnnotations: (annotationsValue) => callLog.push(["setAnnotations", annotationsValue]),
+    closeEditor: () => callLog.push(["closeEditor"]),
+    syncAnnotations: async () => callLog.push(["syncAnnotations"]),
+    renderSidebar: () => callLog.push(["renderSidebar"]),
+    showToast: (message) => callLog.push(["showToast", message]),
+  });
+  assert.equal(handled, true);
+  assert.deepEqual(callLog, [
+    ["setAnnotations", { hero: [] }],
+    ["closeEditor"],
+    ["syncAnnotations"],
+    ["renderSidebar"],
+    ["showToast", "Saved"],
+  ]);
+
+  const cancelLog = [];
+  const cancelHandled = await overlay.runOverlayEditorIntent({
+    intent: {
+      annotations: { hero: [persistedNote] },
+      closeEditor: true,
+      syncAnnotations: false,
+      renderSidebar: false,
+      toast: null,
+    },
+    setAnnotations: () => cancelLog.push("setAnnotations"),
+    closeEditor: () => cancelLog.push("closeEditor"),
+    syncAnnotations: () => cancelLog.push("syncAnnotations"),
+    renderSidebar: () => cancelLog.push("renderSidebar"),
+    showToast: () => cancelLog.push("showToast"),
+  });
+  assert.equal(cancelHandled, true);
+  assert.deepEqual(cancelLog, ["setAnnotations", "closeEditor"]);
+
+  const missingHandled = await overlay.runOverlayEditorIntent({ intent: null });
+  assert.equal(missingHandled, false);
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

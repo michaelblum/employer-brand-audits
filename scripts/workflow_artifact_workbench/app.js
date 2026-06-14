@@ -964,12 +964,14 @@
     }
 
     async function applyOverlayEditorIntent(intent) {
-      if (!intent) return;
-      app.annotations = intent.annotations;
-      if (intent.closeEditor) closeEditor();
-      if (intent.syncAnnotations) await syncAnnotations();
-      if (intent.renderSidebar) renderSidebar();
-      if (intent.toast) showToast(intent.toast);
+      await interactionOverlay().runOverlayEditorIntent({
+        intent,
+        setAnnotations: (annotations) => { app.annotations = annotations; },
+        closeEditor,
+        syncAnnotations,
+        renderSidebar,
+        showToast,
+      });
     }
 
     async function commitEditor() {
