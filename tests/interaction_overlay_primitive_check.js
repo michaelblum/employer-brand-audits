@@ -23,6 +23,8 @@ assert.equal(typeof overlay.existingOverlayEditorPlan, "function");
 assert.equal(typeof overlay.mooredActiveMarkerAnchor, "function");
 assert.equal(typeof overlay.commitOverlayEditorIntent, "function");
 assert.equal(typeof overlay.secondaryOverlayEditorIntent, "function");
+assert.equal(typeof overlay.beginOverlayDraft, "function");
+assert.equal(typeof overlay.completeOverlayDraft, "function");
 
 assert.deepEqual(overlay.editorLabels({ subtype: "annotation", mode: "create" }), {
   primary: "Add Comment",
@@ -468,5 +470,104 @@ assert.deepEqual(
     syncAnnotations: false,
     renderSidebar: false,
     toast: null,
+  },
+);
+
+assert.equal(overlay.beginOverlayDraft({ type: "image", point: null }), null);
+assert.deepEqual(
+  overlay.beginOverlayDraft({
+    type: "image",
+    point: { x: 12, y: 20 },
+  }),
+  {
+    drag: { type: "image", startX: 12, startY: 20 },
+    pendingAnchor: null,
+    popoverHidden: true,
+    displayRect: { x: 12, y: 20, width: 0, height: 0 },
+  },
+);
+assert.deepEqual(
+  overlay.beginOverlayDraft({
+    type: "markdown",
+    point: { x: 4, y: 9 },
+  }),
+  {
+    drag: { type: "markdown", startX: 4, startY: 9 },
+    pendingAnchor: null,
+    popoverHidden: true,
+    displayRect: { x: 4, y: 9, width: 0, height: 0 },
+  },
+);
+
+assert.deepEqual(
+  overlay.completeOverlayDraft({
+    type: "image",
+    displayRect: { x: 1, y: 2, width: 7, height: 20 },
+  }),
+  {
+    action: "discard",
+    drag: null,
+    hideSelection: true,
+    hideMarkdownMarker: true,
+  },
+);
+assert.deepEqual(
+  overlay.completeOverlayDraft({
+    type: "markdown",
+    displayRect: { x: 1, y: 2, width: 40, height: 20 },
+  }),
+  {
+    action: "resolve-anchor",
+    drag: null,
+    type: "markdown",
+    displayRect: { x: 1, y: 2, width: 40, height: 20 },
+  },
+);
+assert.deepEqual(
+  overlay.completeOverlayDraft({
+    type: "markdown",
+    displayRect: { x: 1, y: 2, width: 40, height: 20 },
+    anchorResolved: true,
+    anchor: null,
+  }),
+  {
+    action: "discard",
+    drag: null,
+    hideSelection: false,
+    hideMarkdownMarker: true,
+  },
+);
+assert.deepEqual(
+  overlay.completeOverlayDraft({
+    type: "markdown",
+    displayRect: { x: 1, y: 2, width: 40, height: 20 },
+    anchorResolved: true,
+    anchor: textAnchor,
+  }),
+  {
+    action: "create",
+    drag: null,
+    pendingAnchor: textAnchor,
+    displayRect: { x: 1, y: 2, width: 40, height: 20 },
+    relativeTo: "markdown",
+    renderMarkdownHighlights: true,
+    hidePopover: false,
+  },
+);
+assert.deepEqual(
+  overlay.completeOverlayDraft({
+    type: "image",
+    displayRect: { x: 2, y: 3, width: 40, height: 20 },
+    anchorResolved: true,
+    anchor,
+  }),
+  {
+    action: "create",
+    drag: null,
+    pendingAnchor: anchor,
+    displayRect: { x: 2, y: 3, width: 40, height: 20 },
+    relativeTo: "image",
+    renderMarkdownHighlights: false,
+    hidePopover: true,
   },
 );

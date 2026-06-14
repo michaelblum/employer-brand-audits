@@ -852,14 +852,22 @@
       openExistingEditor(target.note);
     }
 
+    function applyOverlayDraftStart(draft, placeDraftSelection) {
+      if (!draft) return;
+      app.drag = draft.drag;
+      app.pendingAnchor = draft.pendingAnchor;
+      $("comment-popover").hidden = draft.popoverHidden;
+      placeDraftSelection(draft.displayRect);
+    }
+
     function startDrag(event) {
       if (event.button !== 0) return;
       if (event.target.closest("#image-wrap")) {
         const point = imagePoint(event);
-        app.drag = { type: "image", startX: point.x, startY: point.y };
-        app.pendingAnchor = null;
-        $("comment-popover").hidden = true;
-        placeSelection({ x: point.x, y: point.y, width: 0, height: 0 });
+        applyOverlayDraftStart(interactionOverlay().beginOverlayDraft({
+          type: "image",
+          point,
+        }), placeSelection);
         return;
       }
       if (isMarkdownArtifact() && app.markdownMode === "preview" && event.target.closest("#markdown-preview")) {
@@ -867,12 +875,14 @@
           event,
           wrapEl: $("markdown-wrap"),
         });
-        app.drag = { type: "markdown", startX: point.x, startY: point.y };
-        app.pendingAnchor = null;
-        $("comment-popover").hidden = true;
-        window.ArtifactPrimitives.markdownInteractions.placeSelection({
-          markerEl: $("markdown-marker"),
-          displayRect: { x: point.x, y: point.y, width: 0, height: 0 },
+        applyOverlayDraftStart(interactionOverlay().beginOverlayDraft({
+          type: "markdown",
+          point,
+        }), (displayRect) => {
+          window.ArtifactPrimitives.markdownInteractions.placeSelection({
+            markerEl: $("markdown-marker"),
+            displayRect,
+          });
         });
       }
     }
@@ -901,6 +911,27 @@
       }
     }
 
+    function applyOverlayDraftCompletion(intent) {
+      if (!intent) return true;
+      app.drag = intent.drag;
+      if (intent.action === "discard") {
+        if (intent.hideSelection) $("selection").hidden = true;
+        if (intent.hideMarkdownMarker) $("markdown-marker").hidden = true;
+        return true;
+      }
+      if (intent.action === "create") {
+        app.pendingAnchor = intent.pendingAnchor;
+        if (intent.renderMarkdownHighlights) renderMarkdownHighlights();
+        if (intent.hidePopover) $("comment-popover").hidden = true;
+        openCreateEditor(
+          intent.displayRect,
+          intent.relativeTo === "markdown" ? $("markdown-wrap") : $("artifact-image"),
+        );
+        return true;
+      }
+      return false;
+    }
+
     function endDrag(event) {
       if (!app.drag) return;
       const type = app.drag.type;
@@ -910,35 +941,26 @@
           wrapEl: $("markdown-wrap"),
         }))
         : dragDisplayRect(imagePoint(event));
-      app.drag = null;
-      if (displayRect.width < 8 || displayRect.height < 8) {
-        $("selection").hidden = true;
-        $("markdown-marker").hidden = true;
-        return;
-      }
-      if (type === "markdown") {
-        const anchor = window.ArtifactPrimitives.markdownInteractions.anchorFromDisplayRect({
+      const draftCompletion = interactionOverlay().completeOverlayDraft({ type, displayRect });
+      if (applyOverlayDraftCompletion(draftCompletion)) return;
+      const anchor = type === "markdown"
+        ? window.ArtifactPrimitives.markdownInteractions.anchorFromDisplayRect({
           displayRect,
           wrapEl: $("markdown-wrap"),
           rootEl: markdownPreviewBody(),
           content: app.markdownContent[artifact().id] || "",
-        });
-        if (!anchor) {
-          $("markdown-marker").hidden = true;
-          return;
-        }
-        app.pendingAnchor = anchor;
-        renderMarkdownHighlights();
-        openCreateEditor(displayRect, $("markdown-wrap"));
-        return;
-      }
-      app.pendingAnchor = {
-        type: "image_region",
-        coordinate_space: "natural_image",
-        rect: naturalRect(displayRect),
-      };
-      $("comment-popover").hidden = true;
-      openCreateEditor(displayRect);
+        })
+        : {
+          type: "image_region",
+          coordinate_space: "natural_image",
+          rect: naturalRect(displayRect),
+        };
+      applyOverlayDraftCompletion(interactionOverlay().completeOverlayDraft({
+        type,
+        displayRect,
+        anchorResolved: true,
+        anchor,
+      }));
     }
 
     async function applyOverlayEditorIntent(intent) {

@@ -268,10 +268,65 @@
     });
   }
 
+  function beginOverlayDraft({ type, point } = {}) {
+    if (!type || !point) return null;
+    return {
+      drag: { type, startX: point.x, startY: point.y },
+      pendingAnchor: null,
+      popoverHidden: true,
+      displayRect: { x: point.x, y: point.y, width: 0, height: 0 },
+    };
+  }
+
+  function completeOverlayDraft({
+    type,
+    displayRect,
+    anchorResolved = false,
+    anchor = null,
+    minSize = 8,
+  } = {}) {
+    if (!displayRect) return null;
+    if (displayRect.width < minSize || displayRect.height < minSize) {
+      return {
+        action: "discard",
+        drag: null,
+        hideSelection: true,
+        hideMarkdownMarker: true,
+      };
+    }
+    if (!anchorResolved) {
+      return {
+        action: "resolve-anchor",
+        drag: null,
+        type,
+        displayRect,
+      };
+    }
+    if (!anchor) {
+      return {
+        action: "discard",
+        drag: null,
+        hideSelection: false,
+        hideMarkdownMarker: type === "markdown",
+      };
+    }
+    return {
+      action: "create",
+      drag: null,
+      pendingAnchor: anchor,
+      displayRect,
+      relativeTo: type === "markdown" ? "markdown" : "image",
+      renderMarkdownHighlights: type === "markdown",
+      hidePopover: type !== "markdown",
+    };
+  }
+
   ROOT.interactionOverlay = {
     annotationOverlayTarget,
     appendAnnotation,
+    beginOverlayDraft,
     closedEditorSession,
+    completeOverlayDraft,
     commitOverlayEditorIntent,
     createEditorSession,
     deleteAnnotation,
