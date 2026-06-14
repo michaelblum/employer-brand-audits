@@ -233,6 +233,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
         ["node", "--check", "scripts/review_workbench/app.js"],
         ["node", "--check", "scripts/playwright-snippets/review-workbench-composite-artifact-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/review-workbench-document-artifact-check.js"],
         ["node", "--check", "scripts/playwright-snippets/review-workbench-layout-regression-check.js"],
         ["node", "--check", "scripts/playwright-snippets/review-workbench-mermaid-artifact-check.js"],
     ]
