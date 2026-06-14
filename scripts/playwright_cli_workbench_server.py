@@ -2,6 +2,7 @@
 """Serve a local artifact viewer with transient annotation state."""
 
 import argparse
+import hashlib
 import json
 import mimetypes
 import posixpath
@@ -30,6 +31,7 @@ DEFAULT_MANIFEST = (
 WORKBENCH_DIR = Path(__file__).resolve().parent / "workflow_artifact_workbench"
 ARTIFACT_PRIMITIVES_DIR = Path(__file__).resolve().parent / "artifact_primitives"
 WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
+WORKBENCH_ASSET_MANIFEST_PATH = "/api/workbench-assets"
 WORKBENCH_ASSETS = {
     "/assets/workflow-artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
     "/assets/workflow-artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
@@ -71,6 +73,49 @@ WORKBENCH_ASSETS = {
         "text/javascript",
     ),
 }
+
+
+def repo_relative_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(resolved)
+
+
+def workbench_asset_record(url: str, path: Path, content_type: str) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "url": url,
+        "path": repo_relative_path(path),
+        "content_type": content_type,
+        "exists": path.exists(),
+    }
+    if path.exists():
+        data = path.read_bytes()
+        record.update(
+            {
+                "size_bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        )
+    return record
+
+
+def build_workbench_asset_manifest() -> dict[str, Any]:
+    index = workbench_asset_record("/", WORKBENCH_INDEX, "text/html")
+    assets = [
+        workbench_asset_record(url, path, content_type)
+        for url, (path, content_type) in sorted(WORKBENCH_ASSETS.items())
+    ]
+    digest = hashlib.sha256()
+    digest.update(json.dumps({"assets": assets, "index": index}, sort_keys=True).encode("utf-8"))
+    return {
+        "status": "workbench_assets",
+        "fingerprint": digest.hexdigest(),
+        "index": index,
+        "asset_count": len(assets),
+        "assets": assets,
+    }
 
 
 def read_workbench_html() -> str:
@@ -336,6 +381,9 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/workbench-projection":
             self.send_json(HTTPStatus.OK, self.server.workbench_projection)
+            return
+        if parsed.path == WORKBENCH_ASSET_MANIFEST_PATH:
+            self.send_json(HTTPStatus.OK, build_workbench_asset_manifest())
             return
         if parsed.path.startswith("/artifact/"):
             self.serve_artifact(parsed.path.removeprefix("/artifact/"))

@@ -15,6 +15,17 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+try:
+    from playwright_cli_workbench_server import (
+        WORKBENCH_ASSET_MANIFEST_PATH,
+        build_workbench_asset_manifest,
+    )
+except ModuleNotFoundError:
+    from scripts.playwright_cli_workbench_server import (
+        WORKBENCH_ASSET_MANIFEST_PATH,
+        build_workbench_asset_manifest,
+    )
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_HOST = "127.0.0.1"
@@ -170,6 +181,19 @@ def remove_stale_state(paths: dict[str, Path]) -> None:
         paths[key].unlink(missing_ok=True)
 
 
+def stop_owned_pid(pid: int, paths: dict[str, Path]) -> str:
+    os.kill(pid, signal.SIGTERM)
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        if not pid_alive(pid):
+            remove_stale_state(paths)
+            return "stopped"
+        time.sleep(0.1)
+    os.kill(pid, signal.SIGKILL)
+    remove_stale_state(paths)
+    return "killed"
+
+
 def health(url: str, timeout: float = 1.0) -> tuple[bool, str]:
     try:
         with urllib.request.urlopen(url, timeout=timeout) as response:
@@ -178,6 +202,96 @@ def health(url: str, timeout: float = 1.0) -> tuple[bool, str]:
         return 200 <= exc.code < 500, str(exc.code)
     except OSError as exc:
         return False, exc.__class__.__name__
+
+
+def fetch_json_url(url: str, timeout: float = 1.0) -> tuple[dict[str, Any] | None, str]:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            if response.status != 200:
+                return None, str(response.status)
+            return json.loads(response.read().decode("utf-8")), str(response.status)
+    except urllib.error.HTTPError as exc:
+        return None, str(exc.code)
+    except json.JSONDecodeError:
+        return None, "invalid_json"
+    except OSError as exc:
+        return None, exc.__class__.__name__
+
+
+def asset_url_status(url: str, timeout: float = 1.0) -> str:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            return str(response.status)
+    except urllib.error.HTTPError as exc:
+        return str(exc.code)
+    except OSError as exc:
+        return exc.__class__.__name__
+
+
+def workbench_asset_health(url: str, timeout: float = 1.0) -> dict[str, Any]:
+    root_url = url.rstrip("/")
+    expected = build_workbench_asset_manifest()
+    manifest_url = f"{root_url}{WORKBENCH_ASSET_MANIFEST_PATH}"
+    expected_assets = expected.get("assets", [])
+    local_assets = [expected.get("index"), *expected_assets] if isinstance(expected_assets, list) else [expected.get("index")]
+    local_missing = [
+        asset.get("url")
+        for asset in local_assets
+        if isinstance(asset, dict) and not asset.get("exists")
+    ]
+    if local_missing:
+        return {
+            "healthy": False,
+            "status": "expected_asset_missing",
+            "manifest_url": manifest_url,
+            "missing_assets": local_missing,
+            "expected_fingerprint": expected.get("fingerprint"),
+        }
+
+    actual, manifest_status = fetch_json_url(manifest_url, timeout=timeout)
+    if actual is None:
+        return {
+            "healthy": False,
+            "status": f"asset_manifest_unavailable:{manifest_status}",
+            "manifest_url": manifest_url,
+            "expected_fingerprint": expected.get("fingerprint"),
+            "actual_fingerprint": None,
+        }
+    if actual.get("fingerprint") != expected.get("fingerprint"):
+        return {
+            "healthy": False,
+            "status": "asset_fingerprint_mismatch",
+            "manifest_url": manifest_url,
+            "expected_fingerprint": expected.get("fingerprint"),
+            "actual_fingerprint": actual.get("fingerprint"),
+        }
+
+    failed_assets = []
+    for asset in expected_assets if isinstance(expected_assets, list) else []:
+        if not isinstance(asset, dict):
+            continue
+        asset_path = str(asset.get("url") or "")
+        if not asset_path:
+            continue
+        asset_status = asset_url_status(f"{root_url}{asset_path}", timeout=timeout)
+        if asset_status != "200":
+            failed_assets.append({"url": asset_path, "status": asset_status})
+    if failed_assets:
+        return {
+            "healthy": False,
+            "status": f"asset_url_unavailable:{failed_assets[0]['status']}",
+            "manifest_url": manifest_url,
+            "expected_fingerprint": expected.get("fingerprint"),
+            "actual_fingerprint": actual.get("fingerprint"),
+            "failed_assets": failed_assets,
+        }
+    return {
+        "healthy": True,
+        "status": "ok",
+        "manifest_url": manifest_url,
+        "asset_count": expected.get("asset_count"),
+        "fingerprint": expected.get("fingerprint"),
+    }
 
 
 def port_accepts_connection(host: str, port: int) -> bool:
@@ -573,22 +687,33 @@ def command_start(args: argparse.Namespace) -> int:
         healthy, status = health(url)
         if not healthy:
             raise SystemExit(f"Recorded workbench server PID {pid} is alive but unhealthy: {status}")
-        if args.open:
-            open_with_playwright(
-                url,
-                paths,
-                args.channel,
-                args.viewport_size,
-                session=args.browser_session,
-                profile=args.profile,
-            )
-        if not command_quiet(args):
-            print(f"Artifact viewer already running: {url}")
-            print(f"pid={pid}")
-            print(f"health={status}")
-            print(f"annotation_state={url}api/annotation-state")
-            print(f"workbench_projection={url}api/workbench-projection")
-        return 0
+        asset_health = workbench_asset_health(url)
+        if not asset_health["healthy"]:
+            stop_status = stop_owned_pid(pid, paths)
+            if not command_quiet(args):
+                print(
+                    "Restarting artifact viewer because workbench assets are stale: "
+                    f"{asset_health['status']} ({stop_status} PID {pid})"
+                )
+            pid = None
+        else:
+            if args.open:
+                open_with_playwright(
+                    url,
+                    paths,
+                    args.channel,
+                    args.viewport_size,
+                    session=args.browser_session,
+                    profile=args.profile,
+                )
+            if not command_quiet(args):
+                print(f"Artifact viewer already running: {url}")
+                print(f"pid={pid}")
+                print(f"health={status}")
+                print(f"asset_health={asset_health['status']}")
+                print(f"annotation_state={url}api/annotation-state")
+                print(f"workbench_projection={url}api/workbench-projection")
+            return 0
 
     if pid is not None:
         remove_stale_state(paths)
@@ -679,12 +804,19 @@ def status_payload(args: argparse.Namespace, manifest_path: Path) -> dict[str, A
     alive = bool(pid is not None and pid_alive(pid))
     owned = bool(pid is not None and alive and is_owned_workbench_server(pid, manifest_path))
     healthy, health_status = health(url) if alive or port_accepts_connection(host, port) else (False, "not_listening")
+    asset_health = (
+        workbench_asset_health(url)
+        if owned and healthy
+        else {"healthy": False, "status": "not_checked"}
+    )
     return {
         "url": url,
         "pid": pid,
         "alive": alive,
         "owned": owned,
         "health": health_status if healthy else f"unhealthy:{health_status}",
+        "asset_health": asset_health,
+        "asset_manifest_url": f"{url.rstrip('/')}{WORKBENCH_ASSET_MANIFEST_PATH}",
         "manifest": str(manifest_path.relative_to(REPO_ROOT)),
         "log": str(paths["log"].relative_to(REPO_ROOT)),
         "annotation_state_url": f"{url.rstrip('/')}/api/annotation-state",
@@ -715,17 +847,11 @@ def command_stop(args: argparse.Namespace) -> int:
     if not is_owned_workbench_server(pid, manifest_path):
         raise SystemExit(f"Refusing to stop non-workbench-server PID {pid}")
 
-    os.kill(pid, signal.SIGTERM)
-    deadline = time.time() + 5.0
-    while time.time() < deadline:
-        if not pid_alive(pid):
-            remove_stale_state(paths)
-            print(f"Stopped artifact viewer PID {pid}")
-            return 0
-        time.sleep(0.1)
-    os.kill(pid, signal.SIGKILL)
-    remove_stale_state(paths)
-    print(f"Killed unresponsive artifact viewer PID {pid}")
+    stop_status = stop_owned_pid(pid, paths)
+    if stop_status == "stopped":
+        print(f"Stopped artifact viewer PID {pid}")
+    else:
+        print(f"Killed unresponsive artifact viewer PID {pid}")
     return 0
 
 
@@ -767,7 +893,12 @@ def command_surface(args: argparse.Namespace) -> int:
     manifest_path = safe_manifest_path(args.manifest)
     paths = paths_for(manifest_path)
     payload = status_payload(args, manifest_path)
-    if not payload["alive"] or not payload["owned"] or payload["health"] != "200":
+    if (
+        not payload["alive"]
+        or not payload["owned"]
+        or payload["health"] != "200"
+        or not payload.get("asset_health", {}).get("healthy")
+    ):
         start_args = argparse.Namespace(
             manifest=manifest_path,
             host=args.host,
@@ -782,6 +913,8 @@ def command_surface(args: argparse.Namespace) -> int:
         payload = status_payload(args, manifest_path)
         if not payload["alive"] or not payload["owned"] or payload["health"] != "200":
             raise SystemExit("Artifact workbench failed to reach healthy managed state")
+        if not payload.get("asset_health", {}).get("healthy"):
+            raise SystemExit("Artifact workbench assets failed to reach healthy managed state")
 
     state = read_annotation_state(payload["annotation_state_url"])
     result: dict[str, Any] = {
@@ -791,6 +924,7 @@ def command_surface(args: argparse.Namespace) -> int:
         "server": {
             "pid": payload["pid"],
             "health": payload["health"],
+            "asset_health": payload["asset_health"],
             "owned": payload["owned"],
             "log": payload["log"],
         },

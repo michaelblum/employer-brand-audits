@@ -6,6 +6,7 @@ import io
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -229,6 +230,138 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertEqual(status["browser_type"], "chrome")
         self.assertTrue(status["persistent"])
         self.assertEqual(status["profile"], "chrome-profile/workbench")
+
+    def test_workbench_asset_health_fetches_manifest_and_registered_assets(self) -> None:
+        expected_manifest = gate.build_workbench_asset_manifest()
+        requested_urls: list[str] = []
+
+        class Response:
+            status = 200
+
+            def __init__(self, body: bytes = b"asset") -> None:
+                self.body = body
+
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return self.body
+
+        def fake_urlopen(request: object, timeout: float = 1.0) -> Response:
+            url = request.full_url if hasattr(request, "full_url") else str(request)
+            requested_urls.append(url)
+            if url == "http://127.0.0.1:8765/api/workbench-assets":
+                return Response(json.dumps(expected_manifest).encode("utf-8"))
+            if any(url == f"http://127.0.0.1:8765{asset['url']}" for asset in expected_manifest["assets"]):
+                return Response()
+            raise AssertionError(f"unexpected URL: {url}")
+
+        original_urlopen = gate.urllib.request.urlopen
+        try:
+            gate.urllib.request.urlopen = fake_urlopen  # type: ignore[assignment]
+
+            asset_health = gate.workbench_asset_health("http://127.0.0.1:8765/")
+        finally:
+            gate.urllib.request.urlopen = original_urlopen  # type: ignore[assignment]
+
+        self.assertTrue(asset_health["healthy"])
+        self.assertEqual(asset_health["status"], "ok")
+        self.assertIn("http://127.0.0.1:8765/api/workbench-assets", requested_urls)
+        self.assertIn("http://127.0.0.1:8765/assets/workflow-artifact-workbench.js", requested_urls)
+
+    def test_workbench_asset_health_rejects_missing_manifest_endpoint(self) -> None:
+        def fake_urlopen(request: object, timeout: float = 1.0) -> object:
+            url = request.full_url if hasattr(request, "full_url") else str(request)
+            raise urllib.error.HTTPError(url, 404, "not found", None, None)
+
+        original_urlopen = gate.urllib.request.urlopen
+        try:
+            gate.urllib.request.urlopen = fake_urlopen  # type: ignore[assignment]
+
+            asset_health = gate.workbench_asset_health("http://127.0.0.1:8765/")
+        finally:
+            gate.urllib.request.urlopen = original_urlopen  # type: ignore[assignment]
+
+        self.assertFalse(asset_health["healthy"])
+        self.assertEqual(asset_health["status"], "asset_manifest_unavailable:404")
+
+    def test_surface_restarts_owned_server_when_asset_health_is_stale(self) -> None:
+        manifest = REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"
+        payloads = [
+            {
+                "url": "http://127.0.0.1:8765/",
+                "pid": 123,
+                "alive": True,
+                "owned": True,
+                "health": "200",
+                "asset_health": {"healthy": False, "status": "asset_fingerprint_mismatch"},
+                "manifest": "artifacts/easy-audit/latest/manifest.json",
+                "log": "artifacts/easy-audit/latest/workbench-server.log",
+                "annotation_state_url": "http://127.0.0.1:8765/api/annotation-state",
+                "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
+                "browser_session": {"session": "eba-workbench", "alive": True},
+            },
+            {
+                "url": "http://127.0.0.1:8765/",
+                "pid": 456,
+                "alive": True,
+                "owned": True,
+                "health": "200",
+                "asset_health": {"healthy": True, "status": "ok"},
+                "manifest": "artifacts/easy-audit/latest/manifest.json",
+                "log": "artifacts/easy-audit/latest/workbench-server.log",
+                "annotation_state_url": "http://127.0.0.1:8765/api/annotation-state",
+                "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
+                "browser_session": {"session": "eba-workbench", "alive": True},
+            },
+        ]
+        start_calls: list[object] = []
+
+        def fake_status(args: object, manifest_path: Path) -> dict[str, object]:
+            self.assertEqual(manifest_path, manifest)
+            return payloads.pop(0)
+
+        def fake_start(args: object) -> int:
+            start_calls.append(args)
+            return 0
+
+        original_status_payload = gate.status_payload
+        original_command_start = gate.command_start
+        original_read_annotation_state = gate.read_annotation_state
+        try:
+            gate.status_payload = fake_status  # type: ignore[assignment]
+            gate.command_start = fake_start  # type: ignore[assignment]
+            gate.read_annotation_state = lambda url: {  # type: ignore[assignment]
+                "collection": {"artifacts": []},
+                "annotations": {},
+                "updated_at_epoch": 1,
+            }
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = gate.command_surface(
+                    type(
+                        "Args",
+                        (),
+                        {
+                            "manifest": manifest,
+                            "host": "127.0.0.1",
+                            "port": 8765,
+                            "timeout": 10.0,
+                            "no_browser": True,
+                            "json": False,
+                        },
+                    )()
+                )
+        finally:
+            gate.status_payload = original_status_payload  # type: ignore[assignment]
+            gate.command_start = original_command_start  # type: ignore[assignment]
+            gate.read_annotation_state = original_read_annotation_state  # type: ignore[assignment]
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(start_calls), 1)
 
     def test_eba_workbench_control_commands_are_authorized_and_stable(self) -> None:
         from scripts.eba_cli import workbench_browser_command
