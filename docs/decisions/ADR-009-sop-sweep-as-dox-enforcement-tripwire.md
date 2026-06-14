@@ -94,6 +94,11 @@ The durable backstop is CI plus human review of diffs to
 control-plane pinning tests, on PRs from a checked-out ref that the in-turn agent
 is not editing and rerunning as its own authority.
 
+This backstop is only binding while branch protection on the default branch
+requires the `eba-validate` status check and applies to administrators with no
+bypass. Without that repository setting, a failing gate is advisory, not
+blocking; the in-repo machinery cannot enforce its own merge-time authority.
+
 ## Staging And Trigger
 
 Tier 1 is intentionally deferred to a follow-up PR. That work includes:
