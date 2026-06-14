@@ -184,9 +184,12 @@
       }
       if (app.activeMarker) {
         const note = annotationById(app.activeMarker.artifactId, app.activeMarker.annotationId);
-        if (note && artifact().id === app.activeMarker.artifactId) {
-          placeMarkerForAnchor(note.anchor);
-        }
+        const markerAnchor = interactionOverlay().mooredActiveMarkerAnchor({
+          activeMarker: app.activeMarker,
+          note,
+          currentArtifactId: artifact().id,
+        });
+        if (markerAnchor) placeMarkerForAnchor(markerAnchor);
       }
     }
 
@@ -718,19 +721,26 @@
 
     function showAnnotationMarker(artifactId, annotationId) {
       const note = annotationById(artifactId, annotationId);
-      if (!note) return;
-      app.activeMarker = { artifactId, annotationId };
       const index = artifactIndexById(artifactId);
-      if (index !== app.index) {
-        setArtifact(index);
-        app.activeMarker = { artifactId, annotationId };
+      const target = interactionOverlay().annotationOverlayTarget({
+        artifactId,
+        annotationId,
+        artifactIndex: index,
+        currentIndex: app.index,
+        note,
+      });
+      if (!target) return;
+      app.activeMarker = target.activeMarker;
+      if (target.requiresArtifactSwitch) {
+        setArtifact(target.artifactIndex);
+        app.activeMarker = target.activeMarker;
         window.requestAnimationFrame(() => {
-          if (isImageArtifact()) afterImageReady(() => placeMarkerForAnchor(note.anchor));
-          else placeMarkerForAnchor(note.anchor);
+          if (isImageArtifact()) afterImageReady(() => placeMarkerForAnchor(target.note.anchor));
+          else placeMarkerForAnchor(target.note.anchor);
         });
         return;
       }
-      placeMarkerForAnchor(note.anchor);
+      placeMarkerForAnchor(target.note.anchor);
     }
 
     function naturalRect(displayRect) {
@@ -774,13 +784,22 @@
     }
 
     function openExistingEditor(note) {
-      Object.assign(app, interactionOverlay().editEditorSession({ note }));
-      $("comment-text").value = note.comment;
-      setCommentActionLabels("edit");
-      const anchor = note.anchor;
-      if (anchor?.type === "image_region" && anchor.rect) {
+      const plan = interactionOverlay().existingOverlayEditorPlan({
+        note,
+        markdownMode: app.markdownMode,
+      });
+      if (!plan) return;
+      Object.assign(app, {
+        editorMode: plan.editorMode,
+        editing: plan.editing,
+        pendingAnchor: plan.pendingAnchor,
+      });
+      $("comment-text").value = plan.comment;
+      setCommentActionLabels(plan.actionMode);
+      const anchor = plan.anchor;
+      if (plan.placement?.type === "image_region") {
         afterImageReady(() => {
-          scrollRectIntoView(anchor.rect);
+          scrollRectIntoView(plan.placement.rect);
           window.requestAnimationFrame(() => {
             placeSelectionForAnchor(anchor);
             placePopoverForAnchor(anchor);
@@ -788,8 +807,8 @@
         });
         return;
       }
-      if (anchor?.type === "text_range") {
-        if (app.markdownMode !== "preview") {
+      if (plan.placement?.type === "text_range") {
+        if (plan.placement.ensurePreview) {
           app.markdownMode = "preview";
           renderMarkdownBody(artifact());
         }
@@ -816,14 +835,21 @@
     function selectAnnotation(artifactId, annotationId) {
       const index = artifactIndexById(artifactId);
       const note = annotationById(artifactId, annotationId);
-      if (index < 0 || !note) return;
-      if (index !== app.index) {
-        app.index = index;
+      const target = interactionOverlay().annotationOverlayTarget({
+        artifactId,
+        annotationId,
+        artifactIndex: index,
+        currentIndex: app.index,
+        note,
+      });
+      if (!target) return;
+      if (target.requiresArtifactSwitch) {
+        app.index = target.artifactIndex;
         render();
-        window.requestAnimationFrame(() => openExistingEditor(note));
+        window.requestAnimationFrame(() => openExistingEditor(target.note));
         return;
       }
-      openExistingEditor(note);
+      openExistingEditor(target.note);
     }
 
     function startDrag(event) {
@@ -915,57 +941,32 @@
       openCreateEditor(displayRect);
     }
 
+    async function applyOverlayEditorIntent(intent) {
+      if (!intent) return;
+      app.annotations = intent.annotations;
+      if (intent.closeEditor) closeEditor();
+      if (intent.syncAnnotations) await syncAnnotations();
+      if (intent.renderSidebar) renderSidebar();
+      if (intent.toast) showToast(intent.toast);
+    }
+
     async function commitEditor() {
-      const comment = $("comment-text").value;
-      if (interactionOverlay().isBlankComment(comment)) return;
-      if (app.editorMode === "edit" && app.editing) {
-        app.annotations = interactionOverlay().updateAnnotation({
-          annotations: app.annotations,
-          artifactId: app.editing.artifact_id,
-          noteId: app.editing.id,
-          comment,
-          nowEpoch: Math.floor(Date.now() / 1000),
-        });
-        closeEditor();
-        await syncAnnotations();
-        renderSidebar();
-        showToast("Comment updated");
-        return;
-      }
-      if (!app.pendingAnchor) return;
-      const item = artifact();
-      const note = interactionOverlay().newAnnotation({
-        artifact: item,
-        anchor: app.pendingAnchor,
-        comment,
-      });
-      app.annotations = interactionOverlay().appendAnnotation({
+      await applyOverlayEditorIntent(interactionOverlay().commitOverlayEditorIntent({
         annotations: app.annotations,
-        artifactId: item.id,
-        note,
-      });
-      closeEditor();
-      await syncAnnotations();
-      renderSidebar();
-      showToast("Comment added");
+        artifact: artifact(),
+        editorMode: app.editorMode,
+        editing: app.editing,
+        pendingAnchor: app.pendingAnchor,
+        comment: $("comment-text").value,
+      }));
     }
 
     async function secondaryEditorAction() {
-      if (app.editorMode === "edit" && app.editing) {
-        const artifactId = app.editing.artifact_id;
-        const noteId = app.editing.id;
-        app.annotations = interactionOverlay().deleteAnnotation({
-          annotations: app.annotations,
-          artifactId,
-          noteId,
-        });
-        closeEditor();
-        await syncAnnotations();
-        renderSidebar();
-        showToast("Comment deleted");
-        return;
-      }
-      closeEditor();
+      await applyOverlayEditorIntent(interactionOverlay().secondaryOverlayEditorIntent({
+        annotations: app.annotations,
+        editorMode: app.editorMode,
+        editing: app.editing,
+      }));
     }
 
     function insertTextAtCursor(input, value) {

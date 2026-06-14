@@ -135,19 +135,157 @@
     return null;
   }
 
+  function annotationOverlayTarget({
+    artifactId,
+    annotationId,
+    artifactIndex,
+    currentIndex,
+    note,
+  } = {}) {
+    if (artifactIndex < 0 || !note) return null;
+    return {
+      subtype: "annotation",
+      artifactId,
+      annotationId,
+      artifactIndex,
+      note,
+      activeMarker: { artifactId, annotationId },
+      requiresArtifactSwitch: artifactIndex !== currentIndex,
+    };
+  }
+
+  function existingOverlayEditorPlan({ note, markdownMode } = {}) {
+    if (!note) return null;
+    const anchor = note.anchor;
+    let placement = null;
+    if (anchor?.type === "image_region" && anchor.rect) {
+      placement = { type: "image_region", rect: anchor.rect };
+    } else if (anchor?.type === "text_range") {
+      placement = { type: "text_range", ensurePreview: markdownMode !== "preview" };
+    }
+    return {
+      subtype: "annotation",
+      ...editEditorSession({ note }),
+      actionMode: "edit",
+      comment: note.comment || "",
+      anchor,
+      placement,
+    };
+  }
+
+  function mooredActiveMarkerAnchor({
+    activeMarker,
+    note,
+    currentArtifactId,
+  } = {}) {
+    if (!activeMarker || !note) return null;
+    if (currentArtifactId !== activeMarker.artifactId) return null;
+    return note.anchor || null;
+  }
+
+  function annotationEditorEffect({
+    action,
+    annotations,
+    note,
+    toast,
+    syncAnnotations = true,
+    renderSidebar = true,
+  } = {}) {
+    const effect = {
+      subtype: "annotation",
+      action,
+      annotations,
+      closeEditor: true,
+      syncAnnotations,
+      renderSidebar,
+      toast: toast || null,
+    };
+    if (note) effect.note = note;
+    return effect;
+  }
+
+  function commitOverlayEditorIntent({
+    annotations = {},
+    artifact,
+    editorMode,
+    editing,
+    pendingAnchor,
+    comment,
+    nowMs = Date.now(),
+  } = {}) {
+    const normalized = normalizeComment(comment);
+    if (!normalized) return null;
+    if (editorMode === "edit" && editing) {
+      return annotationEditorEffect({
+        action: "update",
+        annotations: updateAnnotation({
+          annotations,
+          artifactId: editing.artifact_id,
+          noteId: editing.id,
+          comment: normalized,
+          nowEpoch: epochFromMilliseconds(nowMs),
+        }),
+        toast: "Comment updated",
+      });
+    }
+    if (!artifact?.id || !pendingAnchor) return null;
+    const note = newAnnotation({
+      artifact,
+      anchor: pendingAnchor,
+      comment: normalized,
+      nowMs,
+    });
+    return annotationEditorEffect({
+      action: "append",
+      annotations: appendAnnotation({ annotations, artifactId: artifact.id, note }),
+      note,
+      toast: "Comment added",
+    });
+  }
+
+  function secondaryOverlayEditorIntent({
+    annotations = {},
+    editorMode,
+    editing,
+  } = {}) {
+    if (editorMode === "edit" && editing) {
+      return annotationEditorEffect({
+        action: "delete",
+        annotations: deleteAnnotation({
+          annotations,
+          artifactId: editing.artifact_id,
+          noteId: editing.id,
+        }),
+        toast: "Comment deleted",
+      });
+    }
+    return annotationEditorEffect({
+      action: "cancel",
+      annotations,
+      toast: null,
+      syncAnnotations: false,
+      renderSidebar: false,
+    });
+  }
+
   ROOT.interactionOverlay = {
+    annotationOverlayTarget,
     appendAnnotation,
     closedEditorSession,
+    commitOverlayEditorIntent,
     createEditorSession,
     deleteAnnotation,
     displayRectForAnchor,
     editEditorSession,
     editorLabels,
+    existingOverlayEditorPlan,
     isBlankComment,
+    mooredActiveMarkerAnchor,
     mooredEditorAnchor,
     newAnnotation,
     normalizeComment,
     placeOverlayBox,
+    secondaryOverlayEditorIntent,
     updateAnnotation,
   };
 }());

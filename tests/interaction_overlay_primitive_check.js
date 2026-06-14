@@ -18,6 +18,11 @@ assert.equal(typeof overlay.createEditorSession, "function");
 assert.equal(typeof overlay.editEditorSession, "function");
 assert.equal(typeof overlay.closedEditorSession, "function");
 assert.equal(typeof overlay.mooredEditorAnchor, "function");
+assert.equal(typeof overlay.annotationOverlayTarget, "function");
+assert.equal(typeof overlay.existingOverlayEditorPlan, "function");
+assert.equal(typeof overlay.mooredActiveMarkerAnchor, "function");
+assert.equal(typeof overlay.commitOverlayEditorIntent, "function");
+assert.equal(typeof overlay.secondaryOverlayEditorIntent, "function");
 
 assert.deepEqual(overlay.editorLabels({ subtype: "annotation", mode: "create" }), {
   primary: "Add Comment",
@@ -195,4 +200,273 @@ assert.equal(
     popoverHidden: false,
   }),
   null,
+);
+
+assert.equal(
+  overlay.annotationOverlayTarget({
+    artifactId: "hero",
+    annotationId: "missing",
+    artifactIndex: 1,
+    currentIndex: 1,
+    note: null,
+  }),
+  null,
+);
+assert.equal(
+  overlay.annotationOverlayTarget({
+    artifactId: "missing-artifact",
+    annotationId: "note-1",
+    artifactIndex: -1,
+    currentIndex: 1,
+    note: editingNote,
+  }),
+  null,
+);
+
+assert.deepEqual(
+  overlay.annotationOverlayTarget({
+    artifactId: "hero",
+    annotationId: "note-1",
+    artifactIndex: 1,
+    currentIndex: 1,
+    note: editingNote,
+  }),
+  {
+    subtype: "annotation",
+    artifactId: "hero",
+    annotationId: "note-1",
+    artifactIndex: 1,
+    note: editingNote,
+    activeMarker: { artifactId: "hero", annotationId: "note-1" },
+    requiresArtifactSwitch: false,
+  },
+);
+
+assert.deepEqual(
+  overlay.annotationOverlayTarget({
+    artifactId: "hero",
+    annotationId: "note-1",
+    artifactIndex: 2,
+    currentIndex: 1,
+    note: editingNote,
+  }),
+  {
+    subtype: "annotation",
+    artifactId: "hero",
+    annotationId: "note-1",
+    artifactIndex: 2,
+    note: editingNote,
+    activeMarker: { artifactId: "hero", annotationId: "note-1" },
+    requiresArtifactSwitch: true,
+  },
+);
+
+assert.equal(overlay.existingOverlayEditorPlan({ note: null }), null);
+
+const imageNote = { id: "note-2", anchor, comment: "Crop this" };
+assert.deepEqual(
+  overlay.existingOverlayEditorPlan({
+    note: imageNote,
+    markdownMode: "source",
+  }),
+  {
+    subtype: "annotation",
+    editorMode: "edit",
+    editing: imageNote,
+    pendingAnchor: null,
+    actionMode: "edit",
+    comment: "Crop this",
+    anchor,
+    placement: {
+      type: "image_region",
+      rect: anchor.rect,
+    },
+  },
+);
+
+assert.deepEqual(
+  overlay.existingOverlayEditorPlan({
+    note: editingNote,
+    markdownMode: "source",
+  }),
+  {
+    subtype: "annotation",
+    editorMode: "edit",
+    editing: editingNote,
+    pendingAnchor: null,
+    actionMode: "edit",
+    comment: "Review this",
+    anchor: textAnchor,
+    placement: {
+      type: "text_range",
+      ensurePreview: true,
+    },
+  },
+);
+
+assert.deepEqual(
+  overlay.existingOverlayEditorPlan({
+    note: editingNote,
+    markdownMode: "preview",
+  }).placement,
+  {
+    type: "text_range",
+    ensurePreview: false,
+  },
+);
+
+const unknownAnchorNote = {
+  id: "note-3",
+  anchor: { type: "unknown" },
+  comment: "Unknown",
+};
+assert.equal(
+  overlay.existingOverlayEditorPlan({
+    note: unknownAnchorNote,
+    markdownMode: "preview",
+  }).placement,
+  null,
+);
+
+assert.equal(
+  overlay.mooredActiveMarkerAnchor({
+    activeMarker: null,
+    note: editingNote,
+    currentArtifactId: "hero",
+  }),
+  null,
+);
+assert.equal(
+  overlay.mooredActiveMarkerAnchor({
+    activeMarker: { artifactId: "hero", annotationId: "note-1" },
+    note: null,
+    currentArtifactId: "hero",
+  }),
+  null,
+);
+assert.equal(
+  overlay.mooredActiveMarkerAnchor({
+    activeMarker: { artifactId: "hero", annotationId: "note-1" },
+    note: editingNote,
+    currentArtifactId: "other",
+  }),
+  null,
+);
+assert.equal(
+  overlay.mooredActiveMarkerAnchor({
+    activeMarker: { artifactId: "hero", annotationId: "note-1" },
+    note: editingNote,
+    currentArtifactId: "hero",
+  }),
+  textAnchor,
+);
+
+const persistedNote = {
+  id: "hero-note-1",
+  artifact_id: "hero",
+  kind: "comment",
+  anchor,
+  comment: "Needs work",
+  created_at_epoch: 10,
+  updated_at_epoch: null,
+};
+const persistedAnnotations = { hero: [persistedNote] };
+
+assert.equal(
+  overlay.commitOverlayEditorIntent({
+    annotations: persistedAnnotations,
+    artifact: { id: "hero" },
+    editorMode: "create",
+    editing: null,
+    pendingAnchor: anchor,
+    comment: "   ",
+    nowMs: 1781423000123,
+  }),
+  null,
+);
+assert.equal(
+  overlay.commitOverlayEditorIntent({
+    annotations: persistedAnnotations,
+    artifact: { id: "hero" },
+    editorMode: "create",
+    editing: null,
+    pendingAnchor: null,
+    comment: "New comment",
+    nowMs: 1781423000123,
+  }),
+  null,
+);
+
+const updateIntent = overlay.commitOverlayEditorIntent({
+  annotations: persistedAnnotations,
+  artifact: { id: "hero" },
+  editorMode: "edit",
+  editing: persistedNote,
+  pendingAnchor: null,
+  comment: "  Updated comment  ",
+  nowMs: 1781423000123,
+});
+assert.equal(updateIntent.subtype, "annotation");
+assert.equal(updateIntent.action, "update");
+assert.equal(updateIntent.toast, "Comment updated");
+assert.equal(updateIntent.closeEditor, true);
+assert.equal(updateIntent.syncAnnotations, true);
+assert.equal(updateIntent.renderSidebar, true);
+assert.equal(updateIntent.annotations.hero[0].comment, "Updated comment");
+assert.equal(updateIntent.annotations.hero[0].updated_at_epoch, 1781423000);
+assert.equal(persistedAnnotations.hero[0].comment, "Needs work");
+
+const appendIntent = overlay.commitOverlayEditorIntent({
+  annotations: persistedAnnotations,
+  artifact: { id: "hero" },
+  editorMode: "create",
+  editing: null,
+  pendingAnchor: textAnchor,
+  comment: "  New source note  ",
+  nowMs: 1781423000456,
+});
+assert.equal(appendIntent.subtype, "annotation");
+assert.equal(appendIntent.action, "append");
+assert.equal(appendIntent.toast, "Comment added");
+assert.equal(appendIntent.closeEditor, true);
+assert.equal(appendIntent.syncAnnotations, true);
+assert.equal(appendIntent.renderSidebar, true);
+assert.equal(appendIntent.note.id, `hero-${(1781423000456).toString(36)}`);
+assert.equal(appendIntent.note.comment, "New source note");
+assert.equal(appendIntent.note.anchor, textAnchor);
+assert.deepEqual(
+  appendIntent.annotations.hero.map((note) => note.id),
+  ["hero-note-1", appendIntent.note.id],
+);
+assert.equal(persistedAnnotations.hero.length, 1);
+
+const deleteIntent = overlay.secondaryOverlayEditorIntent({
+  annotations: persistedAnnotations,
+  editorMode: "edit",
+  editing: persistedNote,
+});
+assert.equal(deleteIntent.subtype, "annotation");
+assert.equal(deleteIntent.action, "delete");
+assert.equal(deleteIntent.toast, "Comment deleted");
+assert.equal(deleteIntent.closeEditor, true);
+assert.equal(deleteIntent.syncAnnotations, true);
+assert.equal(deleteIntent.renderSidebar, true);
+assert.deepEqual(deleteIntent.annotations.hero, []);
+assert.equal(persistedAnnotations.hero.length, 1);
+
+assert.deepEqual(
+  overlay.secondaryOverlayEditorIntent({
+    annotations: persistedAnnotations,
+    editorMode: "create",
+    editing: null,
+  }),
+  {
+    subtype: "annotation",
+    action: "cancel",
+    annotations: persistedAnnotations,
+    closeEditor: true,
+    syncAnnotations: false,
+    renderSidebar: false,
+    toast: null,
+  },
 );
