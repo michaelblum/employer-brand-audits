@@ -34,7 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MANIFEST = (
     REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
 )
-REVIEW_GATE = REPO_ROOT / "scripts" / "playwright_cli_review_gate.py"
+WORKBENCH_GATE = REPO_ROOT / "scripts" / "playwright_cli_workbench_gate.py"
 BROWSER_WRAPPER = REPO_ROOT / "scripts" / "playwright_cli_browser.py"
 WORKBENCH_BROWSER_SESSION = "eba-workbench"
 COMPILE_TARGETS = [
@@ -44,8 +44,9 @@ COMPILE_TARGETS = [
     "scripts/playwright_cli_public_page_matrix_smoke.py",
     "scripts/playwright_cli_public_page_smoke.py",
     "scripts/playwright_cli_capture_modes_smoke.py",
-    "scripts/playwright_cli_review_server.py",
-    "scripts/playwright_cli_review_gate.py",
+    "scripts/playwright_cli_finalize_approval.py",
+    "scripts/playwright_cli_workbench_server.py",
+    "scripts/playwright_cli_workbench_gate.py",
     "scripts/playwright_cli_browser.py",
     "scripts/workbench_projection.py",
     "scripts/workbench_projection_shape_check.py",
@@ -100,7 +101,7 @@ def workbench_status(manifest: Path) -> dict[str, Any] | None:
         return None
     result = run([
         sys.executable,
-        str(REVIEW_GATE),
+        str(WORKBENCH_GATE),
         "status",
         str(manifest),
         "--port",
@@ -132,10 +133,10 @@ def resolve_manifest(args: argparse.Namespace) -> Path:
     return manifest or DEFAULT_MANIFEST
 
 
-def review_gate_json(command: str, manifest: Path) -> dict[str, Any] | None:
+def workbench_gate_json(command: str, manifest: Path) -> dict[str, Any] | None:
     result = run([
         sys.executable,
-        str(REVIEW_GATE),
+        str(WORKBENCH_GATE),
         command,
         str(manifest),
         "--port",
@@ -153,12 +154,12 @@ def release_default_demo_server(target_manifest: Path) -> None:
     default_manifest = DEFAULT_MANIFEST.resolve()
     if target_manifest.resolve() == default_manifest or not default_manifest.exists():
         return
-    status = review_gate_json("status", default_manifest)
+    status = workbench_gate_json("status", default_manifest)
     if not status or not status.get("alive") or not status.get("owned") or status.get("health") != "200":
         return
     run([
         sys.executable,
-        str(REVIEW_GATE),
+        str(WORKBENCH_GATE),
         "stop",
         str(default_manifest),
     ])
@@ -231,6 +232,7 @@ def validation_commands() -> list[list[str]]:
         [sys.executable, "scripts/workbench_projection_shape_check.py"],
         ["node", "--check", "scripts/artifact_primitives/mermaid_renderer.js"],
         ["node", "--check", "scripts/artifact_primitives/markdown_renderer.js"],
+        ["node", "--check", "scripts/artifact_primitives/markdown_interactions.js"],
         ["node", "--check", "scripts/artifact_primitives/image_viewer.js"],
         ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
         ["node", "--check", "scripts/workflow_artifact_workbench/app.js"],
@@ -280,7 +282,7 @@ def command_demo(args: argparse.Namespace) -> int:
     release_default_demo_server(manifest)
     command = [
         sys.executable,
-        str(REVIEW_GATE),
+        str(WORKBENCH_GATE),
         "surface",
         str(manifest),
         "--port",
@@ -308,9 +310,9 @@ def command_demo(args: argparse.Namespace) -> int:
             print("3. Open the final report and confirm the Mermaid diagram renders from markdown.")
             print("4. Open the JSON/text artifacts and confirm they render as inspectable document views.")
         else:
-            print("1. Review the workflow header in the right sidebar.")
+            print("1. Inspect the workflow header in the right sidebar.")
             print("2. Toggle page and slot filter chips; previous/next should follow the filtered set.")
-            print("3. Open a Review Summary artifact and confirm markdown edit/annotation still works.")
+            print("3. Open a markdown summary artifact and confirm edit/annotation still works.")
             print("4. Inspect tall/full-page captures; viewer zoom should fit without mutating image bytes.")
     return 0
 

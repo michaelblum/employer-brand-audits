@@ -527,7 +527,7 @@ def build_manifest(output_dir: Path) -> dict[str, Any]:
                 "id": "l4-report",
                 "layer": 4,
                 "name": "L4 report",
-                "description": "Render the reviewable audit report with provenance map.",
+                "description": "Render the workbench-visible audit report with provenance map.",
                 "status": "complete",
                 "started_at": "2026-06-13T01:07:00Z",
                 "completed_at": "2026-06-13T01:09:00Z",

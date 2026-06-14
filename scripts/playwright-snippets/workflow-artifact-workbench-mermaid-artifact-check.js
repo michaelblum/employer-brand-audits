@@ -28,7 +28,7 @@ async (page) => {
     return figure?.dataset.renderState === "complete"
       && figure.querySelector("[data-mermaid-target] svg")
       && figure.querySelector(".mermaid-source-line[data-source-line]");
-  }, { timeout: 5000 });
+  }, null, { timeout: 5000 });
   const validRenderCompleted = true;
 
   const mermaidLine = await page.evaluate(() => {
@@ -76,7 +76,7 @@ async (page) => {
   }, mermaidLine, { timeout: 5000 });
 
   await page.click("#markdown-source-mode");
-  await page.waitForFunction(() => !document.querySelector("#markdown-source")?.hidden, { timeout: 3000 });
+  await page.waitForFunction(() => !document.querySelector("#markdown-source")?.hidden, null, { timeout: 3000 });
   await page.click("#markdown-preview-mode");
   await page.waitForFunction((line) => {
     const figure = document.querySelector("[data-artifact-renderer='mermaid']");
@@ -100,7 +100,7 @@ async (page) => {
     return figure?.dataset.renderState === "error"
       && /Mermaid render error/.test(figure.querySelector("[data-mermaid-status]")?.textContent || "")
       && Boolean(figure.querySelector(".mermaid-source"));
-  }, { timeout: 5000 });
+  }, null, { timeout: 5000 });
 
   const result = await page.evaluate(({ sourceLineAnchorSurvivedModeSwitch, validRenderCompleted }) => {
     const figure = document.querySelector("[data-artifact-renderer='mermaid']");

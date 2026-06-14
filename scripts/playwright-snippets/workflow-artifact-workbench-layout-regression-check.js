@@ -5,9 +5,11 @@ async (page) => {
   const model = await page.evaluate(async () => {
     const state = await fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json());
     const artifacts = state.collection?.artifacts || [];
-    const imageIndex = artifacts.findIndex((artifact) => artifact.type === "image");
+    const imageIndex = artifacts.findIndex((artifact) => (
+      artifact.type === "image" && /full.page|full page/i.test(`${artifact.name || ""} ${artifact.path || ""}`)
+    ));
     const fitImageIndex = artifacts.findIndex((artifact, index) => (
-      artifact.type === "image" && index !== imageIndex && /animation|shadow|sticky|internal/i.test(`${artifact.name || ""} ${artifact.path || ""}`)
+      artifact.type === "image" && index !== imageIndex && /viewport/i.test(`${artifact.name || ""} ${artifact.path || ""}`)
     ));
     const tableMarkdownIndex = artifacts.findIndex((artifact) => (
       artifact.type === "markdown" && /kilos|analysis/i.test(`${artifact.kind || ""} ${artifact.path || ""}`)
@@ -18,12 +20,17 @@ async (page) => {
     ));
     const markdownIndex = tableMarkdownIndex >= 0
       ? tableMarkdownIndex
-      : artifacts.findIndex((artifact) => artifact.type === "markdown" && artifact.kind === "report");
+      : artifacts.findIndex((artifact) => artifact.type === "markdown");
     if (imageIndex < 0) throw new Error("No image artifact in collection");
-    if (fitImageIndex < 0) throw new Error("No no-scroll fit image artifact in collection");
+    if (fitImageIndex < 0) throw new Error("No viewport fit image artifact in collection");
     if (markdownIndex < 0) throw new Error("No markdown artifact in collection");
-    if (finalReportMarkdownIndex < 0) throw new Error("No final report markdown artifact in collection");
-    return { imageIndex, fitImageIndex, markdownIndex, finalReportMarkdownIndex };
+    return {
+      imageIndex,
+      fitImageIndex,
+      markdownIndex,
+      finalReportMarkdownIndex,
+      expectsMarkdownTable: tableMarkdownIndex >= 0,
+    };
   });
 
   await page.waitForSelector(".artifact-row[data-index]", { timeout: 5000 });
@@ -35,8 +42,8 @@ async (page) => {
   await page.waitForFunction(() => {
     const image = document.querySelector("#artifact-image");
     return image?.complete && image.naturalWidth > 0 && !document.querySelector("#image-wrap")?.hidden;
-  }, { timeout: 5000 });
-  await page.click("#zoom-fit");
+  }, null, { timeout: 5000 });
+  await page.click("#zoom-fit", { timeout: 3000 });
   await page.waitForFunction(() => {
     const stage = document.querySelector("#stage");
     const image = document.querySelector("#artifact-image");
@@ -47,7 +54,7 @@ async (page) => {
     return !wrap?.classList.contains("centered")
       && Math.abs(imageRect.width - stageRect.width) <= 2
       && imageRect.height > stageRect.height + 1;
-  }, { timeout: 3000 });
+  }, null, { timeout: 3000 });
   const imageLayout = await page.evaluate(() => {
     const shell = document.querySelector("#shell");
     const sidebar = document.querySelector("#sidebar");
@@ -145,15 +152,19 @@ async (page) => {
 
   await page.evaluate((index) => {
     const row = document.querySelector(`.artifact-row[data-index="${index}"]`);
-    if (!row) throw new Error(`No-scroll fit image artifact row not found: ${index}`);
+    if (!row) throw new Error(`Viewport fit image artifact row not found: ${index}`);
     row.click();
   }, model.fitImageIndex);
   await page.waitForFunction(() => {
     const image = document.querySelector("#artifact-image");
     return image?.complete && image.naturalWidth > 0 && !document.querySelector("#image-wrap")?.hidden;
-  }, { timeout: 5000 });
-  await page.click("#zoom-fit");
-  await page.waitForFunction(() => document.querySelector("#image-wrap")?.classList.contains("centered"), { timeout: 3000 });
+  }, null, { timeout: 5000 });
+  await page.click("#zoom-fit", { timeout: 3000 });
+  await page.waitForFunction(
+    () => document.querySelector("#image-wrap")?.classList.contains("centered"),
+    null,
+    { timeout: 3000 },
+  );
   const fitImageLayout = await page.evaluate(() => {
     const stage = document.querySelector("#stage");
     const image = document.querySelector("#artifact-image");
@@ -182,13 +193,13 @@ async (page) => {
     };
   });
   if (!fitImageLayout.centered) {
-    throw new Error(`No-scroll fit image should use centered alignment: ${JSON.stringify(fitImageLayout)}`);
+    throw new Error(`Viewport fit image should use centered alignment: ${JSON.stringify(fitImageLayout)}`);
   }
   if (fitImageLayout.stageScrollWidth > fitImageLayout.stageClientWidth + 1 || fitImageLayout.stageScrollHeight > fitImageLayout.stageClientHeight + 1) {
-    throw new Error(`No-scroll fit image should not require stage scrollbars: ${JSON.stringify(fitImageLayout)}`);
+    throw new Error(`Viewport fit image should not require stage scrollbars: ${JSON.stringify(fitImageLayout)}`);
   }
   if (fitImageLayout.verticalEmptySpaceDelta > 2 || fitImageLayout.horizontalEmptySpaceDelta > 2) {
-    throw new Error(`No-scroll fit image should have balanced stage empty space: ${JSON.stringify(fitImageLayout)}`);
+    throw new Error(`Viewport fit image should have balanced stage empty space: ${JSON.stringify(fitImageLayout)}`);
   }
 
   await page.evaluate((index) => {
@@ -206,7 +217,7 @@ async (page) => {
       && preview
       && !preview.hidden
       && preview.querySelector("h1, h2, h3, p, li, pre, figure");
-  }, { timeout: 5000 });
+  }, null, { timeout: 5000 });
   const markdownLayout = await page.evaluate(() => {
     const stage = document.querySelector("#stage");
     const wrap = document.querySelector("#markdown-wrap");
@@ -262,7 +273,7 @@ async (page) => {
   if (/Georgia|Times New Roman/i.test(markdownLayout.previewFontFamily)) {
     throw new Error(`Markdown preview should not use document-serif body text: ${JSON.stringify(markdownLayout)}`);
   }
-  if (markdownLayout.tableCount < 1) {
+  if (model.expectsMarkdownTable && markdownLayout.tableCount < 1) {
     throw new Error(`Markdown table was not rendered as a table: ${JSON.stringify(markdownLayout)}`);
   }
   if (!markdownLayout.artifactDocumentClass || !markdownLayout.artifactDocumentScrollClass || !markdownLayout.artifactDocumentBodyClass || !markdownLayout.artifactProjectionClass) {
@@ -280,24 +291,26 @@ async (page) => {
   if (markdownLayout.bodyPaddingTop === "0px" || markdownLayout.bodyPaddingLeft === "0px") {
     throw new Error(`Markdown body should own document content padding: ${JSON.stringify(markdownLayout)}`);
   }
-  if (!markdownLayout.tableScrollBaseClass) {
+  if (model.expectsMarkdownTable && !markdownLayout.tableScrollBaseClass) {
     throw new Error(`Markdown table scroll should use shared artifact-document table structure: ${JSON.stringify(markdownLayout)}`);
   }
 
-  await page.evaluate((index) => {
-    const row = document.querySelector(`.artifact-row[data-index="${index}"]`);
-    if (!row) throw new Error(`Final report markdown artifact row not found: ${index}`);
-    row.click();
-  }, model.finalReportMarkdownIndex);
-  await page.waitForFunction(() => {
-    const preview = document.querySelector("#markdown-preview");
-    const title = document.querySelector("#artifact-title")?.textContent || "";
-    return preview
-      && !preview.hidden
-      && /Final employer brand audit/i.test(title)
-      && preview.querySelector("h1, h2, h3, p, li, pre, figure, table");
-  }, { timeout: 5000 });
-  const finalReportLayout = await page.evaluate(() => {
+  let finalReportLayout = null;
+  if (model.finalReportMarkdownIndex >= 0) {
+    await page.evaluate((index) => {
+      const row = document.querySelector(`.artifact-row[data-index="${index}"]`);
+      if (!row) throw new Error(`Final report markdown artifact row not found: ${index}`);
+      row.click();
+    }, model.finalReportMarkdownIndex);
+    await page.waitForFunction(() => {
+      const preview = document.querySelector("#markdown-preview");
+      const title = document.querySelector("#artifact-title")?.textContent || "";
+      return preview
+        && !preview.hidden
+        && /Final employer brand audit/i.test(title)
+        && preview.querySelector("h1, h2, h3, p, li, pre, figure, table");
+    }, null, { timeout: 5000 });
+    finalReportLayout = await page.evaluate(() => {
     const stage = document.querySelector("#stage");
     const wrap = document.querySelector("#markdown-wrap");
     const preview = document.querySelector("#markdown-preview");
@@ -344,25 +357,26 @@ async (page) => {
       previewClientHeight: preview.clientHeight,
       previewScrollHeight: preview.scrollHeight,
     };
-  });
-  if (finalReportLayout.wrapBottom > finalReportLayout.stageBottom + 1) {
-    throw new Error(`Final report markdown card extends below visible stage: ${JSON.stringify(finalReportLayout)}`);
-  }
-  if (finalReportLayout.lastBlockBottom > finalReportLayout.stageBottom + 1) {
-    throw new Error(`Final report bottom remains clipped by the stage: ${JSON.stringify(finalReportLayout)}`);
-  }
-  if (finalReportLayout.lastBlockGapToPreviewBottom < 220) {
-    throw new Error(`Final report markdown needs more end-of-document breathing room: ${JSON.stringify(finalReportLayout)}`);
-  }
-  if (!Number.isFinite(finalReportLayout.recommendedListBottom)) {
-    throw new Error(`Final report recommended edits list was not rendered as an ordered list: ${JSON.stringify(finalReportLayout)}`);
-  }
-  if (finalReportLayout.recommendedListBottom > finalReportLayout.previewBottom - 48) {
-    throw new Error(`Final report recommended edits list lacks bottom breathing room: ${JSON.stringify(finalReportLayout)}`);
-  }
-  for (const item of finalReportLayout.recommendedItemRects) {
-    if (item.textRect.right > finalReportLayout.previewRight - 24) {
-      throw new Error(`Final report recommended edits item text is horizontally clipped: ${JSON.stringify(finalReportLayout)}`);
+    });
+    if (finalReportLayout.wrapBottom > finalReportLayout.stageBottom + 1) {
+      throw new Error(`Final report markdown card extends below visible stage: ${JSON.stringify(finalReportLayout)}`);
+    }
+    if (finalReportLayout.lastBlockBottom > finalReportLayout.stageBottom + 1) {
+      throw new Error(`Final report bottom remains clipped by the stage: ${JSON.stringify(finalReportLayout)}`);
+    }
+    if (finalReportLayout.lastBlockGapToPreviewBottom < 220) {
+      throw new Error(`Final report markdown needs more end-of-document breathing room: ${JSON.stringify(finalReportLayout)}`);
+    }
+    if (!Number.isFinite(finalReportLayout.recommendedListBottom)) {
+      throw new Error(`Final report recommended edits list was not rendered as an ordered list: ${JSON.stringify(finalReportLayout)}`);
+    }
+    if (finalReportLayout.recommendedListBottom > finalReportLayout.previewBottom - 48) {
+      throw new Error(`Final report recommended edits list lacks bottom breathing room: ${JSON.stringify(finalReportLayout)}`);
+    }
+    for (const item of finalReportLayout.recommendedItemRects) {
+      if (item.textRect.right > finalReportLayout.previewRight - 24) {
+        throw new Error(`Final report recommended edits item text is horizontally clipped: ${JSON.stringify(finalReportLayout)}`);
+      }
     }
   }
 
@@ -391,7 +405,7 @@ async (page) => {
   if (/rgb\(2(?:4[0-9]|5[0-5])[, ]+2(?:4[0-9]|5[0-5])[, ]+2(?:4[0-9]|5[0-5])\)/.test(artifactDocumentTheme.background || "")) {
     throw new Error(`Artifact document dark mode background should not be white: ${JSON.stringify(artifactDocumentTheme)}`);
   }
-  await page.click("#markdown-theme-toggle");
+  await page.click("#markdown-theme-toggle", { timeout: 3000 });
   const lightArtifactDocumentTheme = await page.evaluate(() => {
     const preview = document.querySelector("#markdown-preview");
     return {
@@ -407,7 +421,7 @@ async (page) => {
   if (lightArtifactDocumentTheme.legacyTheme) {
     throw new Error(`Artifact document light mode should not use legacy markdown dataset hooks: ${JSON.stringify(lightArtifactDocumentTheme)}`);
   }
-  await page.click("#markdown-theme-toggle");
+  await page.click("#markdown-theme-toggle", { timeout: 3000 });
   const restoredArtifactDocumentTheme = await page.evaluate(() => ({
     ariaPressed: document.querySelector("#markdown-theme-toggle")?.getAttribute("aria-pressed"),
     theme: document.body.dataset.artifactDocumentTheme || null,

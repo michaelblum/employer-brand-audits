@@ -22,13 +22,13 @@ DEFAULT_PORT = 8765
 DEFAULT_MANIFEST = (
     REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
 )
-SERVER_SCRIPT = REPO_ROOT / "scripts" / "playwright_cli_review_server.py"
+SERVER_SCRIPT = REPO_ROOT / "scripts" / "playwright_cli_workbench_server.py"
 BROWSER_WRAPPER = REPO_ROOT / "scripts" / "playwright_cli_browser.py"
-PID_NAME = "review-server.pid"
-LOG_NAME = "review-server.log"
-STATE_NAME = "review-server-state.json"
-BROWSER_STATE_NAME = "review-browser-state.json"
-BROWSER_LOG_NAME = "review-browser.log"
+PID_NAME = "workbench-server.pid"
+LOG_NAME = "workbench-server.log"
+STATE_NAME = "workbench-server-state.json"
+BROWSER_STATE_NAME = "workbench-browser-state.json"
+BROWSER_LOG_NAME = "workbench-browser.log"
 DEFAULT_BROWSER_SESSION = "eba-workbench"
 DEFAULT_BROWSER_PROFILE = REPO_ROOT / "chrome-profile" / "workbench"
 
@@ -156,12 +156,12 @@ def process_command(pid: int) -> str:
     return completed.stdout.strip()
 
 
-def is_owned_review_server(pid: int, manifest_path: Path) -> bool:
+def is_owned_workbench_server(pid: int, manifest_path: Path) -> bool:
     command = process_command(pid)
     return (
         str(SERVER_SCRIPT) in command
         and str(manifest_path) in command
-        and "playwright_cli_review_server.py" in command
+        and "playwright_cli_workbench_server.py" in command
     )
 
 
@@ -568,11 +568,11 @@ def command_start(args: argparse.Namespace) -> int:
     pid = read_pid(paths["pid"])
 
     if pid is not None and pid_alive(pid):
-        if not is_owned_review_server(pid, manifest_path):
-            raise SystemExit(f"Refusing to manage non-review-server PID {pid}")
+        if not is_owned_workbench_server(pid, manifest_path):
+            raise SystemExit(f"Refusing to manage non-workbench-server PID {pid}")
         healthy, status = health(url)
         if not healthy:
-            raise SystemExit(f"Recorded review server PID {pid} is alive but unhealthy: {status}")
+            raise SystemExit(f"Recorded workbench server PID {pid} is alive but unhealthy: {status}")
         if args.open:
             open_with_playwright(
                 url,
@@ -677,7 +677,7 @@ def status_payload(args: argparse.Namespace, manifest_path: Path) -> dict[str, A
     port = int(state.get("port", getattr(args, "port", DEFAULT_PORT)))
     url = state.get("url", f"http://{host}:{port}/")
     alive = bool(pid is not None and pid_alive(pid))
-    owned = bool(pid is not None and alive and is_owned_review_server(pid, manifest_path))
+    owned = bool(pid is not None and alive and is_owned_workbench_server(pid, manifest_path))
     healthy, health_status = health(url) if alive or port_accepts_connection(host, port) else (False, "not_listening")
     return {
         "url": url,
@@ -712,8 +712,8 @@ def command_stop(args: argparse.Namespace) -> int:
         remove_stale_state(paths)
         print(f"Removed stale artifact viewer PID {pid}")
         return 0
-    if not is_owned_review_server(pid, manifest_path):
-        raise SystemExit(f"Refusing to stop non-review-server PID {pid}")
+    if not is_owned_workbench_server(pid, manifest_path):
+        raise SystemExit(f"Refusing to stop non-workbench-server PID {pid}")
 
     os.kill(pid, signal.SIGTERM)
     deadline = time.time() + 5.0

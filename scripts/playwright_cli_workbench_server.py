@@ -42,6 +42,10 @@ WORKBENCH_ASSETS = {
         ARTIFACT_PRIMITIVES_DIR / "markdown_renderer.js",
         "text/javascript",
     ),
+    "/assets/artifact-primitives/markdown_interactions.js": (
+        ARTIFACT_PRIMITIVES_DIR / "markdown_interactions.js",
+        "text/javascript",
+    ),
     "/assets/artifact-primitives/image_viewer.js": (
         ARTIFACT_PRIMITIVES_DIR / "image_viewer.js",
         "text/javascript",
@@ -77,7 +81,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--open",
         action="store_true",
-        help="Deprecated no-op; use scripts/playwright_cli_review_gate.py surface to open the managed browser session",
+        help="Deprecated no-op; use scripts/playwright_cli_workbench_gate.py surface to open the managed browser session",
     )
     return parser.parse_args()
 
@@ -109,7 +113,7 @@ def safe_artifact_path(relative_path: str, artifact_root: Path) -> Path | None:
     return candidate
 
 
-def reviewable_projected_artifact(artifact: dict[str, Any], artifact_root: Path) -> bool:
+def workbench_projected_artifact(artifact: dict[str, Any], artifact_root: Path) -> bool:
     artifact_type = artifact.get("type")
     if artifact_type not in {"image", "markdown", "json", "text", "log", "file"}:
         return False
@@ -144,7 +148,7 @@ def build_collection(manifest_path: Path, projection: dict[str, Any] | None = No
     artifacts = [
         collection_artifact(projected, artifact_root)
         for projected in projected_artifacts
-        if isinstance(projected, dict) and reviewable_projected_artifact(projected, artifact_root)
+        if isinstance(projected, dict) and workbench_projected_artifact(projected, artifact_root)
     ]
 
     return {
@@ -234,7 +238,7 @@ def clean_annotation_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-class ReviewServer(ThreadingHTTPServer):
+class WorkbenchServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], manifest_path: Path):
         self.manifest_path = manifest_path
         self.artifact_root = manifest_path.parent
@@ -245,7 +249,7 @@ class ReviewServer(ThreadingHTTPServer):
             item["id"]: [] for item in self.collection["artifacts"]
         }
         self.updated_at_epoch = int(time.time())
-        super().__init__(server_address, ReviewHandler)
+        super().__init__(server_address, WorkbenchHandler)
 
     def annotation_state(self) -> dict[str, Any]:
         return {
@@ -279,8 +283,8 @@ class ReviewServer(ThreadingHTTPServer):
         return artifact
 
 
-class ReviewHandler(BaseHTTPRequestHandler):
-    server: ReviewServer
+class WorkbenchHandler(BaseHTTPRequestHandler):
+    server: WorkbenchServer
 
     def log_message(self, format: str, *args: object) -> None:
         print("[artifact-viewer] " + format % args, file=sys.stderr)
@@ -382,7 +386,7 @@ class ReviewHandler(BaseHTTPRequestHandler):
 def main() -> int:
     args = parse_args()
     manifest_path = safe_manifest_path(args.manifest)
-    server = ReviewServer((args.host, args.port), manifest_path)
+    server = WorkbenchServer((args.host, args.port), manifest_path)
     host, port = server.server_address
     print(f"[artifact-viewer] serving {manifest_path}")
     print(f"[artifact-viewer] open http://{host}:{port}/")
@@ -391,7 +395,7 @@ def main() -> int:
     if args.open:
         print(
             "[artifact-viewer] --open is a no-op; use "
-            "scripts/playwright_cli_review_gate.py surface for the managed eba-workbench browser session.",
+            "scripts/playwright_cli_workbench_gate.py surface for the managed eba-workbench browser session.",
             file=sys.stderr,
         )
     try:

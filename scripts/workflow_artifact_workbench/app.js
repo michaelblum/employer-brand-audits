@@ -3,9 +3,6 @@
       maxZoomInPercent: 400,
       actualSizePercent: 100,
     };
-    const ARTIFACT_DOCUMENT_THEME_STORAGE_KEY = "eba.workflowArtifactWorkbench.artifactDocumentTheme";
-    const LEGACY_MARKDOWN_THEME_STORAGE_KEY = "eba.workflowArtifactWorkbench.markdownTheme";
-
     const app = {
       collection: null,
       annotations: {},
@@ -24,7 +21,6 @@
       markdownDirty: {},
       documentContent: {},
       artifactDocumentTheme: "dark",
-      hoverMarkerTimers: [],
       workbenchProjection: null,
       projectedArtifactsById: {},
       projectedStepsById: {},
@@ -365,57 +361,29 @@
     }
 
     function storedArtifactDocumentTheme() {
-      try {
-        const stored = window.localStorage.getItem(ARTIFACT_DOCUMENT_THEME_STORAGE_KEY)
-          || window.localStorage.getItem(LEGACY_MARKDOWN_THEME_STORAGE_KEY);
-        return stored === "light" ? "light" : "dark";
-      } catch (_error) {
-        return "dark";
-      }
-    }
-
-    function syncArtifactDocumentThemeButton() {
-      const button = $("markdown-theme-toggle");
-      if (!button) return;
-      const isDark = app.artifactDocumentTheme === "dark";
-      button.classList.toggle("active", isDark);
-      button.setAttribute("aria-pressed", String(isDark));
-      button.setAttribute("aria-label", isDark ? "Use light markdown theme" : "Use dark markdown theme");
-      button.title = isDark ? "Use light markdown theme" : "Use dark markdown theme";
+      return window.ArtifactPrimitives.markdownInteractions.storedTheme();
     }
 
     function setArtifactDocumentTheme(theme) {
-      app.artifactDocumentTheme = theme === "light" ? "light" : "dark";
-      document.body.dataset.artifactDocumentTheme = app.artifactDocumentTheme;
-      try {
-        window.localStorage.setItem(ARTIFACT_DOCUMENT_THEME_STORAGE_KEY, app.artifactDocumentTheme);
-        window.localStorage.removeItem(LEGACY_MARKDOWN_THEME_STORAGE_KEY);
-      } catch (_error) {
-        // Local storage can be unavailable in constrained browser profiles.
-      }
-      syncArtifactDocumentThemeButton();
-    }
-
-    function syncMarkdownModeButtons() {
-      for (const button of document.querySelectorAll("[data-markdown-mode]")) {
-        const active = button.dataset.markdownMode === app.markdownMode;
-        button.classList.toggle("active", active);
-        button.setAttribute("aria-pressed", String(active));
-      }
-      syncArtifactDocumentThemeButton();
+      app.artifactDocumentTheme = window.ArtifactPrimitives.markdownInteractions.setTheme({
+        theme,
+        buttonEl: $("markdown-theme-toggle"),
+      });
     }
 
     function renderMarkdownBody(item) {
       const content = app.markdownContent[item.id] || "";
-      markdownPreviewBody().innerHTML = window.ArtifactPrimitives.markdown.renderMarkdown(content);
-      if (window.ArtifactPrimitives?.mermaid && app.markdownMode === "preview") {
-        void window.ArtifactPrimitives.mermaid.upgradeMermaidBlocks(markdownPreviewBody());
-      }
-      $("markdown-source").value = content;
-      $("markdown-preview").hidden = app.markdownMode !== "preview";
-      $("markdown-source").hidden = app.markdownMode !== "source";
-      $("markdown-save").disabled = !app.markdownDirty[item.id];
-      syncMarkdownModeButtons();
+      window.ArtifactPrimitives.markdownInteractions.renderMarkdownBody({
+        content,
+        mode: app.markdownMode,
+        dirty: app.markdownDirty[item.id],
+        previewBodyEl: markdownPreviewBody(),
+        sourceEl: $("markdown-source"),
+        previewEl: $("markdown-preview"),
+        saveButtonEl: $("markdown-save"),
+        themeButtonEl: $("markdown-theme-toggle"),
+        theme: app.artifactDocumentTheme,
+      });
       updateDimensionReadout();
       renderMarkdownHighlights();
     }
@@ -426,12 +394,18 @@
       for (const note of artifactAnnotations(artifact().id)) {
         const anchor = textRangeAnchor(note);
         if (!anchor) continue;
-        for (const node of markdownLineElementsForRange(anchor)) {
+        for (const node of window.ArtifactPrimitives.markdownInteractions.lineElementsForRange({
+          anchor,
+          rootEl: markdownPreviewBody(),
+        })) {
           node.classList.add("line-hit");
         }
       }
       if (app.pendingAnchor?.type === "text_range") {
-        for (const node of markdownLineElementsForRange(app.pendingAnchor)) {
+        for (const node of window.ArtifactPrimitives.markdownInteractions.lineElementsForRange({
+          anchor: app.pendingAnchor,
+          rootEl: markdownPreviewBody(),
+        })) {
           node.classList.add("line-hit");
         }
       }
@@ -627,7 +601,7 @@
       if (!workflow) {
         return "";
       }
-      const reviewableProjectionCount = app.collection.artifacts
+      const workbenchProjectionCount = app.collection.artifacts
         .filter((item) => Boolean(projectedArtifact(item))).length;
       const steps = filterSteps();
       const slots = filterSlots();
@@ -638,7 +612,7 @@
           <div class="summary-title">${escapeHtml(workflow.name || "Workflow")}</div>
           <div class="summary-grid">
             <span>${escapeHtml(String((workflow.steps || []).length))} steps</span>
-            <span>${escapeHtml(String(reviewableProjectionCount))} reviewable</span>
+            <span>${escapeHtml(String(workbenchProjectionCount))} workbench-visible</span>
             <span>${escapeHtml(String(slots.length))} slots</span>
             <span>${escapeHtml(String(composites.length))} composites</span>
           </div>
@@ -777,63 +751,26 @@
     }
 
     function imagePoint(event) {
-      const image = $("artifact-image");
-      const rect = image.getBoundingClientRect();
-      const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width);
-      const y = Math.min(Math.max(event.clientY - rect.top, 0), rect.height);
-      return { x, y };
+      return window.ArtifactPrimitives.imageViewer.imagePoint({
+        event,
+        imageEl: $("artifact-image"),
+      });
     }
 
     function placeSelection(displayRect) {
-      const selection = $("selection");
-      const imageRect = $("artifact-image").getBoundingClientRect();
-      const wrapRect = $("image-wrap").getBoundingClientRect();
-      selection.style.left = `${displayRect.x + imageRect.left - wrapRect.left}px`;
-      selection.style.top = `${displayRect.y + imageRect.top - wrapRect.top}px`;
-      selection.style.width = `${displayRect.width}px`;
-      selection.style.height = `${displayRect.height}px`;
-      selection.hidden = false;
+      window.ArtifactPrimitives.imageViewer.placeSelection({
+        selectionEl: $("selection"),
+        imageEl: $("artifact-image"),
+        wrapEl: $("image-wrap"),
+        displayRect,
+      });
     }
 
     function displayRectFromNatural(rect) {
-      const image = $("artifact-image");
-      const imageRect = image.getBoundingClientRect();
-      const sx = imageRect.width / image.naturalWidth;
-      const sy = imageRect.height / image.naturalHeight;
-      return {
-        x: rect.x * sx,
-        y: rect.y * sy,
-        width: rect.width * sx,
-        height: rect.height * sy,
-      };
-    }
-
-    function markdownLineElementsForRange(anchor) {
-      if (!anchor?.start?.line || !anchor?.end?.line) return [];
-      const start = Math.min(anchor.start.line, anchor.end.line);
-      const end = Math.max(anchor.start.line, anchor.end.line);
-      return [...markdownPreviewBody().querySelectorAll("[data-source-line]")]
-        .filter((node) => {
-          const line = Number(node.dataset.sourceLine);
-          return line >= start && line <= end;
-        });
-    }
-
-    function markdownDisplayRectFromAnchor(anchor) {
-      const elements = markdownLineElementsForRange(anchor);
-      if (!elements.length) return null;
-      const wrapRect = $("markdown-wrap").getBoundingClientRect();
-      const rects = elements.map((node) => node.getBoundingClientRect());
-      const left = Math.min(...rects.map((rect) => rect.left));
-      const top = Math.min(...rects.map((rect) => rect.top));
-      const right = Math.max(...rects.map((rect) => rect.right));
-      const bottom = Math.max(...rects.map((rect) => rect.bottom));
-      return {
-        x: left - wrapRect.left,
-        y: top - wrapRect.top,
-        width: right - left,
-        height: bottom - top,
-      };
+      return window.ArtifactPrimitives.imageViewer.displayRectFromNatural({
+        rect,
+        imageEl: $("artifact-image"),
+      });
     }
 
     function placeSelectionForRect(rect) {
@@ -852,7 +789,11 @@
       }
       if (anchor?.type === "text_range") {
         $("selection").hidden = true;
-        const displayRect = markdownDisplayRectFromAnchor(anchor);
+        const displayRect = window.ArtifactPrimitives.markdownInteractions.displayRectFromAnchor({
+          anchor,
+          rootEl: markdownPreviewBody(),
+          wrapEl: $("markdown-wrap"),
+        });
         if (!displayRect) return;
         const marker = $("markdown-marker");
         marker.style.left = `${displayRect.x}px`;
@@ -869,60 +810,30 @@
         return;
       }
       if (anchor?.type === "text_range") {
-        const displayRect = markdownDisplayRectFromAnchor(anchor);
+        const displayRect = window.ArtifactPrimitives.markdownInteractions.displayRectFromAnchor({
+          anchor,
+          rootEl: markdownPreviewBody(),
+          wrapEl: $("markdown-wrap"),
+        });
         if (displayRect) openComment(displayRect, $("markdown-wrap"));
       }
     }
 
     function placeMarkerForRect(rect) {
-      const marker = $("hover-marker");
-      const displayRect = displayRectFromNatural(rect);
-      const imageRect = $("artifact-image").getBoundingClientRect();
-      const wrapRect = $("image-wrap").getBoundingClientRect();
-      marker.style.left = `${displayRect.x + displayRect.width / 2 + imageRect.left - wrapRect.left}px`;
-      marker.style.top = `${displayRect.y + displayRect.height / 2 + imageRect.top - wrapRect.top}px`;
-      showHoverMarker();
-    }
-
-    function clearHoverMarkerTimers() {
-      for (const timer of app.hoverMarkerTimers) clearTimeout(timer);
-      app.hoverMarkerTimers = [];
-    }
-
-    function queueHoverMarkerStep(delay, callback) {
-      const timer = setTimeout(() => {
-        app.hoverMarkerTimers = app.hoverMarkerTimers.filter((item) => item !== timer);
-        callback();
-      }, delay);
-      app.hoverMarkerTimers.push(timer);
-    }
-
-    function showHoverMarker() {
-      const marker = $("hover-marker");
-      clearHoverMarkerTimers();
-      marker.classList.remove("is-visible", "has-glow");
-      marker.hidden = false;
-      void marker.offsetWidth;
-      marker.classList.add("is-visible");
-      queueHoverMarkerStep(350, () => marker.classList.add("has-glow"));
-      queueHoverMarkerStep(450, () => marker.classList.remove("has-glow"));
-      queueHoverMarkerStep(550, () => marker.classList.add("has-glow"));
-    }
-
-    function hideHoverMarker() {
-      const marker = $("hover-marker");
-      clearHoverMarkerTimers();
-      marker.classList.remove("has-glow", "is-visible");
-      queueHoverMarkerStep(250, () => {
-        if (!marker.classList.contains("is-visible")) marker.hidden = true;
+      window.ArtifactPrimitives.imageViewer.placeHoverMarker({
+        markerEl: $("hover-marker"),
+        imageEl: $("artifact-image"),
+        wrapEl: $("image-wrap"),
+        rect,
       });
     }
 
+    function hideHoverMarker() {
+      window.ArtifactPrimitives.imageViewer.hideHoverMarker($("hover-marker"));
+    }
+
     function resetHoverMarker() {
-      const marker = $("hover-marker");
-      clearHoverMarkerTimers();
-      marker.classList.remove("has-glow", "is-visible");
-      marker.hidden = true;
+      window.ArtifactPrimitives.imageViewer.resetHoverMarker($("hover-marker"));
     }
 
     function placeMarkerForAnchor(anchor) {
@@ -933,7 +844,11 @@
       }
       if (anchor?.type === "text_range") {
         hideHoverMarker();
-        const displayRect = markdownDisplayRectFromAnchor(anchor);
+        const displayRect = window.ArtifactPrimitives.markdownInteractions.displayRectFromAnchor({
+          anchor,
+          rootEl: markdownPreviewBody(),
+          wrapEl: $("markdown-wrap"),
+        });
         if (!displayRect) return;
         const marker = $("markdown-marker");
         marker.style.left = `${displayRect.x}px`;
@@ -968,74 +883,19 @@
     }
 
     function naturalRect(displayRect) {
-      const image = $("artifact-image");
-      const imageRect = image.getBoundingClientRect();
-      const sx = image.naturalWidth / imageRect.width;
-      const sy = image.naturalHeight / imageRect.height;
-      return {
-        x: Math.round(displayRect.x * sx),
-        y: Math.round(displayRect.y * sy),
-        width: Math.round(displayRect.width * sx),
-        height: Math.round(displayRect.height * sy),
-      };
-    }
-
-    function markdownPoint(event) {
-      const rect = $("markdown-wrap").getBoundingClientRect();
-      return {
-        x: Math.min(Math.max(event.clientX - rect.left, 0), rect.width),
-        y: Math.min(Math.max(event.clientY - rect.top, 0), rect.height),
-      };
-    }
-
-    function placeMarkdownSelection(displayRect) {
-      const marker = $("markdown-marker");
-      marker.style.left = `${displayRect.x}px`;
-      marker.style.top = `${displayRect.y}px`;
-      marker.style.width = `${displayRect.width}px`;
-      marker.style.height = `${displayRect.height}px`;
-      marker.hidden = false;
-    }
-
-    function markdownAnchorFromDisplayRect(displayRect) {
-      const wrapRect = $("markdown-wrap").getBoundingClientRect();
-      const selectionRect = {
-        left: wrapRect.left + displayRect.x,
-        top: wrapRect.top + displayRect.y,
-        right: wrapRect.left + displayRect.x + displayRect.width,
-        bottom: wrapRect.top + displayRect.y + displayRect.height,
-      };
-      const hits = [...markdownPreviewBody().querySelectorAll("[data-source-line]")]
-        .map((node) => ({ node, rect: node.getBoundingClientRect(), line: Number(node.dataset.sourceLine) }))
-        .filter(({ rect }) => rect.right >= selectionRect.left
-          && rect.left <= selectionRect.right
-          && rect.bottom >= selectionRect.top
-          && rect.top <= selectionRect.bottom)
-        .filter(({ line }) => Number.isFinite(line));
-      if (!hits.length) return null;
-      const startLine = Math.min(...hits.map((hit) => hit.line));
-      const endLine = Math.max(...hits.map((hit) => hit.line));
-      const content = app.markdownContent[artifact().id] || "";
-      const lines = content.split("\n");
-      const excerpt = lines.slice(startLine - 1, endLine).join("\n").slice(0, 600);
-      return {
-        type: "text_range",
-        coordinate_space: "markdown_source",
-        start: { line: startLine, column: 1 },
-        end: { line: endLine, column: (lines[endLine - 1] || "").length + 1 },
-        excerpt,
-      };
+      return window.ArtifactPrimitives.imageViewer.naturalRect({
+        displayRect,
+        imageEl: $("artifact-image"),
+      });
     }
 
     function openComment(displayRect, relativeTo = $("artifact-image")) {
-      const popover = $("comment-popover");
-      const baseRect = relativeTo.getBoundingClientRect();
-      const left = Math.min(baseRect.left + displayRect.x + displayRect.width + 10, window.innerWidth - 434);
-      const top = Math.min(baseRect.top + displayRect.y, window.innerHeight - 190);
-      popover.style.left = `${Math.max(14, left)}px`;
-      popover.style.top = `${Math.max(14, top)}px`;
-      popover.hidden = false;
-      $("comment-text").focus();
+      window.ArtifactPrimitives.imageViewer.openAnchoredPopover({
+        popoverEl: $("comment-popover"),
+        inputEl: $("comment-text"),
+        displayRect,
+        relativeToEl: relativeTo,
+      });
     }
 
     function openCreateEditor(displayRect, relativeTo = $("artifact-image")) {
@@ -1048,31 +908,12 @@
     }
 
     function scrollRectIntoView(rect) {
-      const image = $("artifact-image");
-      const wrap = $("image-wrap");
-      const stage = $("stage");
-      if (!image.naturalWidth) return;
-      const displayRect = displayRectFromNatural(rect);
-      const targetLeft = wrap.offsetLeft + displayRect.x + displayRect.width / 2;
-      const targetTop = wrap.offsetTop + displayRect.y + displayRect.height / 2;
-      stage.scrollTo({
-        left: Math.max(0, targetLeft - stage.clientWidth / 2),
-        top: Math.max(0, targetTop - stage.clientHeight / 2),
-        behavior: "auto",
+      window.ArtifactPrimitives.imageViewer.scrollRectIntoView({
+        rect,
+        imageEl: $("artifact-image"),
+        wrapEl: $("image-wrap"),
+        stageEl: $("stage"),
       });
-    }
-
-    function scrollTextRangeIntoView(anchor) {
-      if (!anchor?.start?.line) return;
-      const target = markdownPreviewBody().querySelector(`[data-source-line="${anchor.start.line}"]`);
-      if (target) {
-        target.scrollIntoView({ block: "center", inline: "nearest" });
-        return;
-      }
-      const source = $("markdown-source");
-      const lines = String(source.value || "").split("\n");
-      const lineHeight = Number.parseFloat(window.getComputedStyle(source).lineHeight) || 21;
-      source.scrollTop = Math.max(0, (Math.max(1, anchor.start.line) - 3) * lineHeight);
     }
 
     function openExistingEditor(note) {
@@ -1097,7 +938,11 @@
           app.markdownMode = "preview";
           renderMarkdownBody(artifact());
         }
-        scrollTextRangeIntoView(anchor);
+        window.ArtifactPrimitives.markdownInteractions.scrollTextRangeIntoView({
+          anchor,
+          previewBodyEl: markdownPreviewBody(),
+          sourceEl: $("markdown-source"),
+        });
         window.requestAnimationFrame(() => {
           renderMarkdownHighlights();
           placeSelectionForAnchor(anchor);
@@ -1139,21 +984,25 @@
         return;
       }
       if (isMarkdownArtifact() && app.markdownMode === "preview" && event.target.closest("#markdown-preview")) {
-        const point = markdownPoint(event);
+        const point = window.ArtifactPrimitives.markdownInteractions.pointInWrap({
+          event,
+          wrapEl: $("markdown-wrap"),
+        });
         app.drag = { type: "markdown", startX: point.x, startY: point.y };
         app.pendingAnchor = null;
         $("comment-popover").hidden = true;
-        placeMarkdownSelection({ x: point.x, y: point.y, width: 0, height: 0 });
+        window.ArtifactPrimitives.markdownInteractions.placeSelection({
+          markerEl: $("markdown-marker"),
+          displayRect: { x: point.x, y: point.y, width: 0, height: 0 },
+        });
       }
     }
 
     function dragDisplayRect(point) {
-      return {
-        x: Math.min(app.drag.startX, point.x),
-        y: Math.min(app.drag.startY, point.y),
-        width: Math.abs(point.x - app.drag.startX),
-        height: Math.abs(point.y - app.drag.startY),
-      };
+      return window.ArtifactPrimitives.imageViewer.dragDisplayRect({
+        drag: app.drag,
+        point,
+      });
     }
 
     function moveDrag(event) {
@@ -1163,7 +1012,13 @@
         return;
       }
       if (app.drag.type === "markdown") {
-        placeMarkdownSelection(dragDisplayRect(markdownPoint(event)));
+        window.ArtifactPrimitives.markdownInteractions.placeSelection({
+          markerEl: $("markdown-marker"),
+          displayRect: dragDisplayRect(window.ArtifactPrimitives.markdownInteractions.pointInWrap({
+            event,
+            wrapEl: $("markdown-wrap"),
+          })),
+        });
       }
     }
 
@@ -1171,7 +1026,10 @@
       if (!app.drag) return;
       const type = app.drag.type;
       const displayRect = type === "markdown"
-        ? dragDisplayRect(markdownPoint(event))
+        ? dragDisplayRect(window.ArtifactPrimitives.markdownInteractions.pointInWrap({
+          event,
+          wrapEl: $("markdown-wrap"),
+        }))
         : dragDisplayRect(imagePoint(event));
       app.drag = null;
       if (displayRect.width < 8 || displayRect.height < 8) {
@@ -1180,7 +1038,12 @@
         return;
       }
       if (type === "markdown") {
-        const anchor = markdownAnchorFromDisplayRect(displayRect);
+        const anchor = window.ArtifactPrimitives.markdownInteractions.anchorFromDisplayRect({
+          displayRect,
+          wrapEl: $("markdown-wrap"),
+          rootEl: markdownPreviewBody(),
+          content: app.markdownContent[artifact().id] || "",
+        });
         if (!anchor) {
           $("markdown-marker").hidden = true;
           return;
@@ -1374,14 +1237,7 @@
         }
         if (event.key !== "Tab") return;
         event.preventDefault();
-        const input = $("markdown-source");
-        const start = input.selectionStart;
-        const end = input.selectionEnd;
-        const prefix = input.value.slice(0, start);
-        const suffix = input.value.slice(end);
-        input.value = `${prefix}  ${suffix}`;
-        input.setSelectionRange(start + 2, start + 2);
-        input.dispatchEvent(new Event("input"));
+        window.ArtifactPrimitives.markdownInteractions.indentSelection($("markdown-source"));
       });
       $("image-wrap").addEventListener("mousedown", startDrag);
       $("markdown-preview").addEventListener("mousedown", startDrag);

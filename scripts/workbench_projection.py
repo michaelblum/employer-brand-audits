@@ -39,7 +39,7 @@ IMAGE_SLOTS = {
 
 TEXT_SLOTS = {
     "summary": {
-        "label": "Review Summary",
+        "label": "Workflow Summary",
         "slot": "page.summary",
         "artifact_type": "markdown",
         "layer": 2,
@@ -330,13 +330,13 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
             if isinstance(page.get("screenshot_dimensions"), dict)
             else {}
         )
-        page_reviewable_artifact_ids: list[str] = []
+        page_workbench_artifact_ids: list[str] = []
 
         workflow_steps.append(
             {
                 "id": step_id,
                 "name": f"Capture {slug}",
-                "description": "Capture public page screenshots, text, and supporting review files.",
+                "description": "Capture public page screenshots, text, and supporting workflow artifacts.",
                 "status": "complete" if page_status == "passed" else page_status,
                 "layer": 1,
                 "required_inputs": [
@@ -457,7 +457,7 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
                 },
             }
             if artifact_type in {"image", "markdown"}:
-                page_reviewable_artifact_ids.append(artifact_id)
+                page_workbench_artifact_ids.append(artifact_id)
             if key in IMAGE_SLOTS:
                 artifact["dimensions"] = dimensions.get(key)
                 artifact["capabilities"] = ["view", "annotate"]
@@ -487,14 +487,14 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
                 ]
             )
 
-        if page_reviewable_artifact_ids:
+        if page_workbench_artifact_ids:
             group_id = f"composite:page:{slug}"
             group = {
                 "id": group_id,
                 "kind": "source_page_bundle",
                 "label": f"{slug} source bundle",
-                "artifact_ids": page_reviewable_artifact_ids,
-                "edge_ids": [f"edge:{group_id}:{artifact_id}" for artifact_id in page_reviewable_artifact_ids],
+                "artifact_ids": page_workbench_artifact_ids,
+                "edge_ids": [f"edge:{group_id}:{artifact_id}" for artifact_id in page_workbench_artifact_ids],
                 "source": {"kind": "matrix_page", "slug": slug, "url": url, "host": host},
                 "slot": "page.bundle",
             }
@@ -506,7 +506,7 @@ def project_matrix_manifest(manifest_path: str | Path) -> dict[str, Any]:
                     "from": group_id,
                     "to": artifact_id,
                 }
-                for artifact_id in page_reviewable_artifact_ids
+                for artifact_id in page_workbench_artifact_ids
             )
 
     return {
@@ -773,7 +773,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
         },
         "extension_points": {
             "workflow_slots": "TODO: move slot definitions to workflow-pack metadata when packs exist.",
-            "artifact_groups": "TODO: derive audit-native review subjects from real artifact provenance when needed.",
+            "artifact_groups": "TODO: derive audit-native workbench subjects from real artifact provenance when needed.",
         },
     }
 

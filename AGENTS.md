@@ -20,15 +20,13 @@ Provider-specific files such as `.claude/CLAUDE.md` should only point here.
 
 This project is a provider-flexible agent workflow prototype for Employer Brand
 Audits. It has a Python mechanical layer, Playwright CLI browser capture, an
-MCP imaging server, and a local workflow artifact workbench. Legacy server and
-gate filenames still use older wording, but the static implementation surface is
-`scripts/workflow_artifact_workbench/`.
+MCP imaging server, and a local workflow artifact workbench.
 
 - MCP server and image processing: `mcp-server/`
 - MCP tests: `mcp-server/tests/`
 - Browser automation: Playwright CLI and thin repo wrappers only
-- Workflow artifact workbench implementation: `scripts/playwright_cli_review_server.py`,
-  `scripts/playwright_cli_review_gate.py`, and `scripts/workflow_artifact_workbench/`
+- Workflow artifact workbench implementation: `scripts/playwright_cli_workbench_server.py`,
+  `scripts/playwright_cli_workbench_gate.py`, and `scripts/workflow_artifact_workbench/`
 - Command surface for agents: `./eba dev ...`
 
 ## Hard Invariants
@@ -106,7 +104,7 @@ For controlled/debug use after the same active `./eba begin` turn gate has
 been satisfied, the lower-level surface command is:
 
 ```bash
-python3 scripts/playwright_cli_review_gate.py surface artifacts/playwright-cli-public-page-matrix/latest/manifest.json
+python3 scripts/playwright_cli_workbench_gate.py surface artifacts/playwright-cli-public-page-matrix/latest/manifest.json
 ```
 
 Do not treat the lower-level command as a bypass around `./eba dev demo`

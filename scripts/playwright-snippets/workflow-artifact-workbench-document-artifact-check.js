@@ -20,7 +20,7 @@ async (page) => {
       && renderer
       && source
       && /acme\.example|knowledge|identity|logistics/.test(source.textContent || "");
-  }, { timeout: 3000 });
+  }, null, { timeout: 3000 });
 
   return await page.evaluate(() => {
     const activeIcon = document.querySelector(".artifact-row.active .artifact-type-icon");

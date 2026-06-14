@@ -13,9 +13,9 @@ provenance edges from a normalized payload.
 
 This is a viewing, editing, creation, guided-input, bounded-mutation,
 composite-drill-down, and agent-human collaboration surface over workflow
-artifacts. "Review workbench" remains acceptable as the current implementation
-or demo-surface alias. It should not be used as the canonical product concept
-because it pulls future work toward report review only.
+artifacts. Workflow artifact workbench is the implementation and demo-surface
+name; older narrow workbench phrasing is historical only and should not be used
+for new code, docs, or issue tracking.
 
 This follows the accepted direction in:
 
@@ -105,7 +105,7 @@ code from a CDN at runtime.
   drill-down semantics over existing artifacts and provenance edges.
 - **Workflow:** A named run or pack with steps and status. For the current matrix adapter, the workflow is the public-page capture matrix.
 - **Step:** A unit of work in the workflow graph. The matrix adapter projects a conservative discovery step plus per-page capture steps.
-- **Artifact:** A rendered or reviewable output, such as a viewport screenshot, full-page screenshot, element screenshot, markdown review summary, text output, snapshot, or log.
+- **Artifact:** A rendered or workbench-visible output, such as a viewport screenshot, full-page screenshot, element screenshot, markdown workflow summary, text output, snapshot, or log.
 - **Resource:** A source or supporting file that artifacts observe or depend on. Current resources include source URLs and local files.
 - **Slot:** A stable role an artifact can fill in the workbench, such as `capture.viewport`, `capture.full_page`, `capture.element`, `page.summary`, or `debug.log`.
 - **Facet:** A grouping or filtering axis derived from payload facts. Initial facets are host, page slug, artifact type, artifact kind, and slot.
@@ -117,7 +117,7 @@ The first normalized payload should distinguish:
 
 - `workflow`: id, name, status, source manifest, and projected steps.
 - `resources`: source URLs and local supporting files.
-- `artifacts`: reviewable outputs with `slot`, `type`, `kind`, `path`, `mime_type`, `source_page`, and `facets`.
+- `artifacts`: workbench-visible outputs with `slot`, `type`, `kind`, `path`, `mime_type`, `source_page`, and `facets`.
 - `artifact_groups`: canonical flat list of projection-only composite subjects; `facets.composites` was removed in the cleanup after the Mermaid/composite proof because it duplicated the same list.
 - `edges`: conservative provenance placeholders such as `depends_on`, `observes`, and `produced_by`.
 - `facets`: host and slot indexes for filtering and navigation.
@@ -148,8 +148,8 @@ The existing matrix manifest remains supported as an adapter input while the cap
 
 ## Migration Phases
 
-1. **Projection foothold:** Add a matrix-to-workbench projection module and keep the current review server implementation behavior intact.
-2. **Server boundary:** Have the current review server implementation expose both current `collection` state and projected workflow payload for inspection.
+1. **Projection foothold:** Add a matrix-to-workbench projection module and keep the current workbench server implementation behavior intact.
+2. **Server boundary:** Have the current workbench server implementation expose both current `collection` state and projected workflow payload for inspection.
 3. **Renderer adoption:** Move the workbench UI from flat collection assumptions toward workflow/artifact/resource/slot/facet concepts.
 4. **Audit manifest adapter:** Add an ADR-002 manifest adapter alongside the matrix adapter.
 5. **Flagship workflow pack:** Have Employer Brand Audit emit ADR-002-compatible manifests through the normal save path, then treat the matrix adapter as legacy capture support.

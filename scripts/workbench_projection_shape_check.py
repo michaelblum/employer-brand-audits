@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from easy_audit_fixture import generate_easy_audit_fixture
-from playwright_cli_review_server import build_collection
+from playwright_cli_workbench_server import build_collection
 from workbench_projection import project_audit_manifest, project_matrix_manifest, project_workbench_manifest
 
 
@@ -31,14 +31,14 @@ def require(condition: bool, message: str) -> None:
 def fixture_manifest(root: Path) -> Path:
     page_dir = root / "fixture-page"
     page_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = page_dir / "review-summary.md"
+    summary_path = page_dir / "workflow-summary.md"
     summary_path.write_text(
-        """# Fixture Review Summary
+        """# Fixture Workflow Summary
 
 ```mermaid
 flowchart TD
   capture[Capture] --> project[Project]
-  project --> review[Review]
+  project --> workbench[Workbench]
 ```
 """,
         encoding="utf-8",

@@ -11,7 +11,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from scripts import playwright_cli_review_gate as gate
+from scripts import playwright_cli_workbench_gate as gate
 
 
 class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
 
     def test_document_renderer_primitive_is_served_and_validated(self) -> None:
         from scripts.eba_cli import validation_commands
-        from scripts.playwright_cli_review_server import WORKBENCH_ASSETS
+        from scripts.playwright_cli_workbench_server import WORKBENCH_ASSETS
 
         self.assertIn(
             ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
@@ -36,11 +36,16 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "--check", "scripts/artifact_primitives/markdown_interactions.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/artifact_primitives/image_viewer.js"],
             validation_commands(),
         )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/markdown_renderer.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-primitives/markdown_interactions.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/image_viewer.js", WORKBENCH_ASSETS)
 
     def test_browser_open_plan_uses_named_repo_wrapper_session(self) -> None:
@@ -146,8 +151,8 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                     "http://127.0.0.1:8765/",
                     {
                         "artifact_root": root,
-                        "browser_log": root / "review-browser.log",
-                        "browser_state": root / "review-browser-state.json",
+                        "browser_log": root / "workbench-browser.log",
+                        "browser_state": root / "workbench-browser-state.json",
                     },
                     "chrome",
                     None,

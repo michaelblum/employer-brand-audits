@@ -23,7 +23,7 @@ TEXT_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "extract-visible-
 SETTLE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "settle-page.js"
 HIDE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "hide-obscuring-elements.js"
 RESTORE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "restore-page.js"
-REVIEW_FIXTURE_SUMMARY_TEMPLATE = """# {title} Review Fixture Summary
+WORKFLOW_FIXTURE_SUMMARY_TEMPLATE = """# {title} Workflow Fixture Summary
 
 ## Captured Source
 
@@ -33,11 +33,11 @@ REVIEW_FIXTURE_SUMMARY_TEMPLATE = """# {title} Review Fixture Summary
 
 ## Live Artifact Purpose
 
-This markdown file is an explicit review fixture emitted by the public-page
+This markdown file is an explicit workflow fixture emitted by the public-page
 matrix smoke run so the workflow artifact workbench has an editable text artifact
 alongside image artifacts.
 
-## Review Checklist
+## Workflow Checklist
 
 - Preview renders markdown headings and lists.
 - Mermaid preview renders from a fenced source block.
@@ -50,7 +50,7 @@ alongside image artifacts.
 ```mermaid
 flowchart TD
   capture[Capture page artifacts] --> project[Project workbench payload]
-  project --> review[Review in workbench]
+  project --> workbench[Workflow artifact workbench]
 ```
 """
 
@@ -250,12 +250,12 @@ def normalize_capture_artifact(
     manifest.setdefault("image_normalization", {})[key] = normalized
 
 
-def write_review_fixture_markdown_artifact(
+def write_workflow_fixture_markdown_artifact(
     manifest: dict[str, Any], page: dict[str, str], output_path: Path
 ) -> None:
     title = page["slug"].replace("-", " ").title()
     output_path.write_text(
-        REVIEW_FIXTURE_SUMMARY_TEMPLATE.format(
+        WORKFLOW_FIXTURE_SUMMARY_TEMPLATE.format(
             title=title,
             url=page["url"],
             target_used=manifest.get("target_used") or "unknown",
@@ -265,7 +265,7 @@ def write_review_fixture_markdown_artifact(
         encoding="utf-8",
     )
     manifest["artifacts"]["summary"] = str(output_path.relative_to(REPO_ROOT))
-    manifest.setdefault("review_fixtures", {})["summary"] = {
+    manifest.setdefault("workflow_fixtures", {})["summary"] = {
         "path": str(output_path.relative_to(REPO_ROOT)),
         "purpose": "workbench_markdown_view_edit_annotate_smoke",
         "diagram_kind": "mermaid",
@@ -291,7 +291,7 @@ def run_page(
     full_page_path = page_dir / "full-page.png"
     element_path = page_dir / "element.png"
     visible_text_path = page_dir / "visible-text.stdout.txt"
-    summary_path = page_dir / "review-summary.md"
+    summary_path = page_dir / "workflow-summary.md"
     settle_path = page_dir / "settle.stdout.txt"
     hide_path = page_dir / "hide-obscuring.stdout.txt"
     restore_path = page_dir / "restore-page.stdout.txt"
@@ -392,7 +392,7 @@ def run_page(
         if manifest["target_used"] is None:
             raise RuntimeError(f"{slug}: no element screenshot target worked")
         normalize_capture_artifact(manifest, "element", element_path, args.normalization_policy)
-        write_review_fixture_markdown_artifact(manifest, page, summary_path)
+        write_workflow_fixture_markdown_artifact(manifest, page, summary_path)
         restore_result = run_step(
             f"{slug}: restore page",
             command_for(session, "run-code", RESTORE_SNIPPET),
