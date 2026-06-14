@@ -1,12 +1,15 @@
 # Capture & Image Pipeline Implementation Plan
 
 > Historical note: this plan predates [ADR-008](../../decisions/ADR-008-playwright-cli-browser-engine.md). Its pure Python image operations remain useful, but its Claude-in-Chrome `computer`/`zoom` capture primitive is superseded. New browser automation must use Playwright CLI or thin repo wrappers around it.
+>
+> Do not execute Task 0. It is retained only as historical design context for
+> why the active Playwright CLI boundary exists.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build and unit-test the pure-Python image operations the audit's capture path depends on (scale measurement, overlap-stitch, crop, rendition), expose them as MCP tools, and de-risk the browser-side capture primitive with a spike — before any pipeline glue is written.
+**Goal:** Build and unit-test the pure-Python image operations the audit's capture path depends on (scale measurement, overlap-stitch, crop, rendition), expose them as MCP tools, and preserve the superseded browser-side spike as historical context.
 
-**Architecture:** A `mcp-server/` Python package with a focused `imaging/` module of pure functions (path-in → path-out, no audit/manifest coupling), unit-tested with synthetic Pillow fixtures, then wrapped as stdio MCP tools. The capture primitive (Claude in Chrome `computer` screenshot/`zoom`) is validated by a one-off spike whose findings gate the disk-handoff design.
+**Architecture:** A `mcp-server/` Python package with a focused `imaging/` module of pure functions (path-in -> path-out, no audit/manifest coupling), unit-tested with synthetic Pillow fixtures, then wrapped as stdio MCP tools. The original Claude-in-Chrome capture spike below is superseded by ADR-008 and must not gate current implementation work.
 
 **Tech Stack:** Python 3 (ships with macOS), Pillow (image ops), `mcp` (official MCP Python SDK, stdio server), pytest.
 
@@ -16,7 +19,7 @@
 
 This spec was decomposed into self-contained plans. Each produces working, testable software:
 
-1. **Capture & image pipeline** ← *this plan* — pure image ops + MCP scaffold + capture spike.
+1. **Capture & image pipeline** <- *this plan* — pure image ops + MCP scaffold; the capture spike is historical only.
 2. **Manifest & audit lifecycle** — `create_audit`, `save_artifact` (+ `kilos-l2`/`l3-synthesis` schema validation), `get_audit_status`, `set_step_status`; the `card` field; wires the Plan-1 image tools to write into the audit dir. (ADR-002, ADR-007)
 3. **KILOS analysis & synthesis (skill-side)** — the brand-audit SKILL.md L2/L3 logic: eager card + `kilos_map` + salience, weighted L3 roll-up, confluence re-inference. (ADR-007)
 4. **Report generation & publishing** — `generate_report` (Jinja2), `publish_image` (git push to public assets repo), GitHub raw embedding + base64 fallback. (ADR-006)
@@ -55,9 +58,13 @@ Each `imaging/*.py` file owns one operation. `scale.py` is imported by `stitch.p
 
 ---
 
-## Task 0: Capture-primitive spike (Issue #4)
+## Task 0: Historical capture-primitive spike (Issue #4, do not execute)
 
-This is investigation, not TDD. The design-phase spike already confirmed: `computer` screenshot is page-only with origin (0,0); scale is display-dependent (~0.982× on scaled retina) so it must be *measured*; `zoom` region is CSS-px and element-exact; `read_page` is an a11y tree. **This task resolves only the still-open unknowns** that gate the disk handoff, then records a decision.
+This historical investigation predates ADR-008. The design-phase spike
+confirmed useful geometry lessons, but Claude in Chrome, `computer`, and `zoom`
+are no longer valid audit-execution paths. Do not run the steps below in a
+current agent session. Use Playwright CLI or thin repo wrappers for browser
+capture work.
 
 **Files:**
 - Create: `docs/superpowers/spikes/2026-06-11-capture-primitive-spike.md`

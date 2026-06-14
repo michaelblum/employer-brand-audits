@@ -20,12 +20,14 @@ Provider-specific files such as `.claude/CLAUDE.md` should only point here.
 
 This project is a provider-flexible agent workflow prototype for Employer Brand
 Audits. It has a Python mechanical layer, Playwright CLI browser capture, an
-MCP imaging server, and a local review workbench.
+MCP imaging server, and a local workflow artifact workbench. Current files and
+commands still use `review workbench` for the implementation/demo surface; treat
+that as an alias, not the canonical product concept.
 
 - MCP server and image processing: `mcp-server/`
 - MCP tests: `mcp-server/tests/`
 - Browser automation: Playwright CLI and thin repo wrappers only
-- Review workbench: `scripts/playwright_cli_review_server.py`,
+- Workflow artifact workbench implementation: `scripts/playwright_cli_review_server.py`,
   `scripts/playwright_cli_review_gate.py`, and `scripts/review_workbench/`
 - Command surface for agents: `./eba dev ...`
 
@@ -73,7 +75,8 @@ version:
 
 ## Browser And Demo Flow
 
-For the review workbench, prefer the command surface:
+For the current review-workbench implementation of the workflow artifact
+workbench, prefer the command surface:
 
 ```bash
 ./eba dev demo
@@ -120,7 +123,7 @@ Default validation:
 This runs the project’s current focused validation ladder:
 
 - Python compile checks for top-level scripts that participate in capture,
-  projection, normalization, and the review server.
+  projection, normalization, and the current review server implementation.
 - Projection shape checks for the normalized Mermaid/composite workbench
   contract.
 - `node --check` for the review workbench app, shared artifact primitives, and
