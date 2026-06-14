@@ -68,65 +68,36 @@
       const anchor = annotationAnchor(note);
       return anchor.type === "text_range" ? anchor : null;
     };
-    const anchorSummary = (anchor = {}) => {
-      if (anchor.type === "image_region" && anchor.rect) {
-        return `image ${anchor.rect.x},${anchor.rect.y} ${anchor.rect.width}x${anchor.rect.height}`;
-      }
-      if (anchor.type === "text_range" && anchor.start && anchor.end) {
-        return anchor.start.line === anchor.end.line
-          ? `line ${anchor.start.line}`
-          : `lines ${anchor.start.line}-${anchor.end.line}`;
-      }
-      return "unanchored";
-    };
     const formatTime = (epoch) => {
       if (!epoch) return "";
       return new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     };
     const formatSlot = (value) => String(value || "").replace(/[._-]/g, " ");
-    const ARTIFACT_TYPE_META = {
-      image: { icon: "image", className: "image" },
-      markdown: { icon: "markdown", className: "markdown" },
-      json: { icon: "text", className: "text" },
-      text: { icon: "text", className: "text" },
-      log: { icon: "log", className: "log" },
-      file: { icon: "unknown", className: "unknown" },
-    };
     const iconHref = (name) => `/assets/workflow-artifact-workbench-icons.svg#icon-artifact-${name}`;
-
-    function artifactMatchesFilters(item) {
-      const projected = projectedArtifact(item);
-      if (app.filters.stepId && projected?.produced_by_step_id !== app.filters.stepId) return false;
-      if (app.filters.slot && projected?.slot !== app.filters.slot) return false;
-      if (app.filters.compositeId) {
-        const group = app.projectedGroupsById[app.filters.compositeId];
-        if (!group?.artifact_ids?.includes(item.id)) return false;
-      }
-      return true;
-    }
-
-    function artifactTypeLabel(item) {
-      const projected = projectedArtifact(item);
-      return String(projected?.facets?.artifact_type || projected?.type || item?.type || "file");
-    }
-
-    function artifactTypeIcon(item) {
-      const type = artifactTypeLabel(item);
-      const meta = ARTIFACT_TYPE_META[type] || { icon: "unknown", className: "unknown" };
-      return `<span class="artifact-type-icon ${escapeHtml(meta.className)}" title="${escapeHtml(type)}" aria-label="${escapeHtml(type)}" role="img"><svg aria-hidden="true"><use href="${escapeHtml(iconHref(meta.icon))}"></use></svg></span>`;
-    }
+    const workflowSidebar = () => window.ArtifactPrimitives.workflowSidebar;
+    const workflowSidebarContext = () => ({
+      artifacts: app.collection.artifacts,
+      annotations: app.annotations,
+      activeIndex: app.index,
+      filters: app.filters,
+      iconHref,
+      projectedArtifactsById: app.projectedArtifactsById,
+      projectedGroupsById: app.projectedGroupsById,
+      projectedSlotsByValue: app.projectedSlotsByValue,
+      projectedStepsById: app.projectedStepsById,
+      workbenchProjection: app.workbenchProjection,
+    });
 
     function visibleArtifactIndexes() {
-      const indexes = [];
-      for (let index = 0; index < app.collection.artifacts.length; index += 1) {
-        if (artifactMatchesFilters(app.collection.artifacts[index])) indexes.push(index);
-      }
-      return indexes;
+      return workflowSidebar().visibleArtifactIndexes(workflowSidebarContext());
     }
 
     function ensureVisibleArtifactSelected() {
       const indexes = visibleArtifactIndexes();
-      if (indexes.length && !indexes.includes(app.index)) app.index = indexes[0];
+      app.index = workflowSidebar().ensureVisibleArtifactIndex({
+        currentIndex: app.index,
+        visibleIndexes: indexes,
+      });
     }
 
     function indexProjection(payload) {
@@ -535,49 +506,10 @@
     }
 
     function artifactProjectionLine(item) {
-      const projected = projectedArtifact(item);
-      if (!projected) return `${item.type || "file"} · ${item.path}`;
-      const step = projectedStep(item);
-      const parts = [
-        projected.slot || item.type || "file",
-        projected.source_page?.slug,
-        step?.status,
-      ].filter(Boolean);
-      return `${parts.join(" · ")} · ${item.path}`;
-    }
-
-    function filterSteps() {
-      const stepIds = [...new Set(
-        app.collection.artifacts
-          .map((item) => projectedArtifact(item)?.produced_by_step_id)
-          .filter(Boolean)
-      )];
-      return stepIds
-        .map((stepId) => app.projectedStepsById[stepId])
-        .filter(Boolean)
-        .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
-    }
-
-    function filterSlots() {
-      const slotValues = [...new Set(
-        app.collection.artifacts
-          .map((item) => projectedArtifact(item)?.slot)
-          .filter(Boolean)
-      )].sort();
-      return slotValues.map((slot) => app.projectedSlotsByValue[slot] || { value: slot, label: formatSlot(slot) });
-    }
-
-    function filterComposites() {
-      return Object.values(app.projectedGroupsById)
-        .filter((group) => Array.isArray(group.artifact_ids)
-          && group.artifact_ids.some((artifactId) => artifactIndexById(artifactId) >= 0))
-        .sort((a, b) => String(a.label || a.id).localeCompare(String(b.label || b.id)));
-    }
-
-    function filterSummaryText() {
-      const total = app.collection.artifacts.length;
-      const visible = visibleArtifactIndexes().length;
-      return visible === total ? `${total} artifacts` : `${visible} of ${total} artifacts`;
+      return workflowSidebar().artifactProjectionLine({
+        ...workflowSidebarContext(),
+        item,
+      });
     }
 
     function setWorkbenchFilter(kind, value) {
@@ -596,89 +528,8 @@
       render();
     }
 
-    function renderWorkflowHeader() {
-      const workflow = app.workbenchProjection?.workflow;
-      if (!workflow) {
-        return "";
-      }
-      const workbenchProjectionCount = app.collection.artifacts
-        .filter((item) => Boolean(projectedArtifact(item))).length;
-      const steps = filterSteps();
-      const slots = filterSlots();
-      const composites = filterComposites();
-      return `
-        <div class="workflow-summary">
-          <div class="summary-kicker">${escapeHtml(workflow.status || "unknown")}</div>
-          <div class="summary-title">${escapeHtml(workflow.name || "Workflow")}</div>
-          <div class="summary-grid">
-            <span>${escapeHtml(String((workflow.steps || []).length))} steps</span>
-            <span>${escapeHtml(String(workbenchProjectionCount))} workbench-visible</span>
-            <span>${escapeHtml(String(slots.length))} slots</span>
-            <span>${escapeHtml(String(composites.length))} composites</span>
-          </div>
-          <div class="filter-line">
-            <span>${escapeHtml(filterSummaryText())}</span>
-            ${(app.filters.stepId || app.filters.slot || app.filters.compositeId) ? '<button type="button" data-filter-kind="clear">Clear</button>' : ""}
-          </div>
-          <div class="filter-group" aria-label="Workflow step filters">
-            ${steps.map((step) => `
-              <button class="${step.id === app.filters.stepId ? "active" : ""}" type="button" data-filter-kind="step" data-filter-value="${escapeHtml(step.id)}">
-                ${escapeHtml(String(step.name || step.id).replace(/^Capture /, ""))}
-              </button>
-            `).join("")}
-          </div>
-          <div class="filter-group" aria-label="Slot filters">
-            ${slots.map((slot) => `
-              <button class="${slot.value === app.filters.slot ? "active" : ""}" type="button" data-filter-kind="slot" data-filter-value="${escapeHtml(slot.value)}">
-                ${escapeHtml(slot.label || formatSlot(slot.value))}
-              </button>
-            `).join("")}
-          </div>
-          <div class="filter-group" aria-label="Composite filters">
-            ${composites.map((group) => `
-              <button class="${group.id === app.filters.compositeId ? "active" : ""}" type="button" data-filter-kind="composite" data-filter-value="${escapeHtml(group.id)}">
-                ${escapeHtml(group.label || group.id)}
-              </button>
-            `).join("")}
-          </div>
-        </div>
-      `;
-    }
-
     function renderSidebar() {
-      const artifactRows = visibleArtifactIndexes().map((index) => {
-        const item = app.collection.artifacts[index];
-        const notes = artifactAnnotations(item.id);
-        const projected = projectedArtifact(item);
-        const step = projectedStep(item);
-        const slot = projectedSlot(item);
-        const annotationHtml = notes.length
-          ? notes.map((note) => `
-            <div class="annotation" draggable="true" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
-              <div class="annotation-text" title="${escapeHtml(note.comment)}">${escapeHtml(note.comment)}</div>
-              <div class="small">${escapeHtml(anchorSummary(note.anchor))}</div>
-            </div>
-          `).join("")
-          : "";
-        return `
-          <div class="artifact-row ${index === app.index ? "active" : ""}" data-index="${index}">
-            <div class="row-title">
-              ${artifactTypeIcon(item)}
-              <div class="name">${escapeHtml(item.name)}</div>
-            </div>
-            ${projected ? `
-              <div class="projection-meta">
-                <span>${escapeHtml(slot?.label || formatSlot(projected.slot))}</span>
-                <span>${escapeHtml(projected.source_page?.slug || "")}</span>
-                <span>${escapeHtml(step?.status || projected.status || "")}</span>
-              </div>
-            ` : ""}
-            ${annotationHtml}
-          </div>
-        `;
-      }).join("");
-      $("sidebar").innerHTML = renderWorkflowHeader()
-        + (artifactRows || '<div class="empty-filter">No artifacts match the active filters.</div>');
+      $("sidebar").innerHTML = workflowSidebar().renderSidebarHtml(workflowSidebarContext());
       $("sidebar").querySelectorAll("[data-filter-kind]").forEach((button) => {
         button.addEventListener("click", (event) => {
           event.stopPropagation();
