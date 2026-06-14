@@ -172,12 +172,15 @@
     }
 
     function updateMooringOverlays() {
-      if (app.editing) {
-        placeSelectionForAnchor(app.editing.anchor);
-        placePopoverForAnchor(app.editing.anchor);
-      } else if (app.pendingAnchor && app.editorMode === "create" && !$("comment-popover").hidden) {
-        placeSelectionForAnchor(app.pendingAnchor);
-        placePopoverForAnchor(app.pendingAnchor);
+      const editorAnchor = interactionOverlay().mooredEditorAnchor({
+        editing: app.editing,
+        pendingAnchor: app.pendingAnchor,
+        editorMode: app.editorMode,
+        popoverHidden: $("comment-popover").hidden,
+      });
+      if (editorAnchor) {
+        placeSelectionForAnchor(editorAnchor);
+        placePopoverForAnchor(editorAnchor);
       }
       if (app.activeMarker) {
         const note = annotationById(app.activeMarker.artifactId, app.activeMarker.annotationId);
@@ -753,8 +756,9 @@
     }
 
     function openCreateEditor(displayRect, relativeTo = $("artifact-image")) {
-      app.editorMode = "create";
-      app.editing = null;
+      Object.assign(app, interactionOverlay().createEditorSession({
+        anchor: app.pendingAnchor,
+      }));
       $("comment-text").value = "";
       setCommentActionLabels("create");
       openComment(displayRect, relativeTo);
@@ -770,8 +774,7 @@
     }
 
     function openExistingEditor(note) {
-      app.editorMode = "edit";
-      app.editing = note;
+      Object.assign(app, interactionOverlay().editEditorSession({ note }));
       $("comment-text").value = note.comment;
       setCommentActionLabels("edit");
       const anchor = note.anchor;
@@ -804,9 +807,7 @@
     }
 
     function closeEditor() {
-      app.pendingAnchor = null;
-      app.editing = null;
-      app.editorMode = "create";
+      Object.assign(app, interactionOverlay().closedEditorSession());
       $("comment-popover").hidden = true;
       $("selection").hidden = true;
       $("markdown-marker").hidden = true;

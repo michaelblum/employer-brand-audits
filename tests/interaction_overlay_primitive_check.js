@@ -14,6 +14,10 @@ assert.equal(typeof overlay.updateAnnotation, "function");
 assert.equal(typeof overlay.deleteAnnotation, "function");
 assert.equal(typeof overlay.displayRectForAnchor, "function");
 assert.equal(typeof overlay.placeOverlayBox, "function");
+assert.equal(typeof overlay.createEditorSession, "function");
+assert.equal(typeof overlay.editEditorSession, "function");
+assert.equal(typeof overlay.closedEditorSession, "function");
+assert.equal(typeof overlay.mooredEditorAnchor, "function");
 
 assert.deepEqual(overlay.editorLabels({ subtype: "annotation", mode: "create" }), {
   primary: "Add Comment",
@@ -134,3 +138,61 @@ assert.deepEqual(overlayEl.style, {
   height: "50px",
 });
 assert.equal(overlayEl.hidden, false);
+
+const createSession = overlay.createEditorSession({ anchor });
+assert.deepEqual(createSession, {
+  editorMode: "create",
+  editing: null,
+  pendingAnchor: anchor,
+});
+
+const editingNote = { id: "note-1", anchor: textAnchor, comment: "Review this" };
+const editSession = overlay.editEditorSession({ note: editingNote });
+assert.deepEqual(editSession, {
+  editorMode: "edit",
+  editing: editingNote,
+  pendingAnchor: null,
+});
+
+assert.deepEqual(overlay.closedEditorSession(), {
+  editorMode: "create",
+  editing: null,
+  pendingAnchor: null,
+});
+
+assert.equal(
+  overlay.mooredEditorAnchor({
+    editing: editingNote,
+    pendingAnchor: anchor,
+    editorMode: "create",
+    popoverHidden: false,
+  }),
+  textAnchor,
+);
+assert.equal(
+  overlay.mooredEditorAnchor({
+    editing: null,
+    pendingAnchor: anchor,
+    editorMode: "create",
+    popoverHidden: false,
+  }),
+  anchor,
+);
+assert.equal(
+  overlay.mooredEditorAnchor({
+    editing: null,
+    pendingAnchor: anchor,
+    editorMode: "create",
+    popoverHidden: true,
+  }),
+  null,
+);
+assert.equal(
+  overlay.mooredEditorAnchor({
+    editing: null,
+    pendingAnchor: anchor,
+    editorMode: "edit",
+    popoverHidden: false,
+  }),
+  null,
+);

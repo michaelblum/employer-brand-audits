@@ -100,12 +100,51 @@
     overlayEl.hidden = false;
   }
 
+  function createEditorSession({ anchor = null } = {}) {
+    return {
+      editorMode: "create",
+      editing: null,
+      pendingAnchor: anchor,
+    };
+  }
+
+  function editEditorSession({ note } = {}) {
+    return {
+      editorMode: "edit",
+      editing: note || null,
+      pendingAnchor: null,
+    };
+  }
+
+  function closedEditorSession() {
+    return {
+      editorMode: "create",
+      editing: null,
+      pendingAnchor: null,
+    };
+  }
+
+  function mooredEditorAnchor({
+    editing,
+    pendingAnchor,
+    editorMode,
+    popoverHidden,
+  } = {}) {
+    if (editing?.anchor) return editing.anchor;
+    if (pendingAnchor && editorMode === "create" && !popoverHidden) return pendingAnchor;
+    return null;
+  }
+
   ROOT.interactionOverlay = {
     appendAnnotation,
+    closedEditorSession,
+    createEditorSession,
     deleteAnnotation,
     displayRectForAnchor,
+    editEditorSession,
     editorLabels,
     isBlankComment,
+    mooredEditorAnchor,
     newAnnotation,
     normalizeComment,
     placeOverlayBox,
