@@ -89,6 +89,10 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-markdown-artifact-check.js"],
             validation_commands(),
         )
+        self.assertIn(
+            ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-navigation-check.js"],
+            validation_commands(),
+        )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/artifact_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/markdown_renderer.js", WORKBENCH_ASSETS)

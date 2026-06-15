@@ -44,12 +44,6 @@
     const artifactAnnotations = (id) => app.annotations[id] || [];
     const artifactIndexById = (id) => app.collection.artifacts.findIndex((item) => item.id === id);
     const annotationById = (artifactId, annotationId) => artifactAnnotations(artifactId).find((note) => note.id === annotationId);
-    const projectedArtifact = (item = artifact()) => app.projectedArtifactsById[item?.id] || null;
-    const projectedSlot = (item = artifact()) => {
-      const projected = projectedArtifact(item);
-      return projected ? app.projectedSlotsByValue[projected.slot] || null : null;
-    };
-    const activeComposite = () => app.filters.compositeId ? app.projectedGroupsById[app.filters.compositeId] || null : null;
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const isImageArtifact = (item = artifact()) => item.type === "image";
     const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
@@ -159,18 +153,6 @@
       projectedStepsById: app.projectedStepsById,
       workbenchProjection: app.workbenchProjection,
     });
-
-    function visibleArtifactIndexes() {
-      return workflowSidebar().visibleArtifactIndexes(workflowSidebarContext());
-    }
-
-    function ensureVisibleArtifactSelected() {
-      const indexes = visibleArtifactIndexes();
-      app.index = workflowSidebar().ensureVisibleArtifactIndex({
-        currentIndex: app.index,
-        visibleIndexes: indexes,
-      });
-    }
 
     function indexProjection(payload) {
       app.workbenchProjection = payload && typeof payload === "object" ? payload : null;
@@ -353,25 +335,19 @@
     }
 
     function move(delta) {
-      const indexes = visibleArtifactIndexes();
-      if (!indexes.length) return;
-      const current = indexes.includes(app.index) ? indexes.indexOf(app.index) : 0;
-      const next = indexes[(current + delta + indexes.length) % indexes.length];
-      setArtifact(next);
+      const plan = workflowSidebar().workflowMovePlan({
+        ...workflowSidebarContext(),
+        delta,
+      });
+      if (plan.activeIndex === app.index) return;
+      setArtifact(plan.activeIndex);
     }
 
     function renderTitle() {
-      const item = artifact();
-      const projected = projectedArtifact(item);
-      const slot = projectedSlot(item);
-      const workflow = app.workbenchProjection?.workflow;
-      const composite = activeComposite();
-      const slotLabel = slot?.label || projected?.slot;
-      const slotHtml = slotLabel ? `<span class="slot-pill">${escapeHtml(slotLabel)}</span>` : "";
-      const breadcrumbHtml = composite
-        ? `<span class="artifact-breadcrumb">${escapeHtml(workflow?.name || "Workflow")} -&gt; ${escapeHtml(composite.label || composite.id)}</span>`
-        : "";
-      $("artifact-title").innerHTML = `${breadcrumbHtml}<span class="artifact-heading">${escapeHtml(item.name)} ${slotHtml} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span></span>`;
+      $("artifact-title").innerHTML = workflowSidebar().renderArtifactTitleHtml({
+        ...workflowSidebarContext(),
+        formatTime,
+      });
     }
 
     function renderImage({ artifact: item = artifact() } = {}) {
@@ -552,15 +528,7 @@
     }
 
     function renderOverview() {
-      $("overview-popover").innerHTML = visibleArtifactIndexes().map((index) => {
-        const item = app.collection.artifacts[index];
-        return `
-        <button class="artifact-option ${index === app.index ? "active" : ""}" type="button" data-index="${index}">
-          <span>${escapeHtml(item.name)}</span>
-          <span class="small">${escapeHtml(artifactProjectionLine(item))}</span>
-        </button>
-      `;
-      }).join("");
+      $("overview-popover").innerHTML = workflowSidebar().renderOverviewHtml(workflowSidebarContext());
       $("overview-popover").querySelectorAll("[data-index]").forEach((button) => {
         button.addEventListener("click", () => {
           $("overview-popover").hidden = true;
@@ -569,24 +537,9 @@
       });
     }
 
-    function artifactProjectionLine(item) {
-      return workflowSidebar().artifactProjectionLine({
-        ...workflowSidebarContext(),
-        item,
-      });
-    }
-
-    function setWorkbenchFilter(kind, value) {
-      if (kind === "step") {
-        app.filters.stepId = app.filters.stepId === value ? null : value;
-      }
-      if (kind === "slot") {
-        app.filters.slot = app.filters.slot === value ? null : value;
-      }
-      if (kind === "composite") {
-        app.filters.compositeId = app.filters.compositeId === value ? null : value;
-      }
-      ensureVisibleArtifactSelected();
+    function applyWorkflowFilterPlan(plan = {}) {
+      if (plan.filters) app.filters = plan.filters;
+      if (Number.isInteger(plan.activeIndex)) app.index = plan.activeIndex;
       closeEditor();
       hideAnnotationMarker();
       render();
@@ -597,15 +550,11 @@
       $("sidebar").querySelectorAll("[data-filter-kind]").forEach((button) => {
         button.addEventListener("click", (event) => {
           event.stopPropagation();
-          if (button.dataset.filterKind === "clear") {
-            app.filters.stepId = null;
-            app.filters.slot = null;
-            app.filters.compositeId = null;
-            ensureVisibleArtifactSelected();
-            render();
-            return;
-          }
-          setWorkbenchFilter(button.dataset.filterKind, button.dataset.filterValue);
+          applyWorkflowFilterPlan(workflowSidebar().workflowFilterPlan({
+            ...workflowSidebarContext(),
+            filterKind: button.dataset.filterKind,
+            filterValue: button.dataset.filterValue,
+          }));
         });
       });
       $("sidebar").querySelectorAll(".artifact-row[data-index]").forEach((row) => {
