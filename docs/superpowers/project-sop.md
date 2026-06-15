@@ -73,7 +73,8 @@ Handoffs must not invite a new session to change code immediately. A successor
 session should first respond with:
 
 1. Confirmation of onboarding, including links or paths to the entry point and
-   handoff it used, plus the onboarding token from `./eba dev situation --json`.
+   handoff it used, the onboarding token from `./eba dev situation --json`, and
+   the active `EBA-Sig` when a turn is open.
 2. A very concise alignment recital: short bulleted facts under a `Salience`
    heading, with pointers to the handoff and generated onboarding materials
    read. This should be brochure-short, not a second handoff.
@@ -125,6 +126,10 @@ Agents should prefer `./eba dev ...` for common project mechanisms:
 - `./eba begin --worker-id <stable-id>` and `./eba end --worker-id <stable-id>`
   for turn-level worker identity, gate packets, DOX-aware corridor checks, and
   generated work-card/handoff artifacts.
+- `./eba sig` for the current repo-private provenance signature.
+- `./eba dev trace` for bounded local session archaeology.
+- `./eba dev gh` for GitHub prose mutations with automatic `EBA-Sig` footers.
+- `./eba dev hooks install` to install the local commit-message footer hook.
 - `./eba dev validate` for the current validation ladder.
 - `./eba dev demo` for a prepared workflow artifact workbench inspection surface.
 - `./eba dev workbench` for managed `eba-workbench` refresh, tab, snapshot, and
@@ -145,6 +150,30 @@ Generated and local runtime paths such as `artifacts/`, `.playwright-cli/`, and
 Do not push, open PRs, or update GitHub issues unless the user asks or accepts
 one of the end-of-work options. When pushing is accepted, preserve the branch
 stack and state what was pushed.
+
+## GitHub Provenance
+
+Use the command surface, not hand-maintained ritual, for repo-private provenance:
+
+- `./eba sig` prints the active `EBA-Sig`.
+- `./eba dev gh ...` signs agent-authored issue bodies, PR bodies, and comments.
+- `./eba dev hooks install` installs the local commit-message signing hook.
+- `./eba dev trace ...` performs bounded local session archaeology.
+
+Signed GitHub prose and commit messages end with:
+
+```text
+EBA-Sigs:
+- <worker-id>/<turn-id>
+```
+
+Append the current signature, skip only a consecutive duplicate, and keep the
+rolling footer bounded. Use provider-neutral worker IDs because signatures may
+appear in GitHub. Do not paste work-card or handoff payloads into GitHub.
+
+Preserve the Publication Boundary: ask before creating or updating issues,
+labels, epics, PRs, or comments unless the user has already accepted that
+specific action.
 
 ## Handoff Boundary
 

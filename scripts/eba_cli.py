@@ -19,6 +19,7 @@ try:
         end_turn,
         print_json as print_control_plane_json,
     )
+    from scripts.eba_signature import append_signature_footer, current_eba_signature, signature_payload
 except ModuleNotFoundError:
     from easy_audit_fixture import generate_easy_audit_fixture
     from eba_control_plane import (
@@ -28,6 +29,7 @@ except ModuleNotFoundError:
         end_turn,
         print_json as print_control_plane_json,
     )
+    from eba_signature import append_signature_footer, current_eba_signature, signature_payload
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +38,9 @@ DEFAULT_MANIFEST = (
 )
 WORKBENCH_GATE = REPO_ROOT / "scripts" / "playwright_cli_workbench_gate.py"
 BROWSER_WRAPPER = REPO_ROOT / "scripts" / "playwright_cli_browser.py"
+THREAD_WORKBENCH = (
+    Path.home() / ".codex" / "skills" / "codex-thread-workbench" / "scripts" / "thread_workbench.py"
+)
 WORKBENCH_BROWSER_SESSION = "eba-workbench"
 COMPILE_TARGETS = [
     "scripts/easy_audit_fixture.py",
@@ -51,6 +56,8 @@ COMPILE_TARGETS = [
     "scripts/workbench_projection.py",
     "scripts/workbench_projection_shape_check.py",
     "scripts/eba_cli.py",
+    "scripts/eba_commit_msg_hook.py",
+    "scripts/eba_signature.py",
 ]
 FIXTURE_GENERATORS = {
     "easy-audit": generate_easy_audit_fixture,
@@ -64,6 +71,17 @@ def run(args: list[str], *, check: bool = False, capture: bool = True) -> subpro
         text=True,
         capture_output=capture,
         check=check,
+    )
+
+
+def run_with_stdin(args: list[str], input_text: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        args,
+        cwd=REPO_ROOT,
+        text=True,
+        input=input_text,
+        capture_output=True,
+        check=False,
     )
 
 
@@ -180,6 +198,10 @@ def command_situation(args: argparse.Namespace) -> int:
             "demo": "./eba dev demo",
             "demo_headless": "./eba dev demo --no-browser",
             "workbench": "./eba dev workbench",
+            "trace": "./eba dev trace",
+            "gh": "./eba dev gh",
+            "hooks": "./eba dev hooks",
+            "sig": "./eba sig",
         },
         "onboarding": {
             "token": "EBA-AGENTS-SOP-V1",
@@ -221,6 +243,18 @@ def command_begin(args: argparse.Namespace) -> int:
 def command_end(args: argparse.Namespace) -> int:
     payload = end_turn(REPO_ROOT, args.worker_id)
     print_control_plane_json(payload)
+    return 0
+
+
+def command_sig(args: argparse.Namespace) -> int:
+    signature = current_eba_signature(REPO_ROOT, worker_id=args.worker_id)
+    payload = signature_payload(signature)
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"EBA-Sig: {payload['signature']}")
+        if payload["head"]:
+            print(f"head={payload['head']}")
     return 0
 
 
@@ -395,6 +429,135 @@ def command_workbench(args: argparse.Namespace) -> int:
     return completed.returncode
 
 
+def command_hooks(args: argparse.Namespace) -> int:
+    if args.hooks_action == "install":
+        completed = run(["git", "config", "core.hooksPath", "scripts/git-hooks"])
+        if completed.returncode != 0:
+            if completed.stderr:
+                print(completed.stderr, file=sys.stderr, end="")
+            return completed.returncode
+        print("core.hooksPath=scripts/git-hooks")
+        return 0
+    if args.hooks_action == "status":
+        completed = run(["git", "config", "--get", "core.hooksPath"])
+        value = completed.stdout.strip() if completed.returncode == 0 else ""
+        print(value or "(unset)")
+        return 0
+    raise SystemExit(f"Unsupported hooks action: {args.hooks_action}")
+
+
+def body_from_args(args: argparse.Namespace) -> str:
+    if args.body_file:
+        if args.body_file == "-":
+            return sys.stdin.read()
+        return Path(args.body_file).read_text(encoding="utf-8")
+    return args.body or ""
+
+
+def signed_body_from_args(args: argparse.Namespace) -> str:
+    signature = current_eba_signature(REPO_ROOT, worker_id=getattr(args, "worker_id", None))
+    return append_signature_footer(body_from_args(args), signature.signature)
+
+
+def command_gh(args: argparse.Namespace) -> int:
+    body = signed_body_from_args(args)
+    action = args.gh_action
+    command: list[str]
+    if action == "issue-comment":
+        command = ["gh", "issue", "comment", args.issue, "--body-file", "-"]
+    elif action == "pr-comment":
+        command = ["gh", "pr", "comment", args.pr, "--body-file", "-"]
+    elif action == "issue-edit":
+        command = ["gh", "issue", "edit", args.issue, "--body-file", "-"]
+        if args.title:
+            command.extend(["--title", args.title])
+    elif action == "pr-edit":
+        command = ["gh", "pr", "edit", args.pr, "--body-file", "-"]
+        if args.title:
+            command.extend(["--title", args.title])
+    elif action == "issue-create":
+        command = ["gh", "issue", "create", "--title", args.title, "--body-file", "-"]
+        for label in args.label or []:
+            command.extend(["--label", label])
+    elif action == "pr-create":
+        command = ["gh", "pr", "create", "--title", args.title, "--body-file", "-"]
+        if args.base:
+            command.extend(["--base", args.base])
+        if args.head:
+            command.extend(["--head", args.head])
+        for label in args.label or []:
+            command.extend(["--label", label])
+    else:
+        raise SystemExit(f"Unsupported gh action: {action}")
+
+    completed = run_with_stdin(command, body)
+    if completed.stdout:
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, file=sys.stderr, end="")
+    return completed.returncode
+
+
+def command_trace(args: argparse.Namespace) -> int:
+    if not THREAD_WORKBENCH.exists():
+        print(f"Trace workbench script not found: {THREAD_WORKBENCH}", file=sys.stderr)
+        return 1
+    if args.trace_action == "search":
+        terms = list(args.terms)
+        if args.worker_id:
+            terms.append(args.worker_id)
+        if args.turn_id:
+            terms.append(args.turn_id)
+        for keyword in args.keyword or []:
+            terms.append(keyword)
+        if not args.all_projects:
+            terms.append(str(REPO_ROOT))
+        if not terms:
+            print("trace search requires at least one worker id, turn id, or keyword", file=sys.stderr)
+            return 2
+        command = [
+            sys.executable,
+            str(THREAD_WORKBENCH),
+            "search",
+            "--search-scope",
+            "title-cwd-messages",
+            "--search-mode",
+            args.search_mode,
+            "--max-list",
+            str(args.max_list),
+            "--since-days",
+            str(args.since_days),
+        ]
+        for term in terms:
+            command.extend(["--search-term", term])
+    elif args.trace_action == "drill":
+        command = [
+            sys.executable,
+            str(THREAD_WORKBENCH),
+            "drill",
+            "--thread",
+            args.thread,
+            "--limit",
+            str(args.limit),
+            "--context-chars",
+            str(args.context_chars),
+            "--search-mode",
+            args.search_mode,
+            "--non-interactive",
+        ]
+        for query in args.query:
+            command.extend(["--query", query])
+    else:
+        raise SystemExit(f"Unsupported trace action: {args.trace_action}")
+
+    completed = run(command, capture=True)
+    if completed.stdout:
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, file=sys.stderr, end="")
+    return completed.returncode
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Employer Brand Audits project command surface.")
     subparsers = parser.add_subparsers(dest="family", required=True)
@@ -406,6 +569,11 @@ def build_parser() -> argparse.ArgumentParser:
     end = subparsers.add_parser("end", help="End an agent control-plane turn")
     end.add_argument("--worker-id", required=True)
     end.set_defaults(func=command_end)
+
+    sig = subparsers.add_parser("sig", help="Print the active EBA signature")
+    sig.add_argument("--worker-id", help="Select a specific active worker")
+    sig.add_argument("--json", action="store_true")
+    sig.set_defaults(func=command_sig)
 
     dev = subparsers.add_parser("dev", help="Developer and agent workflow commands")
     dev_subparsers = dev.add_subparsers(dest="command", required=True)
@@ -464,6 +632,78 @@ def build_parser() -> argparse.ArgumentParser:
     press = workbench_subparsers.add_parser("press", help="Press a key in the workbench session")
     press.add_argument("key")
     press.set_defaults(func=command_workbench)
+
+    hooks = dev_subparsers.add_parser("hooks", help="Install or inspect local EBA git hooks")
+    hooks_subparsers = hooks.add_subparsers(dest="hooks_action", required=True)
+    hooks_install = hooks_subparsers.add_parser("install", help="Install local git hooks for this checkout")
+    hooks_install.set_defaults(func=command_hooks)
+    hooks_status = hooks_subparsers.add_parser("status", help="Print configured git hooks path")
+    hooks_status.set_defaults(func=command_hooks)
+
+    trace = dev_subparsers.add_parser("trace", help="Search or drill local session archaeology")
+    trace_subparsers = trace.add_subparsers(dest="trace_action", required=True)
+    trace_search = trace_subparsers.add_parser("search", help="Search recent local sessions")
+    trace_search.add_argument("terms", nargs="*", help="Worker IDs, turn IDs, or keywords")
+    trace_search.add_argument("--worker-id")
+    trace_search.add_argument("--turn-id")
+    trace_search.add_argument("--keyword", action="append", default=[])
+    trace_search.add_argument("--since-days", type=float, default=7.0)
+    trace_search.add_argument("--max-list", type=int, default=20)
+    trace_search.add_argument("--search-mode", choices=["all", "any"], default="all")
+    trace_search.add_argument("--all-projects", action="store_true")
+    trace_search.set_defaults(func=command_trace)
+    trace_drill = trace_subparsers.add_parser("drill", help="Drill into one local session")
+    trace_drill.add_argument("--thread", required=True)
+    trace_drill.add_argument("--query", action="append", default=[])
+    trace_drill.add_argument("--limit", type=int, default=20)
+    trace_drill.add_argument("--context-chars", type=int, default=240)
+    trace_drill.add_argument("--search-mode", choices=["all", "any"], default="all")
+    trace_drill.set_defaults(func=command_trace)
+
+    gh = dev_subparsers.add_parser("gh", help="Mutate GitHub prose with an EBA signature footer")
+    gh.add_argument("--worker-id", help="Select a specific active worker for the signature")
+    gh_subparsers = gh.add_subparsers(dest="gh_action", required=True)
+
+    def add_body_args(target: argparse.ArgumentParser) -> None:
+        body_group = target.add_mutually_exclusive_group(required=True)
+        body_group.add_argument("--body")
+        body_group.add_argument("--body-file")
+
+    issue_comment = gh_subparsers.add_parser("issue-comment", help="Create a signed issue comment")
+    issue_comment.add_argument("issue")
+    add_body_args(issue_comment)
+    issue_comment.set_defaults(func=command_gh)
+
+    pr_comment = gh_subparsers.add_parser("pr-comment", help="Create a signed PR comment")
+    pr_comment.add_argument("pr")
+    add_body_args(pr_comment)
+    pr_comment.set_defaults(func=command_gh)
+
+    issue_edit = gh_subparsers.add_parser("issue-edit", help="Update a signed issue body")
+    issue_edit.add_argument("issue")
+    issue_edit.add_argument("--title")
+    add_body_args(issue_edit)
+    issue_edit.set_defaults(func=command_gh)
+
+    pr_edit = gh_subparsers.add_parser("pr-edit", help="Update a signed PR body")
+    pr_edit.add_argument("pr")
+    pr_edit.add_argument("--title")
+    add_body_args(pr_edit)
+    pr_edit.set_defaults(func=command_gh)
+
+    issue_create = gh_subparsers.add_parser("issue-create", help="Create a signed issue")
+    issue_create.add_argument("--title", required=True)
+    issue_create.add_argument("--label", action="append", default=[])
+    add_body_args(issue_create)
+    issue_create.set_defaults(func=command_gh)
+
+    pr_create = gh_subparsers.add_parser("pr-create", help="Create a signed PR")
+    pr_create.add_argument("--title", required=True)
+    pr_create.add_argument("--base")
+    pr_create.add_argument("--head")
+    pr_create.add_argument("--label", action="append", default=[])
+    add_body_args(pr_create)
+    pr_create.set_defaults(func=command_gh)
 
     return parser
 

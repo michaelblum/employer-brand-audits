@@ -147,7 +147,7 @@ def test_dev_validate_blocks_without_active_turn(tmp_path: Path) -> None:
     assert result.returncode != 0
     payload = parse_json(result)
     assert payload["status"] == "blocked"
-    assert payload["reason"] == "no_active_turn"
+    assert payload["reason"] == "no_current_turn"
     assert payload["next_step"] == "run ./eba begin --worker-id <id>"
 
 
@@ -168,8 +168,49 @@ def test_begin_creates_turn_packet_and_allows_validate(tmp_path: Path) -> None:
     assert not (
         validate.returncode != 0
         and validate_payload.get("status") == "blocked"
-        and validate_payload.get("reason") == "no_active_turn"
+        and validate_payload.get("reason") == "no_current_turn"
     )
+
+
+def test_eba_sig_prints_newest_active_turn_signature(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+    assert eba(repo, "begin", "--worker-id", "older-worker").returncode == 0
+    assert eba(repo, "begin", "--worker-id", "current-worker").returncode == 0
+
+    result = eba(repo, "sig", "--json")
+
+    assert result.returncode == 0, result.stderr
+    payload = parse_json(result)
+    assert payload["worker_id"] == "current-worker"
+    assert payload["signature"] == f"current-worker/{payload['turn_id']}"
+
+
+def test_eba_sig_without_current_turn_does_not_use_stale_registry(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+    assert eba(repo, "begin", "--worker-id", "stale-worker").returncode == 0
+    (repo / ".eba" / "current-turn.json").unlink()
+
+    result = eba(repo, "sig", "--json")
+
+    assert result.returncode != 0
+    payload = parse_json(result)
+    assert payload["reason"] == "no_current_turn"
+
+
+def test_dev_command_gate_prefers_current_turn_over_stale_registry(
+    tmp_path: Path,
+) -> None:
+    from scripts.eba_control_plane import assert_dev_command_allowed
+
+    repo = copy_repo(tmp_path)
+    assert eba(repo, "begin", "--worker-id", "stale-worker").returncode == 0
+    registry_path = repo / ".eba" / "registry.json"
+    registry = json.loads(registry_path.read_text())
+    registry["workers"]["stale-worker"]["active_turn"]["allowed_dev_commands"] = ["validate"]
+    registry_path.write_text(json.dumps(registry, indent=2, sort_keys=True) + "\n")
+    assert eba(repo, "begin", "--worker-id", "current-worker").returncode == 0
+
+    assert_dev_command_allowed(repo, "gh")
 
 
 def test_begin_corridor_covers_dox_boundaries(tmp_path: Path) -> None:
@@ -240,7 +281,7 @@ def test_end_writes_artifacts_and_closes_turn(tmp_path: Path) -> None:
 
     blocked = eba(repo, "dev", "validate", "--json")
     assert blocked.returncode != 0
-    assert parse_json(blocked)["reason"] == "no_active_turn"
+    assert parse_json(blocked)["reason"] == "no_current_turn"
 
 
 def test_begin_with_worker_id_fails_closed_when_registry_missing_with_existing_state(
@@ -277,6 +318,37 @@ def test_instruction_bearing_detects_child_agents_files() -> None:
     assert instruction_bearing("scripts/AGENTS.md")
     assert instruction_bearing("mcp-server/imaging/AGENTS.md")
     assert not instruction_bearing("scripts/workflow_artifact_workbench/app.js")
+
+
+def test_signature_footer_appends_and_skips_consecutive_duplicate() -> None:
+    from scripts.eba_signature import append_signature_footer
+
+    body = "Update body\n"
+    signed = append_signature_footer(body, "worker-one/turn-1")
+
+    assert signed == "Update body\n\nEBA-Sigs:\n- worker-one/turn-1\n"
+    assert append_signature_footer(signed, "worker-one/turn-1") == signed
+    assert append_signature_footer(signed, "worker-two/turn-2") == (
+        "Update body\n\nEBA-Sigs:\n- worker-one/turn-1\n- worker-two/turn-2\n"
+    )
+    many = "Update body\n\nEBA-Sigs:\n" + "\n".join(
+        f"- worker/turn-{index}" for index in range(12)
+    )
+    capped = append_signature_footer(many, "worker/turn-12", max_signatures=10)
+    assert "- worker/turn-0\n" not in capped
+    assert "- worker/turn-2\n" not in capped
+    assert capped.endswith("- worker/turn-12\n")
+
+
+def test_trace_and_gh_command_authorization_shape() -> None:
+    from scripts.eba_control_plane import ACTIVE_TURN_REQUIRED_COMMANDS, ALLOWED_DEV_COMMANDS
+
+    assert "trace" in ALLOWED_DEV_COMMANDS
+    assert "trace" not in ACTIVE_TURN_REQUIRED_COMMANDS
+    assert "hooks" in ALLOWED_DEV_COMMANDS
+    assert "hooks" not in ACTIVE_TURN_REQUIRED_COMMANDS
+    assert "gh" in ALLOWED_DEV_COMMANDS
+    assert "gh" in ACTIVE_TURN_REQUIRED_COMMANDS
 
 
 def test_eba_control_plane_is_instruction_bearing() -> None:
