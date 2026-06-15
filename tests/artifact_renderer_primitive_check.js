@@ -16,6 +16,11 @@ assert.equal(typeof renderer.artifactErrorHtml, "function");
 assert.equal(typeof renderer.documentLoadPlan, "function");
 assert.equal(typeof renderer.documentRenderPayload, "function");
 assert.equal(typeof renderer.renderArtifact, "function");
+assert.equal(typeof renderer.artifactFallbackPlan, "function");
+assert.equal(typeof renderer.markdownModePlan, "function");
+assert.equal(typeof renderer.markdownInputPlan, "function");
+assert.equal(typeof renderer.markdownSavePlan, "function");
+assert.equal(typeof renderer.markdownRevertPlan, "function");
 
 assert.equal(renderer.artifactRenderKind({ type: "markdown" }), "markdown");
 assert.equal(renderer.artifactRenderKind({ type: "json" }), "document");
@@ -215,6 +220,86 @@ assert.equal(
   "<p>Failed to load artifact: Bad &lt;artifact&gt;</p>",
 );
 
+assert.deepEqual(
+  renderer.artifactFallbackPlan({ renderKind: "markdown", error: new Error("Bad <markdown>") }),
+  {
+    renderKind: "markdown",
+    html: "<p>Failed to load markdown: Bad &lt;markdown&gt;</p>",
+    surfaces: {
+      markdownPreviewHidden: false,
+      markdownSourceHidden: true,
+    },
+    updateReadout: false,
+  },
+);
+assert.deepEqual(
+  renderer.artifactFallbackPlan({ renderKind: "document", error: new Error("Bad <artifact>") }),
+  {
+    renderKind: "document",
+    html: "<p>Failed to load artifact: Bad &lt;artifact&gt;</p>",
+    surfaces: {},
+    updateReadout: true,
+  },
+);
+
+assert.deepEqual(renderer.markdownModePlan("source"), {
+  mode: "source",
+  renderBody: true,
+  focusSource: true,
+});
+assert.deepEqual(renderer.markdownModePlan("sideways"), {
+  mode: "preview",
+  renderBody: true,
+  focusSource: false,
+});
+
+assert.deepEqual(
+  renderer.markdownInputPlan({ content: "Edited", savedContent: "Saved" }),
+  {
+    content: "Edited",
+    dirty: true,
+    saveDisabled: false,
+    updateReadout: true,
+  },
+);
+assert.deepEqual(
+  renderer.markdownInputPlan({ content: "Saved", savedContent: "Saved" }),
+  {
+    content: "Saved",
+    dirty: false,
+    saveDisabled: true,
+    updateReadout: true,
+  },
+);
+
+assert.deepEqual(
+  renderer.markdownSavePlan({ content: "Edited", responseOk: false }),
+  {
+    status: "failed",
+    toast: "Markdown save failed",
+    renderBody: false,
+  },
+);
+assert.deepEqual(
+  renderer.markdownSavePlan({ content: "Edited", responseOk: true }),
+  {
+    status: "saved",
+    savedContent: "Edited",
+    dirty: false,
+    renderBody: true,
+    toast: "Markdown saved",
+  },
+);
+assert.deepEqual(
+  renderer.markdownRevertPlan({ savedContent: "Saved" }),
+  {
+    content: "Saved",
+    dirty: false,
+    renderBody: true,
+    toast: "Markdown reverted",
+  },
+);
+
 (async () => {
   async function recordControllerRun(artifact, effects = {}) {
     const calls = [];
@@ -304,6 +389,25 @@ assert.equal(
         ["renderArtifactError", "broken-md", "markdown", "fetch failed"],
       ],
       result: { renderKind: "markdown", status: "fallback" },
+    },
+  );
+
+  assert.deepEqual(
+    await recordControllerRun(
+      { id: "broken-doc", type: "json" },
+      {
+        loadDocument() {
+          throw new Error("document render failed");
+        },
+      },
+    ),
+    {
+      calls: [
+        ["applyStagePlan", "document"],
+        ["loadDocument", "broken-doc"],
+        ["renderArtifactError", "broken-doc", "document", "document render failed"],
+      ],
+      result: { renderKind: "document", status: "fallback" },
     },
   );
 })().catch((error) => {

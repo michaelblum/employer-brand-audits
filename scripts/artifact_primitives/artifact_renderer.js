@@ -139,6 +139,63 @@
     return `<p>${prefix}: ${escapeHtml(error?.message || error || "Unknown error")}</p>`;
   }
 
+  function artifactFallbackPlan({ renderKind = "document", error } = {}) {
+    return {
+      renderKind,
+      html: artifactErrorHtml({ renderKind, error }),
+      surfaces: renderKind === "markdown"
+        ? { markdownPreviewHidden: false, markdownSourceHidden: true }
+        : {},
+      updateReadout: renderKind === "document",
+    };
+  }
+
+  function markdownModePlan(mode) {
+    const nextMode = mode === "source" ? "source" : "preview";
+    return {
+      mode: nextMode,
+      renderBody: true,
+      focusSource: nextMode === "source",
+    };
+  }
+
+  function markdownInputPlan({ content = "", savedContent = "" } = {}) {
+    const nextContent = String(content ?? "");
+    const dirty = nextContent !== String(savedContent ?? "");
+    return {
+      content: nextContent,
+      dirty,
+      saveDisabled: !dirty,
+      updateReadout: true,
+    };
+  }
+
+  function markdownSavePlan({ content = "", responseOk = false } = {}) {
+    if (!responseOk) {
+      return {
+        status: "failed",
+        toast: "Markdown save failed",
+        renderBody: false,
+      };
+    }
+    return {
+      status: "saved",
+      savedContent: String(content ?? ""),
+      dirty: false,
+      renderBody: true,
+      toast: "Markdown saved",
+    };
+  }
+
+  function markdownRevertPlan({ savedContent = "" } = {}) {
+    return {
+      content: String(savedContent || ""),
+      dirty: false,
+      renderBody: true,
+      toast: "Markdown reverted",
+    };
+  }
+
   function requiredEffect(effects, name) {
     const effect = effects?.[name];
     if (typeof effect !== "function") {
@@ -179,12 +236,17 @@
   }
 
   ROOT.artifactRenderer = {
+    artifactFallbackPlan,
     artifactErrorHtml,
     artifactReadout,
     artifactStagePlan,
     artifactRenderKind,
     documentLoadPlan,
     documentRenderPayload,
+    markdownInputPlan,
+    markdownModePlan,
+    markdownRevertPlan,
+    markdownSavePlan,
     renderArtifact,
   };
 }());
