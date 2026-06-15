@@ -16,6 +16,9 @@ markdown, Mermaid, images, sidebars, and interaction overlays.
 - Keep primitive APIs narrow and explicit.
 - Primitives should not take over app-level routing, persistence, or generated
   artifact ownership unless that boundary is deliberately moved.
+- Artifact render controller primitives may own render sequencing and fallback
+  decisions; the workbench app shell must still execute DOM, fetch, image, and
+  persistence side effects through explicit callbacks.
 - Interaction overlay primitives expose subtype models and state helpers;
   controller code owns effect execution and annotation routing.
 - Vendor code under `vendor/` should stay isolated from project-authored
