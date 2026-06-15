@@ -290,81 +290,87 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertEqual(asset_health["status"], "asset_manifest_unavailable:404")
 
     def test_surface_restarts_owned_server_when_asset_health_is_stale(self) -> None:
-        manifest = REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"
-        payloads = [
-            {
-                "url": "http://127.0.0.1:8765/",
-                "pid": 123,
-                "alive": True,
-                "owned": True,
-                "health": "200",
-                "asset_health": {"healthy": False, "status": "asset_fingerprint_mismatch"},
-                "manifest": "artifacts/easy-audit/latest/manifest.json",
-                "log": "artifacts/easy-audit/latest/workbench-server.log",
-                "annotation_state_url": "http://127.0.0.1:8765/api/annotation-state",
-                "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
-                "browser_session": {"session": "eba-workbench", "alive": True},
-            },
-            {
-                "url": "http://127.0.0.1:8765/",
-                "pid": 456,
-                "alive": True,
-                "owned": True,
-                "health": "200",
-                "asset_health": {"healthy": True, "status": "ok"},
-                "manifest": "artifacts/easy-audit/latest/manifest.json",
-                "log": "artifacts/easy-audit/latest/workbench-server.log",
-                "annotation_state_url": "http://127.0.0.1:8765/api/annotation-state",
-                "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
-                "browser_session": {"session": "eba-workbench", "alive": True},
-            },
-        ]
-        start_calls: list[object] = []
+        (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest = Path(tmp) / "manifest.json"
+            manifest.write_text('{"artifacts": []}\n', encoding="utf-8")
+            manifest_label = str(manifest.relative_to(REPO_ROOT))
+            log_label = str((Path(tmp) / "workbench-server.log").relative_to(REPO_ROOT))
+            payloads = [
+                {
+                    "url": "http://127.0.0.1:8765/",
+                    "pid": 123,
+                    "alive": True,
+                    "owned": True,
+                    "health": "200",
+                    "asset_health": {"healthy": False, "status": "asset_fingerprint_mismatch"},
+                    "manifest": manifest_label,
+                    "log": log_label,
+                    "annotation_state_url": "http://127.0.0.1:8765/api/annotation-state",
+                    "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
+                    "browser_session": {"session": "eba-workbench", "alive": True},
+                },
+                {
+                    "url": "http://127.0.0.1:8765/",
+                    "pid": 456,
+                    "alive": True,
+                    "owned": True,
+                    "health": "200",
+                    "asset_health": {"healthy": True, "status": "ok"},
+                    "manifest": manifest_label,
+                    "log": log_label,
+                    "annotation_state_url": "http://127.0.0.1:8765/api/annotation-state",
+                    "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
+                    "browser_session": {"session": "eba-workbench", "alive": True},
+                },
+            ]
+            start_calls: list[object] = []
 
-        def fake_status(args: object, manifest_path: Path) -> dict[str, object]:
-            self.assertEqual(manifest_path, manifest)
-            return payloads.pop(0)
+            def fake_status(args: object, manifest_path: Path) -> dict[str, object]:
+                self.assertEqual(manifest_path, manifest)
+                return payloads.pop(0)
 
-        def fake_start(args: object) -> int:
-            start_calls.append(args)
-            return 0
+            def fake_start(args: object) -> int:
+                start_calls.append(args)
+                return 0
 
-        original_status_payload = gate.status_payload
-        original_command_start = gate.command_start
-        original_read_annotation_state = gate.read_annotation_state
-        try:
-            gate.status_payload = fake_status  # type: ignore[assignment]
-            gate.command_start = fake_start  # type: ignore[assignment]
-            gate.read_annotation_state = lambda url: {  # type: ignore[assignment]
-                "collection": {"artifacts": []},
-                "annotations": {},
-                "updated_at_epoch": 1,
-            }
+            original_status_payload = gate.status_payload
+            original_command_start = gate.command_start
+            original_read_annotation_state = gate.read_annotation_state
+            try:
+                gate.status_payload = fake_status  # type: ignore[assignment]
+                gate.command_start = fake_start  # type: ignore[assignment]
+                gate.read_annotation_state = lambda url: {  # type: ignore[assignment]
+                    "collection": {"artifacts": []},
+                    "annotations": {},
+                    "updated_at_epoch": 1,
+                }
 
-            with contextlib.redirect_stdout(io.StringIO()):
-                exit_code = gate.command_surface(
-                    type(
-                        "Args",
-                        (),
-                        {
-                            "manifest": manifest,
-                            "host": "127.0.0.1",
-                            "port": 8765,
-                            "timeout": 10.0,
-                            "no_browser": True,
-                            "json": False,
-                        },
-                    )()
-                )
-        finally:
-            gate.status_payload = original_status_payload  # type: ignore[assignment]
-            gate.command_start = original_command_start  # type: ignore[assignment]
-            gate.read_annotation_state = original_read_annotation_state  # type: ignore[assignment]
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = gate.command_surface(
+                        type(
+                            "Args",
+                            (),
+                            {
+                                "manifest": manifest,
+                                "host": "127.0.0.1",
+                                "port": 8765,
+                                "timeout": 10.0,
+                                "no_browser": True,
+                                "json": False,
+                            },
+                        )()
+                    )
+            finally:
+                gate.status_payload = original_status_payload  # type: ignore[assignment]
+                gate.command_start = original_command_start  # type: ignore[assignment]
+                gate.read_annotation_state = original_read_annotation_state  # type: ignore[assignment]
 
-        self.assertEqual(exit_code, 0)
-        self.assertEqual(len(start_calls), 1)
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(start_calls), 1)
 
     def test_stale_asset_restart_waits_for_owned_port_release(self) -> None:
+        (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
             manifest = Path(tmp) / "manifest.json"
             manifest.write_text('{"artifacts": []}\n', encoding="utf-8")

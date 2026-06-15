@@ -107,26 +107,31 @@ class EasyAuditFixtureTests(unittest.TestCase):
             self.assertIn("#sticky-obscured-target", source)
 
     def test_live_capture_artifacts_are_added_to_review_manifest(self) -> None:
-        manifest = {
-            "steps": [
-                {"id": "l1-source-capture", "artifact_ids": ["l1-careers-screenshot"]},
-            ],
-            "artifacts": [
-                {"id": "l1-careers-screenshot", "type": "screenshot"},
-            ],
-        }
-        artifacts = {
-            "animation_progress": "artifacts/easy-audit/latest/l1-animation-progress.png",
-            "sticky_obscured_target": "artifacts/easy-audit/latest/l1-sticky-obscured-target.png",
-        }
+        with tempfile.TemporaryDirectory() as tmp:
+            progress = Path(tmp) / "l1-animation-progress.png"
+            sticky = Path(tmp) / "l1-sticky-obscured-target.png"
+            progress.touch()
+            sticky.touch()
+            manifest = {
+                "steps": [
+                    {"id": "l1-source-capture", "artifact_ids": ["l1-careers-screenshot"]},
+                ],
+                "artifacts": [
+                    {"id": "l1-careers-screenshot", "type": "screenshot"},
+                ],
+            }
+            artifacts = {
+                "animation_progress": str(progress),
+                "sticky_obscured_target": str(sticky),
+            }
 
-        attach_live_capture_artifacts(manifest, artifacts)
+            attach_live_capture_artifacts(manifest, artifacts)
 
-        artifact_ids = [artifact["id"] for artifact in manifest["artifacts"]]
-        self.assertIn("l1-animation-progress", artifact_ids)
-        self.assertIn("l1-sticky-obscured-target", artifact_ids)
-        self.assertIn("l1-animation-progress", manifest["steps"][0]["artifact_ids"])
-        self.assertIn("l1-sticky-obscured-target", manifest["steps"][0]["artifact_ids"])
+            artifact_ids = [artifact["id"] for artifact in manifest["artifacts"]]
+            self.assertIn("l1-animation-progress", artifact_ids)
+            self.assertIn("l1-sticky-obscured-target", artifact_ids)
+            self.assertIn("l1-animation-progress", manifest["steps"][0]["artifact_ids"])
+            self.assertIn("l1-sticky-obscured-target", manifest["steps"][0]["artifact_ids"])
 
     def test_live_capture_artifacts_skip_missing_files(self) -> None:
         manifest = {
