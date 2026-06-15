@@ -127,8 +127,8 @@ def window_focus(args: argparse.Namespace) -> int:
         "}"
     )
     page_result = _run(_session_prefix(args.session) + ["run-code", code])
-    app_result = _activate_app(args.app_name)
-    return page_result if page_result != 0 else app_result
+    _activate_app(args.app_name)
+    return page_result
 
 
 def tab_list(args: argparse.Namespace) -> int:

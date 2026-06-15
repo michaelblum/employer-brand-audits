@@ -229,6 +229,28 @@ def test_dev_command_gate_can_force_active_turn_for_ungated_family(
     assert_dev_command_allowed(repo, "workbench", require_active_turn=True)
 
 
+@pytest.mark.parametrize(
+    "workbench_args",
+    [
+        ("click", "artifact-title"),
+        ("fill", "comment-text", "hello"),
+        ("press", "Enter"),
+    ],
+)
+def test_workbench_interaction_commands_require_active_turn(
+    tmp_path: Path,
+    workbench_args: tuple[str, ...],
+) -> None:
+    repo = copy_repo(tmp_path)
+
+    result = eba(repo, "dev", "workbench", *workbench_args)
+
+    assert result.returncode != 0
+    payload = parse_json(result)
+    assert payload["reason"] == "no_current_turn"
+    assert payload["command"] == "./eba dev workbench"
+
+
 def test_begin_corridor_covers_dox_boundaries(tmp_path: Path) -> None:
     repo = copy_repo(tmp_path)
 
