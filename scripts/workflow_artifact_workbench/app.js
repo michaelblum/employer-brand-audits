@@ -45,10 +45,6 @@
     const artifactIndexById = (id) => app.collection.artifacts.findIndex((item) => item.id === id);
     const annotationById = (artifactId, annotationId) => artifactAnnotations(artifactId).find((note) => note.id === annotationId);
     const projectedArtifact = (item = artifact()) => app.projectedArtifactsById[item?.id] || null;
-    const projectedStep = (item = artifact()) => {
-      const projected = projectedArtifact(item);
-      return projected ? app.projectedStepsById[projected.produced_by_step_id] || null : null;
-    };
     const projectedSlot = (item = artifact()) => {
       const projected = projectedArtifact(item);
       return projected ? app.projectedSlotsByValue[projected.slot] || null : null;
@@ -60,10 +56,6 @@
     const isDocumentArtifact = (item = artifact()) => ["json", "text", "log", "file"].includes(item.type);
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
-    const imageRectAnchor = (note) => {
-      const anchor = annotationAnchor(note);
-      return anchor.type === "image_region" ? anchor.rect : null;
-    };
     const textRangeAnchor = (note) => {
       const anchor = annotationAnchor(note);
       return anchor.type === "text_range" ? anchor : null;
@@ -72,7 +64,6 @@
       if (!epoch) return "";
       return new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     };
-    const formatSlot = (value) => String(value || "").replace(/[._-]/g, " ");
     const iconHref = (name) => `/assets/workflow-artifact-workbench-icons.svg#icon-artifact-${name}`;
     const interactionOverlay = () => window.ArtifactPrimitives.interactionOverlay;
     let overlayControllerInstance = null;
