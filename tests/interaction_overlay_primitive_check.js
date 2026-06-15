@@ -8,6 +8,7 @@ require(path.join(__dirname, "../scripts/artifact_primitives/interaction_overlay
 const overlay = window.ArtifactPrimitives.interactionOverlay;
 
 [
+  "annotationReorderPlan",
   "annotationOverlayTarget",
   "beginOverlayDraft",
   "closedEditorSession",
@@ -305,6 +306,68 @@ assert.deepEqual(
   ["hero-note-1", appendIntent.note.id],
 );
 assert.equal(persistedAnnotations.hero.length, 1);
+
+const reorderAnnotations = {
+  hero: [
+    { id: "note-a", comment: "First" },
+    { id: "note-b", comment: "Second" },
+    { id: "note-c", comment: "Third" },
+  ],
+  other: [
+    { id: "other-note", comment: "Other" },
+  ],
+};
+assert.deepEqual(
+  overlay.annotationReorderPlan({
+    annotations: reorderAnnotations,
+    artifactId: "hero",
+    sourceArtifactId: "hero",
+    sourceAnnotationId: "note-c",
+    targetAnnotationId: "note-a",
+  }),
+  {
+    artifactId: "hero",
+    notes: [
+      { id: "note-c", comment: "Third" },
+      { id: "note-a", comment: "First" },
+      { id: "note-b", comment: "Second" },
+    ],
+  },
+);
+assert.deepEqual(
+  reorderAnnotations.hero.map((note) => note.id),
+  ["note-a", "note-b", "note-c"],
+);
+assert.equal(
+  overlay.annotationReorderPlan({
+    annotations: reorderAnnotations,
+    artifactId: "hero",
+    sourceArtifactId: "other",
+    sourceAnnotationId: "other-note",
+    targetAnnotationId: "note-a",
+  }),
+  null,
+);
+assert.equal(
+  overlay.annotationReorderPlan({
+    annotations: reorderAnnotations,
+    artifactId: "hero",
+    sourceArtifactId: "hero",
+    sourceAnnotationId: "note-a",
+    targetAnnotationId: "note-a",
+  }),
+  null,
+);
+assert.equal(
+  overlay.annotationReorderPlan({
+    annotations: reorderAnnotations,
+    artifactId: "hero",
+    sourceArtifactId: "hero",
+    sourceAnnotationId: "missing",
+    targetAnnotationId: "note-a",
+  }),
+  null,
+);
 
 const deleteIntent = overlay.secondaryOverlayEditorIntent({
   annotations: persistedAnnotations,

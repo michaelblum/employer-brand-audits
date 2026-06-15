@@ -568,14 +568,15 @@
           const targetArtifactId = row.dataset.artifactId;
           const targetAnnotationId = row.dataset.annotationId;
           const payload = JSON.parse(event.dataTransfer.getData("text/plain") || "{}");
-          if (payload.artifactId !== targetArtifactId || payload.annotationId === targetAnnotationId) return;
-          const notes = [...artifactAnnotations(targetArtifactId)];
-          const from = notes.findIndex((note) => note.id === payload.annotationId);
-          const to = notes.findIndex((note) => note.id === targetAnnotationId);
-          if (from < 0 || to < 0) return;
-          const [moved] = notes.splice(from, 1);
-          notes.splice(to, 0, moved);
-          app.annotations[targetArtifactId] = notes;
+          const plan = interactionOverlay().annotationReorderPlan({
+            annotations: app.annotations,
+            artifactId: targetArtifactId,
+            sourceArtifactId: payload.artifactId,
+            sourceAnnotationId: payload.annotationId,
+            targetAnnotationId,
+          });
+          if (!plan) return;
+          app.annotations[plan.artifactId] = plan.notes;
           await syncAnnotations();
           renderSidebar();
         });
