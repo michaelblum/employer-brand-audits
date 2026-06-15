@@ -10,6 +10,8 @@ Provider-specific files such as `.claude/CLAUDE.md` should only point here.
 - If you did not receive an `./eba begin` turn packet at session start, manually
   run `./eba begin --worker-id <stable-id>` before `./eba dev validate`,
   `./eba dev demo`, or substantive repo edits.
+- After an active turn exists, include its `EBA-Sig` (`<worker-id>/<turn-id>`)
+  in the first substantive session response and final/checkpoint responses.
 - Before editing, follow the DOX Read Before Editing chain for the paths you
   expect to touch.
 - Use `./eba dev validate` before checkpointing substantive code changes.
@@ -59,6 +61,8 @@ version:
   for a team of one that wants remote visibility and agent analysis on the go.
 - Offer to update issues, labels, epics, or workstream records when the work
   touches project-tracking conventions.
+- Use `./eba dev gh ...` for agent-authored GitHub prose mutations so the
+  current `EBA-Sig` footer is appended automatically.
 - Recommend a handoff when context pressure is present or continuity would help.
 - If context pressure is detected or imminent, explicitly offer to use the
   Handoff skill.

@@ -12,8 +12,8 @@ from typing import Any
 
 REGISTRY_SCHEMA_VERSION = "eba_registry.v1"
 
-ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "demo", "workbench"}
-ALLOWED_DEV_COMMANDS = {"situation", "validate", "demo", "workbench"}
+ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "demo", "workbench", "gh"}
+ALLOWED_DEV_COMMANDS = {"situation", "validate", "demo", "workbench", "trace", "gh", "hooks"}
 DEFAULT_ALLOWED_PATHS = [
     "AGENTS.md",
     "data/",
@@ -66,6 +66,10 @@ def registry_path(repo_root: Path) -> Path:
     return state_root(repo_root) / "registry.json"
 
 
+def current_turn_path(repo_root: Path) -> Path:
+    return state_root(repo_root) / "current-turn.json"
+
+
 def turns_root(repo_root: Path, worker_id: str) -> Path:
     return state_root(repo_root) / "turns" / worker_id
 
@@ -107,6 +111,13 @@ def read_json(path: Path) -> dict[str, Any]:
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def clear_current_turn(repo_root: Path, worker_id: str, turn_id: str) -> None:
+    path = current_turn_path(repo_root)
+    current = read_json(path)
+    if current.get("worker_id") == worker_id and current.get("turn_id") == turn_id:
+        path.unlink(missing_ok=True)
 
 
 def print_json(payload: dict[str, Any]) -> None:
@@ -284,7 +295,8 @@ def begin_turn(repo_root: Path, worker_id: str | None) -> dict[str, Any]:
             }
         )
 
-    now = int(time.time())
+    now_ns = time.time_ns()
+    now = int(now_ns / 1_000_000_000)
     turn_id = f"turn-{now}-{uuid.uuid4().hex[:8]}"
     packet = {
         "status": "active",
@@ -297,10 +309,12 @@ def begin_turn(repo_root: Path, worker_id: str | None) -> dict[str, Any]:
         "required_checks_before_end": ["corridor", "instruction_sop_sweep"],
         "begin_head": current_head(repo_root),
         "started_at": now,
+        "started_at_ns": now_ns,
     }
     workers[worker_id] = {"worker_id": worker_id, "active_turn": packet}
     save_registry(repo_root, registry)
     write_json(turns_root(repo_root, worker_id) / f"{turn_id}.json", packet)
+    write_json(current_turn_path(repo_root), packet)
     return packet
 
 
@@ -308,17 +322,30 @@ def assert_dev_command_allowed(repo_root: Path, command: str) -> None:
     if command not in ACTIVE_TURN_REQUIRED_COMMANDS:
         return
     registry = load_registry(repo_root)
-    found = active_turn(registry)
-    if not found:
+    current = read_json(current_turn_path(repo_root))
+    if not current:
         raise ControlPlaneError(
             {
                 "status": "blocked",
-                "reason": "no_active_turn",
+                "reason": "no_current_turn",
                 "command": f"./eba dev {command}",
                 "next_step": "run ./eba begin --worker-id <id>",
             }
         )
-    worker_id, turn = found
+    worker_id = str(current.get("worker_id") or "")
+    turn_id = str(current.get("turn_id") or "")
+    found = active_turn(registry, worker_id)
+    if not found or found[1].get("turn_id") != turn_id:
+        raise ControlPlaneError(
+            {
+                "status": "blocked",
+                "reason": "current_turn_mismatch",
+                "worker_id": worker_id,
+                "turn_id": turn_id,
+                "command": f"./eba dev {command}",
+            }
+        )
+    _, turn = found
     if command not in turn.get("allowed_dev_commands", []):
         raise ControlPlaneError(
             {
@@ -558,6 +585,7 @@ def end_turn(repo_root: Path, worker_id: str) -> dict[str, Any]:
     if status == "closed":
         registry["workers"][worker_id]["active_turn"] = None
         save_registry(repo_root, registry)
+        clear_current_turn(repo_root, worker_id, turn_id)
     else:
         blocked_packet = {**turn, "status": "blocked", "blocked_result": payload}
         registry["workers"][worker_id]["active_turn"] = blocked_packet

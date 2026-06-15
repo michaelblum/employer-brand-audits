@@ -27,6 +27,9 @@ artifact workbench implementation, and checked-in Playwright snippets.
 
 - Keep command routes typed, small, and honest; do not add routes that are not
   wired or validated.
+- `./eba sig`, `./eba dev trace`, `./eba dev gh`, and `./eba dev hooks` own the
+  repo-private provenance signature surface; keep GitHub prose and commit
+  message signing automatic where possible.
 - Preserve managed `eba-workbench` session behavior: reuse should not resize or
   reposition a human-moved native browser window. Viewport-emulation sync may
   target the current display's visible bounds after the managed window opens or
