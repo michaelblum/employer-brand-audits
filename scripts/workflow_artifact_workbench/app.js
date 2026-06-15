@@ -934,25 +934,21 @@
           wrapEl: $("markdown-wrap"),
         }))
         : dragDisplayRect(imagePoint(event));
-      const draftCompletion = interactionOverlay().completeOverlayDraft({ type, displayRect });
-      if (applyOverlayDraftCompletion(draftCompletion)) return;
-      const anchor = type === "markdown"
-        ? window.ArtifactPrimitives.markdownInteractions.anchorFromDisplayRect({
-          displayRect,
-          wrapEl: $("markdown-wrap"),
-          rootEl: markdownPreviewBody(),
-          content: app.markdownContent[artifact().id] || "",
-        })
-        : {
-          type: "image_region",
-          coordinate_space: "natural_image",
-          rect: naturalRect(displayRect),
-        };
-      applyOverlayDraftCompletion(interactionOverlay().completeOverlayDraft({
+      applyOverlayDraftCompletion(interactionOverlay().completeResolvedOverlayDraft({
         type,
         displayRect,
-        anchorResolved: true,
-        anchor,
+        resolveAnchor: ({ type: draftType, displayRect: draftRect }) => draftType === "markdown"
+          ? window.ArtifactPrimitives.markdownInteractions.anchorFromDisplayRect({
+            displayRect: draftRect,
+            wrapEl: $("markdown-wrap"),
+            rootEl: markdownPreviewBody(),
+            content: app.markdownContent[artifact().id] || "",
+          })
+          : {
+            type: "image_region",
+            coordinate_space: "natural_image",
+            rect: naturalRect(draftRect),
+          },
       }));
     }
 
