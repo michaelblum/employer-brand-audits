@@ -111,6 +111,24 @@
     return next;
   }
 
+  function annotationReorderPlan({
+    annotations = {},
+    artifactId,
+    sourceArtifactId,
+    sourceAnnotationId,
+    targetAnnotationId,
+  } = {}) {
+    if (!artifactId || sourceArtifactId !== artifactId) return null;
+    if (!sourceAnnotationId || !targetAnnotationId || sourceAnnotationId === targetAnnotationId) return null;
+    const notes = [...(annotations[artifactId] || [])];
+    const from = notes.findIndex((note) => note.id === sourceAnnotationId);
+    const to = notes.findIndex((note) => note.id === targetAnnotationId);
+    if (from < 0 || to < 0) return null;
+    const [moved] = notes.splice(from, 1);
+    notes.splice(to, 0, moved);
+    return { artifactId, notes };
+  }
+
   function displayRectForAnchor({
     anchor,
     imageRegionRect,
@@ -376,6 +394,7 @@
   }
 
   ROOT.interactionOverlay = {
+    annotationReorderPlan,
     annotationOverlayTarget,
     beginOverlayDraft,
     closedEditorSession,
