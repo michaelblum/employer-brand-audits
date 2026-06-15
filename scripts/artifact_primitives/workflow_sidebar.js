@@ -42,6 +42,53 @@
     return context.filters?.compositeId ? context.projectedGroupsById?.[context.filters.compositeId] || null : null;
   }
 
+  function workflowProjectionModel(payload = null) {
+    const workbenchProjection = payload && typeof payload === "object" ? payload : null;
+    const model = {
+      workbenchProjection,
+      projectedArtifactsById: {},
+      projectedStepsById: {},
+      projectedSlotsByValue: {},
+      projectedGroupsById: {},
+    };
+    for (const item of workbenchProjection?.artifacts || []) {
+      if (item?.id) model.projectedArtifactsById[item.id] = item;
+    }
+    for (const step of workbenchProjection?.workflow?.steps || []) {
+      if (step?.id) model.projectedStepsById[step.id] = step;
+    }
+    for (const slot of workbenchProjection?.facets?.slots || []) {
+      if (slot?.value) model.projectedSlotsByValue[slot.value] = slot;
+    }
+    for (const group of workbenchProjection?.artifact_groups || []) {
+      if (group?.id) model.projectedGroupsById[group.id] = group;
+    }
+    return model;
+  }
+
+  function workflowSidebarContext({
+    artifacts = [],
+    annotations = {},
+    activeIndex = 0,
+    filters = {},
+    iconHref = null,
+    projectionModel = null,
+  } = {}) {
+    const model = projectionModel || workflowProjectionModel(null);
+    return {
+      artifacts,
+      annotations,
+      activeIndex,
+      filters,
+      iconHref,
+      projectedArtifactsById: model.projectedArtifactsById || {},
+      projectedGroupsById: model.projectedGroupsById || {},
+      projectedSlotsByValue: model.projectedSlotsByValue || {},
+      projectedStepsById: model.projectedStepsById || {},
+      workbenchProjection: model.workbenchProjection || null,
+    };
+  }
+
   function artifactIndexById(context, artifactId) {
     return (context.artifacts || []).findIndex((item) => item.id === artifactId);
   }
@@ -327,6 +374,8 @@
     renderWorkflowHeader,
     visibleArtifactIndexes,
     ensureVisibleArtifactIndex,
+    workflowProjectionModel,
+    workflowSidebarContext,
     workflowFilterPlan,
     workflowMovePlan,
   };

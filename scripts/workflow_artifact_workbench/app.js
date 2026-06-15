@@ -21,11 +21,7 @@
       markdownDirty: {},
       documentContent: {},
       artifactDocumentTheme: "dark",
-      workbenchProjection: null,
-      projectedArtifactsById: {},
-      projectedStepsById: {},
-      projectedSlotsByValue: {},
-      projectedGroupsById: {},
+      workflowProjectionModel: null,
       filters: {
         stepId: null,
         slot: null,
@@ -141,39 +137,14 @@
       return overlayControllerInstance;
     }
     const workflowSidebar = () => window.ArtifactPrimitives.workflowSidebar;
-    const workflowSidebarContext = () => ({
+    const workflowSidebarContext = () => workflowSidebar().workflowSidebarContext({
       artifacts: app.collection.artifacts,
       annotations: app.annotations,
       activeIndex: app.index,
       filters: app.filters,
       iconHref,
-      projectedArtifactsById: app.projectedArtifactsById,
-      projectedGroupsById: app.projectedGroupsById,
-      projectedSlotsByValue: app.projectedSlotsByValue,
-      projectedStepsById: app.projectedStepsById,
-      workbenchProjection: app.workbenchProjection,
+      projectionModel: app.workflowProjectionModel,
     });
-
-    function indexProjection(payload) {
-      app.workbenchProjection = payload && typeof payload === "object" ? payload : null;
-      app.projectedArtifactsById = {};
-      app.projectedStepsById = {};
-      app.projectedSlotsByValue = {};
-      app.projectedGroupsById = {};
-      for (const item of app.workbenchProjection?.artifacts || []) {
-        if (item?.id) app.projectedArtifactsById[item.id] = item;
-      }
-      for (const step of app.workbenchProjection?.workflow?.steps || []) {
-        if (step?.id) app.projectedStepsById[step.id] = step;
-      }
-      for (const slot of app.workbenchProjection?.facets?.slots || []) {
-        if (slot?.value) app.projectedSlotsByValue[slot.value] = slot;
-      }
-      const groups = app.workbenchProjection?.artifact_groups || [];
-      for (const group of groups) {
-        if (group?.id) app.projectedGroupsById[group.id] = group;
-      }
-    }
 
     async function fetchWorkbenchProjection() {
       try {
@@ -1105,7 +1076,7 @@
       const payload = await stateResponse.json();
       app.collection = payload.collection;
       app.annotations = payload.annotations || {};
-      indexProjection(projectionPayload);
+      app.workflowProjectionModel = workflowSidebar().workflowProjectionModel(projectionPayload);
       setArtifactDocumentTheme(storedArtifactDocumentTheme());
       if (!app.collection.artifacts.length) {
         $("stage").innerHTML = "<div class='small'>No artifacts found.</div>";

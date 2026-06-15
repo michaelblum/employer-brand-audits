@@ -23,9 +23,10 @@ markdown, Mermaid, images, sidebars, and interaction overlays.
 - Markdown/document surface planners may own mode normalization, dirty-state,
   save/revert outcome, and fallback display plans; the workbench app shell must
   still execute DOM updates, focus, network writes, rendering, and toasts.
-- Workflow sidebar primitives may own artifact filtering, navigation, overview,
-  and title view-model decisions; the workbench app shell must still own state
-  application, event wiring, and side effects.
+- Workflow sidebar primitives may own projection indexing, sidebar context
+  shaping, artifact filtering, navigation, overview, and title view-model
+  decisions; the workbench app shell must still own state application, event
+  wiring, and side effects.
 - Interaction overlay primitives expose subtype models and state helpers;
   controller code owns effect execution and annotation routing.
 - Vendor code under `vendor/` should stay isolated from project-authored
