@@ -53,7 +53,8 @@
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const isImageArtifact = (item = artifact()) => item.type === "image";
     const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
-    const isDocumentArtifact = (item = artifact()) => ["json", "text", "log", "file"].includes(item.type);
+    const documentRenderer = () => window.ArtifactPrimitives.document;
+    const isDocumentArtifact = (item = artifact()) => documentRenderer().isDocumentArtifact(item);
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
     const textRangeAnchor = (note) => {
@@ -307,11 +308,7 @@
 
     function updateDocumentReadout(item) {
       const content = app.documentContent[item.id] || "";
-      const lines = content ? content.split("\n").length : 0;
-      const size = item.size_bytes ? `${item.size_bytes} bytes` : "";
-      $("dimension-readout").textContent = [item.type || "file", lines ? `${lines} lines` : "", size]
-        .filter(Boolean)
-        .join(" · ");
+      $("dimension-readout").textContent = documentRenderer().documentReadout(item, content);
     }
 
     function afterImageReady(callback) {
@@ -498,7 +495,7 @@
         if (!window.ArtifactPrimitives?.document) {
           throw new Error("Document renderer primitive is not loaded");
         }
-        window.ArtifactPrimitives.document.renderDocumentArtifact(
+        documentRenderer().renderDocumentArtifact(
           {
             ...item,
             content,
