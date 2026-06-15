@@ -251,6 +251,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-layout-regression-check.js"],
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-markdown-artifact-check.js"],
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-mermaid-artifact-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-navigation-check.js"],
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-interaction-overlay-check.js"],
     ]
     venv_python = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "python"

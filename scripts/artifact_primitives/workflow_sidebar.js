@@ -38,6 +38,10 @@
     return projected ? context.projectedSlotsByValue?.[projected.slot] || null : null;
   }
 
+  function activeComposite(context = {}) {
+    return context.filters?.compositeId ? context.projectedGroupsById?.[context.filters.compositeId] || null : null;
+  }
+
   function artifactIndexById(context, artifactId) {
     return (context.artifacts || []).findIndex((item) => item.id === artifactId);
   }
@@ -102,6 +106,47 @@
     return visibleIndexes.length && !visibleIndexes.includes(currentIndex) ? visibleIndexes[0] : currentIndex;
   }
 
+  function normalizedFilters(filters = {}) {
+    return {
+      stepId: filters.stepId || null,
+      slot: filters.slot || null,
+      compositeId: filters.compositeId || null,
+    };
+  }
+
+  function workflowFilterPlan(context = {}) {
+    const filters = normalizedFilters(context.filters);
+    const kind = context.filterKind;
+    const value = context.filterValue || null;
+    if (kind === "clear") {
+      filters.stepId = null;
+      filters.slot = null;
+      filters.compositeId = null;
+    }
+    if (kind === "step") filters.stepId = filters.stepId === value ? null : value;
+    if (kind === "slot") filters.slot = filters.slot === value ? null : value;
+    if (kind === "composite") filters.compositeId = filters.compositeId === value ? null : value;
+    const visibleIndexes = visibleArtifactIndexes({ ...context, filters });
+    return {
+      filters,
+      activeIndex: ensureVisibleArtifactIndex({
+        currentIndex: context.activeIndex || 0,
+        visibleIndexes,
+      }),
+    };
+  }
+
+  function workflowMovePlan(context = {}) {
+    const visibleIndexes = visibleArtifactIndexes(context);
+    const activeIndex = context.activeIndex || 0;
+    if (!visibleIndexes.length) return { activeIndex };
+    const current = visibleIndexes.includes(activeIndex) ? visibleIndexes.indexOf(activeIndex) : 0;
+    const delta = Number(context.delta || 0);
+    return {
+      activeIndex: visibleIndexes[(current + delta + visibleIndexes.length) % visibleIndexes.length],
+    };
+  }
+
   function artifactProjectionLine(context = {}) {
     const item = context.item || {};
     const projected = projectedArtifact(context, item);
@@ -113,6 +158,34 @@
       step?.status,
     ].filter(Boolean);
     return `${parts.join(" · ")} · ${item.path}`;
+  }
+
+  function renderArtifactTitleHtml(context = {}) {
+    const item = (context.artifacts || [])[context.activeIndex || 0] || {};
+    const projected = projectedArtifact(context, item);
+    const slot = projectedSlot(context, item);
+    const workflow = context.workbenchProjection?.workflow;
+    const composite = activeComposite(context);
+    const slotLabel = slot?.label || projected?.slot;
+    const slotHtml = slotLabel ? `<span class="slot-pill">${escapeHtml(slotLabel)}</span>` : "";
+    const breadcrumbHtml = composite
+      ? `<span class="artifact-breadcrumb">${escapeHtml(workflow?.name || "Workflow")} -&gt; ${escapeHtml(composite.label || composite.id)}</span>`
+      : "";
+    const formatTime = typeof context.formatTime === "function" ? context.formatTime : () => "";
+    return `${breadcrumbHtml}<span class="artifact-heading">${escapeHtml(item.name)} ${slotHtml} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span></span>`;
+  }
+
+  function renderOverviewHtml(context = {}) {
+    const artifacts = context.artifacts || [];
+    return visibleArtifactIndexes(context).map((index) => {
+      const item = artifacts[index] || {};
+      return `
+        <button class="artifact-option ${index === context.activeIndex ? "active" : ""}" type="button" data-index="${index}">
+          <span>${escapeHtml(item.name)}</span>
+          <span class="small">${escapeHtml(artifactProjectionLine({ ...context, item }))}</span>
+        </button>
+      `;
+    }).join("");
   }
 
   function filterSteps(context = {}) {
@@ -238,6 +311,7 @@
   }
 
   ROOT.workflowSidebar = {
+    activeComposite,
     anchorSummary,
     artifactMatchesFilters,
     artifactProjectionLine,
@@ -248,8 +322,12 @@
     filterSummaryText,
     formatSlot,
     renderSidebarHtml,
+    renderArtifactTitleHtml,
+    renderOverviewHtml,
     renderWorkflowHeader,
     visibleArtifactIndexes,
     ensureVisibleArtifactIndex,
+    workflowFilterPlan,
+    workflowMovePlan,
   };
 }());

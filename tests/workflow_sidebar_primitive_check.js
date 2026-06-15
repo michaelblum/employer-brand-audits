@@ -9,6 +9,10 @@ const sidebar = window.ArtifactPrimitives.workflowSidebar;
 
 assert.equal(typeof sidebar.visibleArtifactIndexes, "function");
 assert.equal(typeof sidebar.renderSidebarHtml, "function");
+assert.equal(typeof sidebar.workflowFilterPlan, "function");
+assert.equal(typeof sidebar.workflowMovePlan, "function");
+assert.equal(typeof sidebar.renderArtifactTitleHtml, "function");
+assert.equal(typeof sidebar.renderOverviewHtml, "function");
 
 const artifacts = [
   { id: "hero", name: "Hero <Shot>", path: "hero.png", type: "image" },
@@ -108,3 +112,93 @@ const unfilteredHtml = sidebar.renderSidebarHtml({
 assert.match(unfilteredHtml, /Workflow summary/);
 assert.match(unfilteredHtml, /lines 2-4/);
 assert.match(unfilteredHtml, /artifact-row active/);
+
+assert.deepEqual(
+  sidebar.workflowFilterPlan({
+    ...context,
+    activeIndex: 1,
+    filters: { stepId: null, slot: null, compositeId: "visible" },
+    filterKind: "step",
+    filterValue: "capture",
+  }),
+  {
+    filters: { stepId: "capture", slot: null, compositeId: "visible" },
+    activeIndex: 0,
+  },
+);
+assert.deepEqual(
+  sidebar.workflowFilterPlan({
+    ...context,
+    activeIndex: 0,
+    filters: { stepId: "capture", slot: "diagnostics", compositeId: "visible" },
+    filterKind: "clear",
+  }),
+  {
+    filters: { stepId: null, slot: null, compositeId: null },
+    activeIndex: 0,
+  },
+);
+assert.deepEqual(
+  sidebar.workflowFilterPlan({
+    ...context,
+    activeIndex: 0,
+    filters: { stepId: "capture", slot: null, compositeId: null },
+    filterKind: "step",
+    filterValue: "capture",
+  }),
+  {
+    filters: { stepId: null, slot: null, compositeId: null },
+    activeIndex: 0,
+  },
+);
+
+assert.deepEqual(
+  sidebar.workflowMovePlan({
+    ...context,
+    activeIndex: 0,
+    filters: { stepId: null, slot: null, compositeId: null },
+    delta: -1,
+  }),
+  { activeIndex: 2 },
+);
+assert.deepEqual(
+  sidebar.workflowMovePlan({
+    ...context,
+    activeIndex: 99,
+    filters: { stepId: "capture", slot: null, compositeId: null },
+    delta: 1,
+  }),
+  { activeIndex: 2 },
+);
+assert.deepEqual(
+  sidebar.workflowMovePlan({
+    ...context,
+    artifacts: [],
+    activeIndex: 0,
+    filters: { stepId: null, slot: null, compositeId: null },
+    delta: 1,
+  }),
+  { activeIndex: 0 },
+);
+
+const titleHtml = sidebar.renderArtifactTitleHtml({
+  ...context,
+  activeIndex: 1,
+  filters: { stepId: null, slot: null, compositeId: "visible" },
+  formatTime: () => "now",
+});
+assert.match(titleHtml, /Easy Audit -&gt; Visible bundle/);
+assert.match(titleHtml, /Summary/);
+assert.match(titleHtml, /Workflow summary/);
+assert.match(titleHtml, /\(now\)/);
+
+const overviewHtml = sidebar.renderOverviewHtml({
+  ...context,
+  activeIndex: 2,
+  filters: { stepId: null, slot: null, compositeId: null },
+});
+assert.match(overviewHtml, /data-index="0"/);
+assert.match(overviewHtml, /Hero &lt;Shot&gt;/);
+assert.match(overviewHtml, /data-index="2"/);
+assert.match(overviewHtml, /artifact-option active/);
+assert.match(overviewHtml, /diagnostics · home · complete · raw\.json/);
