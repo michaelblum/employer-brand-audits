@@ -1,0 +1,40 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  eba-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install MCP test dependencies
+        run: |
+          python -m venv mcp-server/.venv
+          mcp-server/.venv/bin/python -m pip install --upgrade pip
+          mcp-server/.venv/bin/python -m pip install -r mcp-server/requirements.txt
+
+      - name: Run EBA validation gate
+        run: |
+          ./eba begin --worker-id ci-validate
+          ./eba dev validate
+          ./eba end --worker-id ci-validate

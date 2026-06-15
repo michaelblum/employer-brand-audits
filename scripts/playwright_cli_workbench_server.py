@@ -2,13 +2,13 @@
 """Serve a local artifact viewer with transient annotation state."""
 
 import argparse
+import hashlib
 import json
 import mimetypes
 import posixpath
 import shutil
 import sys
 import time
-import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -28,15 +28,44 @@ DEFAULT_MANIFEST = (
     REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
 )
 
-WORKBENCH_DIR = Path(__file__).resolve().parent / "review_workbench"
+WORKBENCH_DIR = Path(__file__).resolve().parent / "workflow_artifact_workbench"
 ARTIFACT_PRIMITIVES_DIR = Path(__file__).resolve().parent / "artifact_primitives"
 WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
+WORKBENCH_ASSET_MANIFEST_PATH = "/api/workbench-assets"
 WORKBENCH_ASSETS = {
-    "/assets/review-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
-    "/assets/review-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
-    "/assets/review-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
+    "/assets/workflow-artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
+    "/assets/workflow-artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
+    "/assets/workflow-artifact-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
     "/assets/artifact-primitives/mermaid_renderer.js": (
         ARTIFACT_PRIMITIVES_DIR / "mermaid_renderer.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/markdown_renderer.js": (
+        ARTIFACT_PRIMITIVES_DIR / "markdown_renderer.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/markdown_interactions.js": (
+        ARTIFACT_PRIMITIVES_DIR / "markdown_interactions.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/image_viewer.js": (
+        ARTIFACT_PRIMITIVES_DIR / "image_viewer.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/document_renderer.js": (
+        ARTIFACT_PRIMITIVES_DIR / "document_renderer.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/workflow_sidebar.js": (
+        ARTIFACT_PRIMITIVES_DIR / "workflow_sidebar.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/interaction_overlay.js": (
+        ARTIFACT_PRIMITIVES_DIR / "interaction_overlay.js",
+        "text/javascript",
+    ),
+    "/assets/artifact-primitives/interaction_overlay_controller.js": (
+        ARTIFACT_PRIMITIVES_DIR / "interaction_overlay_controller.js",
         "text/javascript",
     ),
     "/assets/artifact-primitives/vendor/mermaid.min.js": (
@@ -44,6 +73,49 @@ WORKBENCH_ASSETS = {
         "text/javascript",
     ),
 }
+
+
+def repo_relative_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(resolved)
+
+
+def workbench_asset_record(url: str, path: Path, content_type: str) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "url": url,
+        "path": repo_relative_path(path),
+        "content_type": content_type,
+        "exists": path.exists(),
+    }
+    if path.exists():
+        data = path.read_bytes()
+        record.update(
+            {
+                "size_bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        )
+    return record
+
+
+def build_workbench_asset_manifest() -> dict[str, Any]:
+    index = workbench_asset_record("/", WORKBENCH_INDEX, "text/html")
+    assets = [
+        workbench_asset_record(url, path, content_type)
+        for url, (path, content_type) in sorted(WORKBENCH_ASSETS.items())
+    ]
+    digest = hashlib.sha256()
+    digest.update(json.dumps({"assets": assets, "index": index}, sort_keys=True).encode("utf-8"))
+    return {
+        "status": "workbench_assets",
+        "fingerprint": digest.hexdigest(),
+        "index": index,
+        "asset_count": len(assets),
+        "assets": assets,
+    }
 
 
 def read_workbench_html() -> str:
@@ -66,7 +138,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--open",
         action="store_true",
-        help="Open the local artifact viewer in the system browser after the server starts",
+        help="Deprecated no-op; use scripts/playwright_cli_workbench_gate.py surface to open the managed browser session",
     )
     return parser.parse_args()
 
@@ -98,9 +170,9 @@ def safe_artifact_path(relative_path: str, artifact_root: Path) -> Path | None:
     return candidate
 
 
-def reviewable_projected_artifact(artifact: dict[str, Any], artifact_root: Path) -> bool:
+def workbench_projected_artifact(artifact: dict[str, Any], artifact_root: Path) -> bool:
     artifact_type = artifact.get("type")
-    if artifact_type not in {"image", "markdown"}:
+    if artifact_type not in {"image", "markdown", "json", "text", "log", "file"}:
         return False
     path = safe_artifact_path(str(artifact.get("path", "")), artifact_root)
     return path is not None
@@ -133,7 +205,7 @@ def build_collection(manifest_path: Path, projection: dict[str, Any] | None = No
     artifacts = [
         collection_artifact(projected, artifact_root)
         for projected in projected_artifacts
-        if isinstance(projected, dict) and reviewable_projected_artifact(projected, artifact_root)
+        if isinstance(projected, dict) and workbench_projected_artifact(projected, artifact_root)
     ]
 
     return {
@@ -223,7 +295,7 @@ def clean_annotation_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-class ReviewServer(ThreadingHTTPServer):
+class WorkbenchServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], manifest_path: Path):
         self.manifest_path = manifest_path
         self.artifact_root = manifest_path.parent
@@ -234,7 +306,7 @@ class ReviewServer(ThreadingHTTPServer):
             item["id"]: [] for item in self.collection["artifacts"]
         }
         self.updated_at_epoch = int(time.time())
-        super().__init__(server_address, ReviewHandler)
+        super().__init__(server_address, WorkbenchHandler)
 
     def annotation_state(self) -> dict[str, Any]:
         return {
@@ -268,8 +340,8 @@ class ReviewServer(ThreadingHTTPServer):
         return artifact
 
 
-class ReviewHandler(BaseHTTPRequestHandler):
-    server: ReviewServer
+class WorkbenchHandler(BaseHTTPRequestHandler):
+    server: WorkbenchServer
 
     def log_message(self, format: str, *args: object) -> None:
         print("[artifact-viewer] " + format % args, file=sys.stderr)
@@ -309,6 +381,9 @@ class ReviewHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/workbench-projection":
             self.send_json(HTTPStatus.OK, self.server.workbench_projection)
+            return
+        if parsed.path == WORKBENCH_ASSET_MANIFEST_PATH:
+            self.send_json(HTTPStatus.OK, build_workbench_asset_manifest())
             return
         if parsed.path.startswith("/artifact/"):
             self.serve_artifact(parsed.path.removeprefix("/artifact/"))
@@ -371,14 +446,18 @@ class ReviewHandler(BaseHTTPRequestHandler):
 def main() -> int:
     args = parse_args()
     manifest_path = safe_manifest_path(args.manifest)
-    server = ReviewServer((args.host, args.port), manifest_path)
+    server = WorkbenchServer((args.host, args.port), manifest_path)
     host, port = server.server_address
     print(f"[artifact-viewer] serving {manifest_path}")
     print(f"[artifact-viewer] open http://{host}:{port}/")
     print(f"[artifact-viewer] annotation state http://{host}:{port}/api/annotation-state")
     print(f"[artifact-viewer] workbench projection http://{host}:{port}/api/workbench-projection")
     if args.open:
-        webbrowser.open(f"http://{host}:{port}/", new=2)
+        print(
+            "[artifact-viewer] --open is a no-op; use "
+            "scripts/playwright_cli_workbench_gate.py surface for the managed eba-workbench browser session.",
+            file=sys.stderr,
+        )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

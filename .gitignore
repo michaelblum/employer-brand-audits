@@ -2,6 +2,7 @@
 # the decisions it produced live in docs/decisions/ and docs/superpowers/specs/)
 .superpowers/
 .brainstorm/
+.eba/
 
 # Python
 __pycache__/

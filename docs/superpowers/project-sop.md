@@ -41,6 +41,32 @@ implement them without explicit approval. Record that the `SOP sweep` happened
 in the final response, handoff, or commit message context. Do not treat the
 sweep as authorization to expand scope beyond the approved SOP change.
 
+## DOX Operating Policy
+
+DOX is the repository's `AGENTS.md` hierarchy. It is the local-contract layer
+for instructions, ownership, and durable workflow rules; this SOP remains the
+standing process layer.
+
+Before editing, agents must re-read the applicable DOX chain in the current
+session: the root `AGENTS.md`, then every child `AGENTS.md` found from the repo
+root to each path they expect to touch. If a parent lists a child whose scope
+contains the target path, read that child before editing.
+
+Every meaningful change requires a DOX pass before closeout:
+
+- update the nearest owning `AGENTS.md` when purpose, ownership, workflow,
+  contracts, required inputs or outputs, permissions, artifacts, or durable user
+  preferences change;
+- refresh affected Child DOX Index entries;
+- remove stale or contradictory instructions;
+- report any applicable docs intentionally left unchanged and why.
+
+The DOX pass and Closeout are in-turn steps, not the turn gate. The corridor and
+SOP sweep run only at `./eba end`.
+
+DOX changes that alter this SOP or project-wide operating rules still require
+the SOP Change Control process above, including an `SOP sweep`.
+
 ## Successor Onboarding Gate
 
 Handoffs must not invite a new session to change code immediately. A successor
@@ -68,7 +94,7 @@ before handing it to the user:
 4. Avoid making the user do agentic management tasks such as restarting
    services, finding ports, or navigating verbose setup instructions.
 
-For the current review workbench, after an active `./eba begin` turn is in
+For the current workflow artifact workbench, after an active `./eba begin` turn is in
 place, use:
 
 ```bash
@@ -78,6 +104,18 @@ place, use:
 Use `./eba dev demo --no-browser` only when opening a browser is inappropriate
 or unavailable.
 
+For routine browser control after the same active turn is in place, use the
+managed workbench control surface:
+
+```bash
+./eba dev workbench refresh
+./eba dev workbench tabs
+./eba dev workbench tab-select <index>
+```
+
+Agents should reuse the managed `eba-workbench` session when available. Reuse
+must not resize or reposition the browser window.
+
 ## Command Surface
 
 Agents should prefer `./eba dev ...` for common project mechanisms:
@@ -85,14 +123,22 @@ Agents should prefer `./eba dev ...` for common project mechanisms:
 - `./eba dev situation --json` for branch, dirt, ahead/behind, and workbench
   status.
 - `./eba begin --worker-id <stable-id>` and `./eba end --worker-id <stable-id>`
-  for turn-level worker identity, gate packets, corridor checks, and generated
-  work-card/handoff artifacts.
+  for turn-level worker identity, gate packets, DOX-aware corridor checks, and
+  generated work-card/handoff artifacts.
 - `./eba dev validate` for the current validation ladder.
-- `./eba dev demo` for a prepared review-workbench inspection surface.
+- `./eba dev demo` for a prepared workflow artifact workbench inspection surface.
+- `./eba dev workbench` for managed `eba-workbench` refresh, tab, snapshot, and
+  interaction controls.
 
 Update the command surface as the project evolves and new repeated mechanisms
 appear. Keep it small, typed, and honest; do not add routes that are not wired
 or validated.
+
+The DOX-aware turn corridor intentionally covers durable source and instruction
+trees (`.github/`, `data/`, `docs/`, `mcp-server/`, `scripts/`, and `tests/`)
+so child `AGENTS.md` files and their owning code can move through the same gate.
+Generated and local runtime paths such as `artifacts/`, `.playwright-cli/`, and
+`chrome-profile/` stay outside the corridor.
 
 ## Publication Boundary
 
@@ -108,3 +154,8 @@ Reference commits, docs, and command output paths rather than restating large
 source content.
 
 Every handoff must include the Successor Onboarding Gate above.
+
+After writing a handoff, the agent's chat response should include a ready-to-use
+successor prompt that points to the handoff file and restates the onboarding
+commands and first-response requirements. Do not end with only the handoff file
+path unless the user explicitly asks for path-only output.

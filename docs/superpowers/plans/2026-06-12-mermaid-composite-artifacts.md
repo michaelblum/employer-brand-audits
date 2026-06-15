@@ -21,7 +21,7 @@ and is constrained by:
 ## Boundaries
 
 - Python remains routing, orchestration, data prep, and disk IO only.
-- Workbench shell presentation lives in `scripts/review_workbench/` static
+- Workbench shell presentation lives in `scripts/workflow_artifact_workbench/` static
   assets.
 - Artifact-type rendering primitives live outside consuming surfaces under
   `scripts/artifact_primitives/`.
@@ -51,8 +51,10 @@ Initial projection shape:
 
 Recommended capabilities:
 
-- Markdown with Mermaid fence: `view`, `edit`, `annotate`, `render`.
-- Standalone Mermaid source: `view`, `edit`, `annotate`, `render`, `export`.
+- Markdown with Mermaid fence: `view`, `edit`, `annotate`, `render`; `annotate`
+  is the source-line interaction overlay subtype.
+- Standalone Mermaid source: `view`, `edit`, `annotate`, `render`, `export`;
+  `annotate` is the source-line interaction overlay subtype.
 - Rendered preview export is a later capability; do not imply export until a
   disk artifact is actually written and recorded.
 
@@ -64,10 +66,11 @@ the needed mental model: source is the durable artifact, preview is a projection
 Renderer contract:
 
 - Markdown rendering detects fenced code blocks with language `mermaid`.
-- The generated DOM keeps source line attributes for annotation mooring.
+- The generated DOM keeps source line attributes for interaction overlay and
+  annotation mooring.
 - The Mermaid preview is rendered by the shared browser primitive
   `scripts/artifact_primitives/mermaid_renderer.js`, not by Python-generated
-  HTML and not by code owned under `scripts/review_workbench/`.
+  HTML and not by code owned under `scripts/workflow_artifact_workbench/`.
 - The primitive exports `renderMermaid(source, containerEl, options)`, which
   returns a promise resolving to `{ ok, state, errorMessage }`, and
   `upgradeMermaidBlocks(rootEl, options)`, which upgrades Markdown-rendered
@@ -84,7 +87,7 @@ Renderer contract:
   `.render-state-complete`, and `.render-state-error` when class selectors are
   more ergonomic.
 - Invalid Mermaid source should produce an inline error state without losing
-  edit or annotation capability.
+  edit or interaction overlay capability.
 - The error state renders an inline status element with `role="status"`, the
   sanitized Mermaid error message, and the raw source fallback in a `<pre>` so
   the artifact remains inspectable.
@@ -116,7 +119,8 @@ Composite artifacts should begin as projection edges and facet groups.
 
 Initial projection shape:
 
-- A composite is a review subject generated from existing artifacts and edges.
+- A composite is a composite subject generated from existing artifacts and
+  edges.
 - The projection exposes canonical `artifact_groups` entries with:
   `id`, `label`, `artifact_ids`, `edge_ids`, `source`, and optional `slot`.
 - Edges should use explicit relationship kinds such as `contains`,
@@ -158,8 +162,8 @@ carry enough hierarchy to make nested navigation honest.
    - the Mermaid row appears with the expected projection metadata;
    - preview/source mode keeps source editable;
    - invalid source produces an error state;
-   - source-line annotation still works;
-   - icon use remains through `/assets/review-workbench-icons.svg`.
+   - source-line annotation or overlay anchoring still works;
+   - icon use remains through `/assets/workflow-artifact-workbench-icons.svg`.
 7. For composites, add a projection fixture with one `artifact_groups` entry,
    then add a Playwright CLI smoke snippet that
    selects the composite facet, asserts the header breadcrumb includes the

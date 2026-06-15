@@ -71,8 +71,35 @@ def goto(args: argparse.Namespace) -> int:
     return _run(_session_prefix(args.session) + ["goto", args.url])
 
 
+def reload_page(args: argparse.Namespace) -> int:
+    return _run(_session_prefix(args.session) + ["reload"])
+
+
 def resize(args: argparse.Namespace) -> int:
     return _run(_session_prefix(args.session) + ["resize", str(args.width), str(args.height)])
+
+
+def tab_list(args: argparse.Namespace) -> int:
+    return _run(_session_prefix(args.session) + ["tab-list"])
+
+
+def tab_select(args: argparse.Namespace) -> int:
+    return _run(_session_prefix(args.session) + ["tab-select", str(args.index)])
+
+
+def click(args: argparse.Namespace) -> int:
+    cmd = _session_prefix(args.session) + ["click", args.target]
+    if args.button:
+        cmd.append(args.button)
+    return _run(cmd)
+
+
+def fill(args: argparse.Namespace) -> int:
+    return _run(_session_prefix(args.session) + ["fill", args.target, args.text])
+
+
+def press(args: argparse.Namespace) -> int:
+    return _run(_session_prefix(args.session) + ["press", args.key])
 
 
 def snapshot(args: argparse.Namespace) -> int:
@@ -138,10 +165,34 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("url")
     p.set_defaults(func=goto)
 
+    p = with_session(sub.add_parser("reload", help="Reload current page"))
+    p.set_defaults(func=reload_page)
+
     p = with_session(sub.add_parser("resize", help="Resize browser window"))
     p.add_argument("width", type=int)
     p.add_argument("height", type=int)
     p.set_defaults(func=resize)
+
+    p = with_session(sub.add_parser("tab-list", help="List browser tabs"))
+    p.set_defaults(func=tab_list)
+
+    p = with_session(sub.add_parser("tab-select", help="Select browser tab by index"))
+    p.add_argument("index", type=int)
+    p.set_defaults(func=tab_select)
+
+    p = with_session(sub.add_parser("click", help="Click an element target"))
+    p.add_argument("target")
+    p.add_argument("button", nargs="?")
+    p.set_defaults(func=click)
+
+    p = with_session(sub.add_parser("fill", help="Fill an element target"))
+    p.add_argument("target")
+    p.add_argument("text")
+    p.set_defaults(func=fill)
+
+    p = with_session(sub.add_parser("press", help="Press a key"))
+    p.add_argument("key")
+    p.set_defaults(func=press)
 
     p = with_session(sub.add_parser("snapshot", help="Write accessibility snapshot with element boxes"))
     p.add_argument("output", type=Path)

@@ -1,12 +1,16 @@
 async (page) => {
+  await page.reload();
+  await page.waitForSelector(".artifact-row[data-index]", { timeout: 5000 });
+
   await page.evaluate(() => {
     const rows = [...document.querySelectorAll(".artifact-row[data-index]")];
     const markdownRow = rows.find((row) => {
       const icon = row.querySelector(".artifact-type-icon");
-      return icon?.getAttribute("title") === "markdown";
+      const title = row.querySelector(".name")?.textContent || "";
+      return icon?.getAttribute("title") === "markdown" && /Final employer brand audit/.test(title);
     });
     if (!markdownRow) {
-      throw new Error("No markdown artifact row found");
+      throw new Error("No final report markdown artifact row found");
     }
     markdownRow.click();
   });
@@ -19,9 +23,9 @@ async (page) => {
       && imageWrap
       && !markdownWrap.hidden
       && imageWrap.hidden
-      && /Review (Fixture )?Summary/.test(preview?.textContent || "")
-      && document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href")?.includes("review-workbench-icons.svg");
-  }, { timeout: 3000 });
+      && /Acme Robotics Employer Brand Audit/.test(preview?.textContent || "")
+      && document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href")?.includes("workflow-artifact-workbench-icons.svg");
+  }, null, { timeout: 3000 });
 
   return await page.evaluate(() => {
     const markdownIcon = document.querySelector(".artifact-row.active .artifact-type-icon");

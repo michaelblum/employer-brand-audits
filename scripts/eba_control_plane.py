@@ -12,14 +12,16 @@ from typing import Any
 
 REGISTRY_SCHEMA_VERSION = "eba_registry.v1"
 
-ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "demo"}
-ALLOWED_DEV_COMMANDS = {"situation", "validate", "demo"}
+ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "demo", "workbench"}
+ALLOWED_DEV_COMMANDS = {"situation", "validate", "demo", "workbench"}
 DEFAULT_ALLOWED_PATHS = [
     "AGENTS.md",
-    "docs/superpowers/project-sop.md",
-    "docs/superpowers/plans/",
+    "data/",
+    "docs/",
+    "mcp-server/",
     "scripts/",
     "tests/",
+    ".github/",
     ".eba/",
 ]
 INSTRUCTION_BEARING_PATHS = [
@@ -29,7 +31,24 @@ INSTRUCTION_BEARING_PATHS = [
     ".eba/",
     "docs/superpowers/project-sop.md",
     "docs/decisions/",
+    "scripts/eba_control_plane.py",
 ]
+
+# Tier-0 immutable floor: invariants the gate enforces in code regardless of
+# what the DOX hierarchy declares. Tier-1 (ADR-009) layers DOX-declared
+# invariants on top; this set must never shrink.
+PROTECTED_SOP_CHECKS = frozenset(
+    {
+        "agents_turn_gate",
+        "agents_browser_boundary",
+        "agents_base64_boundary",
+        "agents_provider_attribution",
+        "sop_change_control",
+        "sop_turn_commands",
+        "adr_008_browser_boundary",
+        "no_mutable_hard_policy",
+    }
+)
 
 
 class ControlPlaneError(Exception):
@@ -323,6 +342,8 @@ def path_allowed(path: str, allowed_paths: list[str]) -> bool:
 
 def instruction_bearing(path: str) -> bool:
     normalized = path.replace("\\", "/").lstrip("/")
+    if normalized == "AGENTS.md" or normalized.endswith("/AGENTS.md"):
+        return True
     for candidate in INSTRUCTION_BEARING_PATHS:
         normalized_candidate = candidate.replace("\\", "/").strip("/")
         if normalized == normalized_candidate or normalized.startswith(normalized_candidate + "/"):
@@ -357,6 +378,35 @@ def required_text_check(
     return {
         "name": name,
         "path": path,
+        "status": "passed" if not missing else "failed",
+        "missing": missing,
+    }
+
+
+def adr_008_browser_boundary_check(repo_root: Path) -> dict[str, Any]:
+    path = "docs/decisions/ADR-008-playwright-cli-browser-engine.md"
+    target = repo_root / path
+    text = target.read_text(encoding="utf-8") if target.exists() else ""
+    normalized = re.sub(r"\s+", " ", text).lower()
+    missing = []
+    if "**status:** accepted" not in normalized and "**status:** superseded" not in normalized:
+        missing.append("**Status:** Accepted or **Status:** Superseded")
+    required_boundary = "Playwright CLI is the browser engine for automated audits."
+    if re.sub(r"\s+", " ", required_boundary).lower() not in normalized:
+        missing.append(required_boundary)
+    return {
+        "name": "adr_008_browser_boundary",
+        "path": path,
+        "status": "passed" if not missing else "failed",
+        "missing": missing,
+    }
+
+
+def gate_integrity_check(produced_names: set[str]) -> dict[str, Any]:
+    missing = sorted(PROTECTED_SOP_CHECKS - produced_names)
+    return {
+        "name": "sop_gate_integrity",
+        "path": "scripts/eba_control_plane.py",
         "status": "passed" if not missing else "failed",
         "missing": missing,
     }
@@ -406,15 +456,7 @@ def concrete_sop_checks(repo_root: Path) -> list[dict[str, Any]]:
             path="docs/superpowers/project-sop.md",
             required=["./eba begin", "./eba end", "./eba dev demo", "active `./eba begin` turn"],
         ),
-        required_text_check(
-            repo_root,
-            name="adr_008_browser_boundary",
-            path="docs/decisions/ADR-008-playwright-cli-browser-engine.md",
-            required=[
-                "**Status:** Accepted",
-                "Playwright CLI is the browser engine for automated audits.",
-            ],
-        ),
+        adr_008_browser_boundary_check(repo_root),
     ]
     policy_path = state_root(repo_root) / "policy.json"
     checks.append(
@@ -425,6 +467,7 @@ def concrete_sop_checks(repo_root: Path) -> list[dict[str, Any]]:
             "missing": [],
         }
     )
+    checks.append(gate_integrity_check({check["name"] for check in checks}))
     return checks
 
 
@@ -435,9 +478,24 @@ def sop_sweep(repo_root: Path, changes: list[str]) -> dict[str, Any]:
         if instruction_bearing(path) and not generated_control_plane_state(path)
     ]
     skipped_generated_state = [path for path in changes if generated_control_plane_state(path)]
-    if not checked:
-        return {"status": "passed", "checked_files": [], "skipped_generated_state": skipped_generated_state}
     checks = concrete_sop_checks(repo_root)
+    integrity_check = next(check for check in checks if check["name"] == "sop_gate_integrity")
+    if not checked:
+        return {
+            "status": "passed" if integrity_check["status"] == "passed" else "blocked",
+            "checked_files": [],
+            "skipped_generated_state": skipped_generated_state,
+            "checks": [integrity_check],
+            **(
+                {}
+                if integrity_check["status"] == "passed"
+                else {
+                    "failed_checks": [integrity_check["name"]],
+                    "reason": "sop_sweep_failed",
+                    "next_step": "restore the hard invariants or ask the human to approve the policy change",
+                }
+            ),
+        }
     failed_checks = [check["name"] for check in checks if check["status"] == "failed"]
     if not failed_checks:
         return {

@@ -10,9 +10,13 @@ import pytest
 
 from scripts.eba_control_plane import (
     ControlPlaneError,
+    PROTECTED_SOP_CHECKS,
     begin_turn,
     changed_files,
+    concrete_sop_checks,
     end_turn,
+    gate_integrity_check,
+    instruction_bearing,
     path_allowed,
 )
 
@@ -77,18 +81,52 @@ def test_cli_can_be_package_imported() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_validation_commands_scope_mcp_pytest_to_mcp_tests() -> None:
+def test_validation_commands_scope_pytest_to_control_plane_and_mcp_tests() -> None:
     from scripts.eba_cli import validation_commands
 
-    mcp_pytest_commands = [
+    pytest_commands = [
         command
         for command in validation_commands()
-        if command[0].endswith("mcp-server/.venv/bin/pytest")
+        if "pytest" in command or command[0].endswith("/pytest")
     ]
-    if not mcp_pytest_commands:
+    if not pytest_commands:
         pytest.skip("mcp-server pytest venv is not present")
 
-    assert mcp_pytest_commands == [[mcp_pytest_commands[0][0], "-q", "mcp-server/tests"]]
+    venv_python = str(REPO_ROOT / "mcp-server" / ".venv" / "bin" / "python")
+    pytest_bin = str(REPO_ROOT / "mcp-server" / ".venv" / "bin" / "pytest")
+    assert pytest_commands == [
+        [venv_python, "-m", "pytest", "-q", "tests/test_eba_control_plane.py"],
+        [pytest_bin, "-q", "mcp-server/tests"],
+    ]
+
+
+def test_validation_commands_compile_easy_audit_fixture() -> None:
+    from scripts.eba_cli import validation_commands
+
+    compile_command = validation_commands()[0]
+
+    assert "scripts/easy_audit_fixture.py" in compile_command
+
+
+def test_ci_runs_eba_validate_inside_turn() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "validate.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "./eba begin --worker-id ci-validate" in workflow
+    assert "./eba dev validate" in workflow
+    assert "./eba end --worker-id ci-validate" in workflow
+
+
+def test_easy_audit_fixture_route_generates_manifest(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+
+    result = eba(repo, "dev", "situation", "--fixture", "easy-audit", "--json")
+
+    assert result.returncode == 0, result.stderr
+    payload = parse_json(result)
+    assert payload["workflow_artifact_workbench"]["manifest"] == "artifacts/easy-audit/latest/manifest.json"
+    assert (repo / "artifacts" / "easy-audit" / "latest" / "manifest.json").exists()
 
 
 def test_situation_remains_available_without_begin(tmp_path: Path) -> None:
@@ -132,6 +170,38 @@ def test_begin_creates_turn_packet_and_allows_validate(tmp_path: Path) -> None:
         and validate_payload.get("status") == "blocked"
         and validate_payload.get("reason") == "no_active_turn"
     )
+
+
+def test_begin_corridor_covers_dox_boundaries(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+
+    begin = eba(repo, "begin", "--worker-id", "worker-test")
+
+    assert begin.returncode == 0, begin.stderr
+    allowed_paths = parse_json(begin)["corridor"]["allowed_paths"]
+    for expected in [
+        "AGENTS.md",
+        "data/",
+        "docs/",
+        "mcp-server/",
+        "scripts/",
+        "tests/",
+        ".github/",
+        ".eba/",
+    ]:
+        assert expected in allowed_paths
+
+
+def test_begin_corridor_still_excludes_generated_and_root_runtime_paths(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+
+    begin = eba(repo, "begin", "--worker-id", "worker-test")
+
+    assert begin.returncode == 0, begin.stderr
+    allowed_paths = parse_json(begin)["corridor"]["allowed_paths"]
+    assert not path_allowed("artifacts/easy-audit/latest/manifest.json", allowed_paths)
+    assert not path_allowed("chrome-profile/Local State", allowed_paths)
+    assert not path_allowed("eba", allowed_paths)
 
 
 def test_begin_twice_for_same_worker_blocks(tmp_path: Path) -> None:
@@ -200,6 +270,34 @@ def test_changed_files_preserves_untracked_path_with_spaces_and_quotes(
 
     assert special_path in changes
     assert path_allowed(special_path, ["scripts/"])
+
+
+def test_instruction_bearing_detects_child_agents_files() -> None:
+    assert instruction_bearing("AGENTS.md")
+    assert instruction_bearing("scripts/AGENTS.md")
+    assert instruction_bearing("mcp-server/imaging/AGENTS.md")
+    assert not instruction_bearing("scripts/workflow_artifact_workbench/app.js")
+
+
+def test_eba_control_plane_is_instruction_bearing() -> None:
+    assert instruction_bearing("scripts/eba_control_plane.py")
+
+
+def test_sop_gate_protects_its_check_set(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+
+    checks = concrete_sop_checks(repo)
+
+    assert PROTECTED_SOP_CHECKS <= {check["name"] for check in checks}
+    integrity = next(check for check in checks if check["name"] == "sop_gate_integrity")
+    assert integrity["status"] == "passed"
+
+
+def test_gate_integrity_trips_when_a_protected_check_is_missing() -> None:
+    result = gate_integrity_check({"agents_turn_gate"})
+
+    assert result["status"] == "failed"
+    assert "no_mutable_hard_policy" in result["missing"]
 
 
 def test_corrupt_registry_fails_closed(tmp_path: Path) -> None:
@@ -280,3 +378,19 @@ def test_end_blocks_when_sop_sweep_detects_weakened_hard_invariant(
     assert sweep["status"] == "blocked"
     assert sweep["reason"] == "sop_sweep_failed"
     assert "agents_base64_boundary" in sweep["failed_checks"]
+
+
+def test_adr_008_sop_check_tolerates_supersession_note(tmp_path: Path) -> None:
+    repo = copy_repo(tmp_path)
+    adr = repo / "docs" / "decisions" / "ADR-008-playwright-cli-browser-engine.md"
+    adr.write_text(
+        adr.read_text(encoding="utf-8").replace(
+            "**Status:** Accepted",
+            "**Status:** Superseded by ADR-009",
+        ),
+        encoding="utf-8",
+    )
+
+    check = next(check for check in concrete_sop_checks(repo) if check["name"] == "adr_008_browser_boundary")
+
+    assert check["status"] == "passed"

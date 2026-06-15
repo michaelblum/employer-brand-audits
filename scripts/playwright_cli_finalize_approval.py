@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Finalize a local human review draft after explicit agent-session approval."""
+"""Finalize a local human approval draft after explicit agent-session approval."""
 
 import argparse
 import json
@@ -16,7 +16,7 @@ DEFAULT_MANIFEST = REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Write human-approval.json from review-draft.json. "
+            "Write human-approval.json from approval-draft.json. "
             "Run only after the user returns to the agent session and says ready."
         )
     )
@@ -43,10 +43,10 @@ def main() -> int:
         raise SystemExit(f"Manifest must be inside the repository: {manifest_path}")
 
     artifact_root = manifest_path.parent
-    draft_path = artifact_root / "review-draft.json"
+    draft_path = artifact_root / "approval-draft.json"
     approval_path = artifact_root / "human-approval.json"
     if not draft_path.exists():
-        raise SystemExit(f"Review draft not found: {draft_path}")
+        raise SystemExit(f"Approval draft not found: {draft_path}")
 
     manifest = read_json(manifest_path)
     draft = read_json(draft_path)
@@ -58,13 +58,13 @@ def main() -> int:
     page_slugs = [page["slug"] for page in pages]
     missing = [slug for slug in page_slugs if slug not in decisions]
     if missing:
-        raise SystemExit(f"Review draft is missing decisions for: {', '.join(missing)}")
+        raise SystemExit(f"Approval draft is missing decisions for: {', '.join(missing)}")
 
     cleaned: dict[str, dict[str, str]] = {}
     for slug in page_slugs:
         decision = decisions[slug]
         value = decision.get("decision")
-        if value not in {"accept", "needs_review", "reject"}:
+        if value not in {"accept", "needs_changes", "reject"}:
             raise SystemExit(f"Invalid decision for {slug}: {value}")
         cleaned[slug] = {
             "decision": value,
@@ -73,15 +73,15 @@ def main() -> int:
 
     accepted_all = all(decision["decision"] == "accept" for decision in cleaned.values())
     approval = {
-        "status": "approved" if accepted_all else "reviewed_with_exceptions",
+        "status": "approved" if accepted_all else "approved_with_exceptions",
         "accepted_all": accepted_all,
         "manifest": str(manifest_path.relative_to(REPO_ROOT)),
         "draft": str(draft_path.relative_to(REPO_ROOT)),
         "created_at_epoch": int(time.time()),
         "decision_counts": {
             "accept": sum(1 for decision in cleaned.values() if decision["decision"] == "accept"),
-            "needs_review": sum(
-                1 for decision in cleaned.values() if decision["decision"] == "needs_review"
+            "needs_changes": sum(
+                1 for decision in cleaned.values() if decision["decision"] == "needs_changes"
             ),
             "reject": sum(1 for decision in cleaned.values() if decision["decision"] == "reject"),
         },
