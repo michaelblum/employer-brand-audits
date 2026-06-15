@@ -33,6 +33,7 @@ markdown, Mermaid, images, sidebars, and interaction overlays.
 - Run `node --check` on changed primitive files.
 - Run relevant checks such as `node tests/interaction_overlay_primitive_check.js`,
   `node tests/document_renderer_primitive_check.js`,
+  `node tests/artifact_renderer_primitive_check.js`,
   `node tests/interaction_overlay_controller_check.js`, or
   `node tests/workflow_sidebar_primitive_check.js`.
 - Run `./eba dev validate` before checkpointing substantive primitive changes.

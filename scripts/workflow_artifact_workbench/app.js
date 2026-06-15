@@ -53,8 +53,8 @@
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const isImageArtifact = (item = artifact()) => item.type === "image";
     const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
+    const artifactRenderer = () => window.ArtifactPrimitives.artifactRenderer;
     const documentRenderer = () => window.ArtifactPrimitives.document;
-    const isDocumentArtifact = (item = artifact()) => documentRenderer().isDocumentArtifact(item);
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
     const textRangeAnchor = (note) => {
@@ -550,11 +550,12 @@
     }
 
     function renderArtifact() {
-      if (isMarkdownArtifact()) {
+      const renderKind = artifactRenderer().artifactRenderKind(artifact(), { document: documentRenderer() });
+      if (renderKind === "markdown") {
         void renderMarkdownArtifact();
         return;
       }
-      if (isDocumentArtifact()) {
+      if (renderKind === "document") {
         void renderDocumentArtifact();
         return;
       }
