@@ -91,6 +91,43 @@
     };
   }
 
+  function documentLoadResultPlan(plan = {}, { fetchedContent = "" } = {}) {
+    if (plan.action === "use-cache") {
+      return { content: String(plan.content || ""), cacheContent: null };
+    }
+    if (plan.action === "use-empty-content") {
+      const content = String(plan.content || "");
+      return { content, cacheContent: content };
+    }
+    const content = String(fetchedContent ?? "");
+    return { content, cacheContent: content };
+  }
+
+  function markdownLoadPlan(artifact = {}, {
+    hasCachedContent = false,
+    cachedContent = "",
+    url = "",
+  } = {}) {
+    if (hasCachedContent) {
+      return { action: "use-cache", content: String(cachedContent || "") };
+    }
+    return {
+      action: "fetch-text",
+      url,
+      cache: "no-store",
+      errorPrefix: "Markdown fetch failed",
+    };
+  }
+
+  function markdownLoadResultPlan({ content = "" } = {}) {
+    const nextContent = String(content ?? "");
+    return {
+      content: nextContent,
+      savedContent: nextContent,
+      dirty: false,
+    };
+  }
+
   function documentRenderPayload(artifact = {}, { content = "", url = "" } = {}) {
     return {
       ...artifact,
@@ -98,6 +135,26 @@
       url,
       mimeType: artifact.mime_type ?? artifact.mimeType,
       sizeBytes: artifact.size_bytes ?? artifact.sizeBytes,
+    };
+  }
+
+  function artifactReadoutPlan({
+    artifact = {},
+    imageNaturalWidth = null,
+    imageNaturalHeight = null,
+    markdownContentById = {},
+    documentContentById = {},
+    markdown = ROOT.markdown,
+    document = ROOT.document,
+  } = {}) {
+    return {
+      artifact,
+      imageNaturalWidth,
+      imageNaturalHeight,
+      markdownContent: markdownContentById[artifact.id] || "",
+      documentContent: documentContentById[artifact.id] || "",
+      markdown,
+      document,
     };
   }
 
@@ -122,6 +179,27 @@
     const width = dimensions.width || imageNaturalWidth || "unknown";
     const height = dimensions.height || imageNaturalHeight || "unknown";
     return `${width} x ${height} px`;
+  }
+
+  function artifactSelectionPlan({ requestedIndex = 0, artifactCount = 0 } = {}) {
+    const count = Number(artifactCount || 0);
+    if (count <= 0) {
+      return {
+        activeIndex: 0,
+        canSelect: false,
+        closeEditor: false,
+        hideAnnotationMarker: false,
+        render: false,
+      };
+    }
+    const requested = Number(requestedIndex || 0);
+    return {
+      activeIndex: ((requested % count) + count) % count,
+      canSelect: true,
+      closeEditor: true,
+      hideAnnotationMarker: true,
+      render: true,
+    };
   }
 
   function escapeHtml(value) {
@@ -238,11 +316,16 @@
   ROOT.artifactRenderer = {
     artifactFallbackPlan,
     artifactErrorHtml,
+    artifactReadoutPlan,
     artifactReadout,
+    artifactSelectionPlan,
     artifactStagePlan,
     artifactRenderKind,
     documentLoadPlan,
+    documentLoadResultPlan,
     documentRenderPayload,
+    markdownLoadPlan,
+    markdownLoadResultPlan,
     markdownInputPlan,
     markdownModePlan,
     markdownRevertPlan,

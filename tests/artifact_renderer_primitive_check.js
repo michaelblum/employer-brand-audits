@@ -12,9 +12,14 @@ const renderer = window.ArtifactPrimitives.artifactRenderer;
 assert.equal(typeof renderer.artifactRenderKind, "function");
 assert.equal(typeof renderer.artifactStagePlan, "function");
 assert.equal(typeof renderer.artifactReadout, "function");
+assert.equal(typeof renderer.artifactReadoutPlan, "function");
 assert.equal(typeof renderer.artifactErrorHtml, "function");
+assert.equal(typeof renderer.artifactSelectionPlan, "function");
 assert.equal(typeof renderer.documentLoadPlan, "function");
+assert.equal(typeof renderer.documentLoadResultPlan, "function");
 assert.equal(typeof renderer.documentRenderPayload, "function");
+assert.equal(typeof renderer.markdownLoadPlan, "function");
+assert.equal(typeof renderer.markdownLoadResultPlan, "function");
 assert.equal(typeof renderer.renderArtifact, "function");
 assert.equal(typeof renderer.artifactFallbackPlan, "function");
 assert.equal(typeof renderer.markdownModePlan, "function");
@@ -130,6 +135,55 @@ assert.deepEqual(
     errorPrefix: "Artifact fetch failed",
   },
 );
+assert.deepEqual(
+  renderer.documentLoadResultPlan(
+    { action: "use-cache", content: "{\"cached\":true}" },
+    { fetchedContent: "{\"ignored\":true}" },
+  ),
+  { content: "{\"cached\":true}", cacheContent: null },
+);
+assert.deepEqual(
+  renderer.documentLoadResultPlan(
+    { action: "use-empty-content", content: "" },
+    { fetchedContent: "{\"ignored\":true}" },
+  ),
+  { content: "", cacheContent: "" },
+);
+assert.deepEqual(
+  renderer.documentLoadResultPlan(
+    { action: "fetch-text" },
+    { fetchedContent: "{\"fetched\":true}" },
+  ),
+  { content: "{\"fetched\":true}", cacheContent: "{\"fetched\":true}" },
+);
+
+assert.deepEqual(
+  renderer.markdownLoadPlan(
+    { id: "cached-md" },
+    { hasCachedContent: true, cachedContent: "# Cached", url: "/artifact/cached.md" },
+  ),
+  { action: "use-cache", content: "# Cached" },
+);
+assert.deepEqual(
+  renderer.markdownLoadPlan(
+    { id: "fresh-md" },
+    { hasCachedContent: false, url: "/artifact/fresh.md" },
+  ),
+  {
+    action: "fetch-text",
+    url: "/artifact/fresh.md",
+    cache: "no-store",
+    errorPrefix: "Markdown fetch failed",
+  },
+);
+assert.deepEqual(
+  renderer.markdownLoadResultPlan({ content: "# Fresh" }),
+  {
+    content: "# Fresh",
+    savedContent: "# Fresh",
+    dirty: false,
+  },
+);
 
 assert.deepEqual(
   renderer.documentRenderPayload(
@@ -209,6 +263,56 @@ assert.equal(
     document: window.ArtifactPrimitives.document,
   }),
   "json · 1 lines · 42 bytes",
+);
+assert.deepEqual(
+  renderer.artifactReadoutPlan({
+    artifact: { id: "md", type: "markdown" },
+    imageNaturalWidth: 800,
+    imageNaturalHeight: 600,
+    markdownContentById: { md: "# Heading" },
+    documentContentById: { doc: "{\"ok\":true}" },
+    markdown: window.ArtifactPrimitives.markdown,
+    document: window.ArtifactPrimitives.document,
+  }),
+  {
+    artifact: { id: "md", type: "markdown" },
+    imageNaturalWidth: 800,
+    imageNaturalHeight: 600,
+    markdownContent: "# Heading",
+    documentContent: "",
+    markdown: window.ArtifactPrimitives.markdown,
+    document: window.ArtifactPrimitives.document,
+  },
+);
+assert.deepEqual(
+  renderer.artifactSelectionPlan({ requestedIndex: -1, artifactCount: 3 }),
+  {
+    activeIndex: 2,
+    canSelect: true,
+    closeEditor: true,
+    hideAnnotationMarker: true,
+    render: true,
+  },
+);
+assert.deepEqual(
+  renderer.artifactSelectionPlan({ requestedIndex: 4, artifactCount: 3 }),
+  {
+    activeIndex: 1,
+    canSelect: true,
+    closeEditor: true,
+    hideAnnotationMarker: true,
+    render: true,
+  },
+);
+assert.deepEqual(
+  renderer.artifactSelectionPlan({ requestedIndex: 2, artifactCount: 0 }),
+  {
+    activeIndex: 0,
+    canSelect: false,
+    closeEditor: false,
+    hideAnnotationMarker: false,
+    render: false,
+  },
 );
 
 assert.equal(
