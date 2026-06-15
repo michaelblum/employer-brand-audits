@@ -247,7 +247,9 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/workflow_artifact_workbench/app.js"],
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-composite-artifact-check.js"],
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-document-artifact-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-image-artifact-check.js"],
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-layout-regression-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-markdown-artifact-check.js"],
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-mermaid-artifact-check.js"],
         ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-interaction-overlay-check.js"],
     ]

@@ -25,6 +25,9 @@ markdown, Mermaid, images, sidebars, and interaction overlays.
 
 - Prefer extracting real decision trees over moving callbacks for line-count
   reduction.
+- For Issue #12-style primitive extraction, prefer PR-sized responsibility
+  boundaries that remove coherent workbench orchestration from the app shell;
+  avoid one-helper slices unless they eliminate a real orchestration branch.
 - Update primitive checks when public APIs or controller behavior changes.
 - Avoid freezing incidental callback order unless order is a contract.
 
