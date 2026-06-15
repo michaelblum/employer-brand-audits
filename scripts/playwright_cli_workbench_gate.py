@@ -572,18 +572,19 @@ def viewport_width_sync_command(session: str, metrics: dict[str, Any]) -> list[s
         inner_width = int(metrics["innerWidth"])
         inner_height = int(metrics["innerHeight"])
         outer_width = int(metrics["outerWidth"])
+        outer_height = int(metrics.get("outerHeight", inner_height))
     except (KeyError, TypeError, ValueError):
         return None
-    if inner_width <= 0 or inner_height <= 0 or outer_width <= 0:
+    if inner_width <= 0 or inner_height <= 0 or outer_width <= 0 or outer_height <= 0:
         return None
-    if abs(inner_width - outer_width) <= 1:
+    if abs(inner_width - outer_width) <= 1 and abs(inner_height - outer_height) <= 1:
         return None
     return [
         sys.executable,
         relative_path(BROWSER_WRAPPER),
         "resize",
         str(outer_width),
-        str(inner_height),
+        str(outer_height),
         "--session",
         session,
     ]

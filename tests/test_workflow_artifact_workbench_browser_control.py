@@ -155,7 +155,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             ],
         )
 
-    def test_reused_browser_session_syncs_viewport_width_without_reopening(self) -> None:
+    def test_reused_browser_session_syncs_viewport_to_visible_window_without_reopening(self) -> None:
         commands: list[list[str]] = []
         statuses = [
             {
@@ -189,6 +189,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 "innerWidth": 1440,
                 "innerHeight": 1000,
                 "outerWidth": 1512,
+                "outerHeight": 949,
             }
 
         original_require_cli = gate.require_session_aware_cli
@@ -231,7 +232,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             commands,
             [
                 [sys.executable, "scripts/playwright_cli_browser.py", "goto", "http://127.0.0.1:8765/", "--session", "eba-workbench"],
-                [sys.executable, "scripts/playwright_cli_browser.py", "resize", "1512", "1000", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "resize", "1512", "949", "--session", "eba-workbench"],
             ],
         )
 
