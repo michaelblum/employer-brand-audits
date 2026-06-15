@@ -916,6 +916,22 @@
       return overlayController().runDraftCompletion(intent);
     }
 
+    function resolveOverlayDraftAnchor({ type, displayRect }) {
+      if (type === "markdown") {
+        return window.ArtifactPrimitives.markdownInteractions.anchorFromDisplayRect({
+          displayRect,
+          wrapEl: $("markdown-wrap"),
+          rootEl: markdownPreviewBody(),
+          content: app.markdownContent[artifact().id] || "",
+        });
+      }
+      return {
+        type: "image_region",
+        coordinate_space: "natural_image",
+        rect: naturalRect(displayRect),
+      };
+    }
+
     function endDrag(event) {
       if (!app.drag) return;
       const type = app.drag.type;
@@ -928,18 +944,7 @@
       applyOverlayDraftCompletion(interactionOverlay().completeResolvedOverlayDraft({
         type,
         displayRect,
-        resolveAnchor: ({ type: draftType, displayRect: draftRect }) => draftType === "markdown"
-          ? window.ArtifactPrimitives.markdownInteractions.anchorFromDisplayRect({
-            displayRect: draftRect,
-            wrapEl: $("markdown-wrap"),
-            rootEl: markdownPreviewBody(),
-            content: app.markdownContent[artifact().id] || "",
-          })
-          : {
-            type: "image_region",
-            coordinate_space: "natural_image",
-            rect: naturalRect(draftRect),
-          },
+        resolveAnchor: resolveOverlayDraftAnchor,
       }));
     }
 
