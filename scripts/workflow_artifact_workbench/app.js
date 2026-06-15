@@ -327,8 +327,12 @@
       if (typeof surfaces.commentPopoverHidden === "boolean") $("comment-popover").hidden = surfaces.commentPopoverHidden;
     }
 
-    function renderArtifactError(renderKind, error) {
-      markdownPreviewBody().innerHTML = artifactRenderer().artifactErrorHtml({ renderKind, error });
+    function applyArtifactFallbackPlan(plan = {}) {
+      const { surfaces = {} } = plan;
+      if (typeof surfaces.markdownPreviewHidden === "boolean") $("markdown-preview").hidden = surfaces.markdownPreviewHidden;
+      if (typeof surfaces.markdownSourceHidden === "boolean") $("markdown-source").hidden = surfaces.markdownSourceHidden;
+      markdownPreviewBody().innerHTML = plan.html || "";
+      if (plan.updateReadout) updateDimensionReadout();
     }
 
     function afterImageReady(callback) {
@@ -405,12 +409,7 @@
     }
 
     function renderArtifactFallback({ renderKind, error } = {}) {
-      if (renderKind === "markdown") {
-        $("markdown-preview").hidden = false;
-        $("markdown-source").hidden = true;
-      }
-      renderArtifactError(renderKind, error);
-      if (renderKind === "document") updateDimensionReadout();
+      applyArtifactFallbackPlan(artifactRenderer().artifactFallbackPlan({ renderKind, error }));
     }
 
     async function loadMarkdown(item) {
@@ -503,29 +502,32 @@
         headers: { "content-type": "text/markdown; charset=utf-8" },
         body: content,
       });
-      if (!response.ok) {
-        showToast("Markdown save failed");
+      const plan = artifactRenderer().markdownSavePlan({ content, responseOk: response.ok });
+      if (plan.status !== "saved") {
+        showToast(plan.toast);
         return;
       }
-      app.markdownSavedContent[item.id] = content;
-      app.markdownDirty[item.id] = false;
-      renderMarkdownBody(item);
-      showToast("Markdown saved");
+      app.markdownSavedContent[item.id] = plan.savedContent;
+      app.markdownDirty[item.id] = plan.dirty;
+      if (plan.renderBody) renderMarkdownBody(item);
+      showToast(plan.toast);
     }
 
     function revertMarkdownArtifact() {
       const item = artifact();
       if (!isMarkdownArtifact(item)) return;
-      app.markdownContent[item.id] = app.markdownSavedContent[item.id] || "";
-      app.markdownDirty[item.id] = false;
-      renderMarkdownBody(item);
-      showToast("Markdown reverted");
+      const plan = artifactRenderer().markdownRevertPlan({ savedContent: app.markdownSavedContent[item.id] });
+      app.markdownContent[item.id] = plan.content;
+      app.markdownDirty[item.id] = plan.dirty;
+      if (plan.renderBody) renderMarkdownBody(item);
+      showToast(plan.toast);
     }
 
     function setMarkdownMode(mode) {
-      app.markdownMode = mode === "source" ? "source" : "preview";
-      renderMarkdownBody(artifact());
-      if (app.markdownMode === "source") $("markdown-source").focus();
+      const plan = artifactRenderer().markdownModePlan(mode);
+      app.markdownMode = plan.mode;
+      if (plan.renderBody) renderMarkdownBody(artifact());
+      if (plan.focusSource) $("markdown-source").focus();
     }
 
     function toggleMarkdownTheme() {
@@ -1074,10 +1076,14 @@
       $("markdown-revert").addEventListener("click", revertMarkdownArtifact);
       $("markdown-source").addEventListener("input", () => {
         const item = artifact();
-        app.markdownContent[item.id] = $("markdown-source").value;
-        app.markdownDirty[item.id] = app.markdownContent[item.id] !== app.markdownSavedContent[item.id];
-        $("markdown-save").disabled = !app.markdownDirty[item.id];
-        updateDimensionReadout();
+        const plan = artifactRenderer().markdownInputPlan({
+          content: $("markdown-source").value,
+          savedContent: app.markdownSavedContent[item.id],
+        });
+        app.markdownContent[item.id] = plan.content;
+        app.markdownDirty[item.id] = plan.dirty;
+        $("markdown-save").disabled = plan.saveDisabled;
+        if (plan.updateReadout) updateDimensionReadout();
       });
       $("markdown-source").addEventListener("keydown", (event) => {
         const key = String(event.key || "").toLowerCase();

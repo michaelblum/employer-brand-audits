@@ -19,6 +19,9 @@ markdown, Mermaid, images, sidebars, and interaction overlays.
 - Artifact render controller primitives may own render sequencing and fallback
   decisions; the workbench app shell must still execute DOM, fetch, image, and
   persistence side effects through explicit callbacks.
+- Markdown/document surface planners may own mode normalization, dirty-state,
+  save/revert outcome, and fallback display plans; the workbench app shell must
+  still execute DOM updates, focus, network writes, rendering, and toasts.
 - Interaction overlay primitives expose subtype models and state helpers;
   controller code owns effect execution and annotation routing.
 - Vendor code under `vendor/` should stay isolated from project-authored
