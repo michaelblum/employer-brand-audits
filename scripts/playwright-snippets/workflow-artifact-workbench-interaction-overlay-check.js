@@ -1,19 +1,23 @@
 async (page) => {
   await page.reload();
   const model = await page.evaluate(async () => {
-    const state = await fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json());
+    const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
     const artifacts = state.collection?.artifacts || [];
     const imageIndex = artifacts.findIndex((artifact) => artifact.type === "image");
     if (imageIndex < 0) throw new Error("No image artifact available for interaction overlay smoke");
     const artifactId = artifacts[imageIndex].id;
-    const annotations = { ...(state.annotations || {}) };
-    annotations[artifactId] = [];
-    const response = await fetch("/api/annotation-state", {
+    const interactionOverlays = (state.interaction_overlays || [])
+      .filter((overlay) => !(
+        overlay?.subtype === "annotation"
+        && overlay?.subject?.kind === "artifact"
+        && overlay?.subject?.id === artifactId
+      ));
+    const response = await fetch("/api/workbench-state", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ annotations }),
+      body: JSON.stringify({ interaction_overlays: interactionOverlays }),
     });
-    if (!response.ok) throw new Error(`Annotation reset failed: ${response.status}`);
+    if (!response.ok) throw new Error(`Interaction overlay reset failed: ${response.status}`);
     return { artifactId, imageIndex };
   });
 
@@ -84,9 +88,14 @@ async (page) => {
   }, null, { timeout: 3000 });
 
   return await page.evaluate(async ({ artifactId }) => {
-    const state = await fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json());
-    const remaining = (state.annotations?.[artifactId] || [])
-      .filter((note) => /Interaction overlay smoke/.test(note.comment || ""));
+    const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
+    const remaining = (state.interaction_overlays || [])
+      .filter((overlay) => (
+        overlay?.subtype === "annotation"
+        && overlay?.subject?.kind === "artifact"
+        && overlay?.subject?.id === artifactId
+        && /Interaction overlay smoke/.test(overlay?.body?.text || "")
+      ));
     return {
       artifactId,
       overlaySubtype: "annotation",

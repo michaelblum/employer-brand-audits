@@ -30,10 +30,9 @@ artifact workbench implementation, and checked-in Playwright snippets.
 - `./eba sig`, `./eba dev trace`, `./eba dev gh`, and `./eba dev hooks` own the
   repo-private provenance signature surface; keep GitHub prose and commit
   message signing automatic where possible.
-- Preserve managed `eba-workbench` session behavior: reuse should not resize or
-  reposition a human-moved native browser window. Viewport-emulation sync may
-  target the current display's visible bounds after the managed window opens or
-  moves displays, and must not choose arbitrary dimensions.
+- Route routine workbench browser behavior through named management helpers in
+  `playwright_cli_workbench_gate.py`; keep focus, maximize, and viewport sync as
+  separate operations so tests can guard their side effects.
 - Keep fixture generation separate from generated runtime output.
 
 ## Verification

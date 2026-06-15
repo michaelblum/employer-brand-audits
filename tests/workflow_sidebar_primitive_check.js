@@ -58,26 +58,26 @@ const projectedSlotsByValue = {
 const projectedGroupsById = {
   visible: { id: "visible", label: "Visible bundle", artifact_ids: ["hero", "summary"] },
 };
-const annotations = {
-  hero: [
-    {
-      id: "note-1",
-      comment: "Contrast <needs> work",
-      anchor: { type: "image_region", rect: { x: 10, y: 20, width: 30, height: 40 } },
+const interactionOverlays = [
+  {
+    id: "note-1",
+    subtype: "annotation",
+    subject: { kind: "artifact", id: "hero" },
+    body: { kind: "comment", text: "Contrast <needs> work" },
+    anchor: { type: "image_region", rect: { x: 10, y: 20, width: 30, height: 40 } },
+  },
+  {
+    id: "note-2",
+    subtype: "annotation",
+    subject: { kind: "artifact", id: "summary" },
+    body: { kind: "comment", text: "Rewrite heading" },
+    anchor: {
+      type: "text_range",
+      start: { line: 2, column: 1 },
+      end: { line: 4, column: 1 },
     },
-  ],
-  summary: [
-    {
-      id: "note-2",
-      comment: "Rewrite heading",
-      anchor: {
-        type: "text_range",
-        start: { line: 2, column: 1 },
-        end: { line: 4, column: 1 },
-      },
-    },
-  ],
-};
+  },
+];
 
 const projectionPayload = {
   workflow: {
@@ -123,7 +123,12 @@ assert.deepEqual(sidebar.workflowProjectionModel(null), {
 
 const context = {
   artifacts,
-  annotations,
+  interactionOverlays,
+  contexts: [
+    { manifest: "artifacts/easy-audit/latest/manifest.json", label: "Easy Audit", subtitle: "Acme Robotics", active: true },
+    { manifest: "artifacts/playwright-cli-public-page-matrix/latest/manifest.json", label: "Public Matrix", subtitle: "4 pages", active: false },
+  ],
+  context: { manifest: "artifacts/easy-audit/latest/manifest.json" },
   activeIndex: 1,
   filters: { stepId: "capture", slot: null, compositeId: "visible" },
   projectedArtifactsById,
@@ -138,7 +143,9 @@ const context = {
 assert.deepEqual(
   sidebar.workflowSidebarContext({
     artifacts,
-    annotations,
+    interactionOverlays,
+    contexts: context.contexts,
+    context: context.context,
     activeIndex: 1,
     filters: { stepId: null, slot: null, compositeId: null },
     projectionModel,
@@ -146,7 +153,9 @@ assert.deepEqual(
   }),
   {
     artifacts,
-    annotations,
+    interactionOverlays,
+    contexts: context.contexts,
+    context: context.context,
     activeIndex: 1,
     filters: { stepId: null, slot: null, compositeId: null },
     iconHref: context.iconHref,
@@ -263,6 +272,9 @@ const overviewHtml = sidebar.renderOverviewHtml({
   activeIndex: 2,
   filters: { stepId: null, slot: null, compositeId: null },
 });
+assert.match(overviewHtml, /data-context-select/);
+assert.match(overviewHtml, /Easy Audit/);
+assert.match(overviewHtml, /Public Matrix/);
 assert.match(overviewHtml, /data-index="0"/);
 assert.match(overviewHtml, /Hero &lt;Shot&gt;/);
 assert.match(overviewHtml, /data-index="2"/);

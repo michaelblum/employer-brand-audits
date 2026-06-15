@@ -95,8 +95,8 @@ before handing it to the user:
 4. Avoid making the user do agentic management tasks such as restarting
    services, finding ports, or navigating verbose setup instructions.
 
-For the current workflow artifact workbench, after an active `./eba begin` turn is in
-place, use:
+For the current workflow artifact workbench, use the command surface directly
+for view-only user requests:
 
 ```bash
 ./eba dev demo
@@ -105,17 +105,22 @@ place, use:
 Use `./eba dev demo --no-browser` only when opening a browser is inappropriate
 or unavailable.
 
-For routine browser control after the same active turn is in place, use the
-managed workbench control surface:
+For routine browser control, use the managed workbench control surface:
 
 ```bash
 ./eba dev workbench refresh
+./eba dev workbench glance --json
+./eba dev workbench context --json
 ./eba dev workbench tabs
 ./eba dev workbench tab-select <index>
 ```
 
 Agents should reuse the managed `eba-workbench` session when available. Reuse
-must not resize or reposition the browser window.
+must not resize or reposition the browser window. View-only demo and workbench
+requests should bring the existing managed window to the front on its current
+display. Workbench `click`, `fill`, and `press` still require an active turn.
+For "what is on the workbench now?" questions, use `glance` first; it returns
+the compact live context, current artifact, and annotation summary.
 
 ## Command Surface
 
@@ -132,8 +137,8 @@ Agents should prefer `./eba dev ...` for common project mechanisms:
 - `./eba dev hooks install` to install the local commit-message footer hook.
 - `./eba dev validate` for the current validation ladder.
 - `./eba dev demo` for a prepared workflow artifact workbench inspection surface.
-- `./eba dev workbench` for managed `eba-workbench` refresh, tab, snapshot, and
-  interaction controls.
+- `./eba dev workbench` for managed `eba-workbench` context, refresh, tab,
+  snapshot, glance, and interaction controls.
 
 Update the command surface as the project evolves and new repeated mechanisms
 appear. Keep it small, typed, and honest; do not add routes that are not wired

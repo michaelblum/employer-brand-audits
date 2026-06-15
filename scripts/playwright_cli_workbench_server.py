@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serve a local artifact viewer with transient annotation state."""
+"""Serve a local workflow artifact workbench with session interaction overlays."""
 
 import argparse
 import hashlib
@@ -32,6 +32,8 @@ WORKBENCH_DIR = Path(__file__).resolve().parent / "workflow_artifact_workbench"
 ARTIFACT_PRIMITIVES_DIR = Path(__file__).resolve().parent / "artifact_primitives"
 WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
 WORKBENCH_ASSET_MANIFEST_PATH = "/api/workbench-assets"
+WORKBENCH_STATE_PATH = "/api/workbench-state"
+WORKBENCH_CONTEXT_PATH = "/api/workbench-context"
 WORKBENCH_ASSETS = {
     "/assets/workflow-artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
     "/assets/workflow-artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
@@ -222,43 +224,49 @@ def build_collection(manifest_path: Path, projection: dict[str, Any] | None = No
     }
 
 
-def clean_annotations(payload: Any, artifact_ids: set[str]) -> dict[str, list[dict[str, Any]]]:
-    if not isinstance(payload, dict):
-        return {}
-    clean: dict[str, list[dict[str, Any]]] = {artifact_id_value: [] for artifact_id_value in artifact_ids}
-    for item_id, annotations in payload.items():
-        if item_id not in artifact_ids or not isinstance(annotations, list):
+def clean_interaction_overlays(payload: Any, artifact_ids: set[str]) -> list[dict[str, Any]]:
+    if not isinstance(payload, list):
+        return []
+    clean: list[dict[str, Any]] = []
+    for overlay in payload:
+        if not isinstance(overlay, dict):
             continue
-        for annotation in annotations:
-            if not isinstance(annotation, dict):
-                continue
-            anchor = annotation.get("anchor")
-            comment = str(annotation.get("comment", "")).strip()
-            if not isinstance(anchor, dict) or not comment:
-                continue
-            clean_anchor = clean_annotation_anchor(anchor)
-            if clean_anchor is None:
-                continue
-            try:
-                clean[item_id].append(
-                    {
-                        "id": str(annotation.get("id") or f"{item_id}-{len(clean[item_id]) + 1}"),
-                        "artifact_id": item_id,
-                        "kind": str(annotation.get("kind") or "comment"),
-                        "anchor": clean_anchor,
-                        "comment": comment,
-                        "created_at_epoch": int(annotation.get("created_at_epoch") or time.time()),
-                        "updated_at_epoch": int(annotation["updated_at_epoch"])
-                        if annotation.get("updated_at_epoch") is not None
-                        else None,
-                    }
-                )
-            except (KeyError, TypeError, ValueError):
-                continue
+        if str(overlay.get("subtype") or "") != "annotation":
+            continue
+        subject = overlay.get("subject")
+        if not isinstance(subject, dict) or str(subject.get("kind") or "") != "artifact":
+            continue
+        artifact_id_value = str(subject.get("id") or "")
+        if artifact_id_value not in artifact_ids:
+            continue
+        anchor = overlay.get("anchor")
+        body = overlay.get("body")
+        comment = str(body.get("text", "")).strip() if isinstance(body, dict) else ""
+        if not isinstance(anchor, dict) or not comment:
+            continue
+        clean_anchor = clean_overlay_anchor(anchor)
+        if clean_anchor is None:
+            continue
+        try:
+            clean.append(
+                {
+                    "id": str(overlay.get("id") or f"overlay-{artifact_id_value}-{len(clean) + 1}"),
+                    "subtype": "annotation",
+                    "subject": {"kind": "artifact", "id": artifact_id_value},
+                    "anchor": clean_anchor,
+                    "body": {"kind": "comment", "text": comment},
+                    "created_at_epoch": int(overlay.get("created_at_epoch") or time.time()),
+                    "updated_at_epoch": int(overlay["updated_at_epoch"])
+                    if overlay.get("updated_at_epoch") is not None
+                    else None,
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
     return clean
 
 
-def clean_annotation_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
+def clean_overlay_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
     anchor_type = str(anchor.get("type") or "")
     if anchor_type == "image_region":
         rect = anchor.get("rect")
@@ -299,30 +307,122 @@ def clean_annotation_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+def manifest_display_label(manifest_path: Path, projection: dict[str, Any]) -> tuple[str, str]:
+    workflow = projection.get("workflow") if isinstance(projection.get("workflow"), dict) else {}
+    label = str(workflow.get("name") or manifest_path.parent.parent.name or manifest_path.parent.name)
+    subtitle_parts = [
+        str(workflow.get("company") or "").strip(),
+        str(workflow.get("talent_segment") or "").strip(),
+        str(workflow.get("status") or "").strip(),
+    ]
+    subtitle = " · ".join(part for part in subtitle_parts if part)
+    if not subtitle:
+        subtitle = str(manifest_path.relative_to(REPO_ROOT))
+    return label, subtitle
+
+
+def discover_workbench_contexts(active_manifest: Path) -> list[dict[str, Any]]:
+    contexts: list[dict[str, Any]] = []
+    artifacts_root = REPO_ROOT / "artifacts"
+    if not artifacts_root.exists():
+        return contexts
+    for manifest_path in sorted(artifacts_root.glob("**/manifest.json")):
+        try:
+            projection = project_workbench_manifest(manifest_path)
+        except Exception:
+            continue
+        label, subtitle = manifest_display_label(manifest_path, projection)
+        contexts.append(
+            {
+                "manifest": str(manifest_path.relative_to(REPO_ROOT)),
+                "label": label,
+                "subtitle": subtitle,
+                "source_format": projection.get("source", {}).get("format")
+                if isinstance(projection.get("source"), dict)
+                else None,
+                "status": projection.get("workflow", {}).get("status")
+                if isinstance(projection.get("workflow"), dict)
+                else None,
+                "active": manifest_path.resolve() == active_manifest.resolve(),
+            }
+        )
+    return contexts
+
+
 class WorkbenchServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], manifest_path: Path):
-        self.manifest_path = manifest_path
-        self.artifact_root = manifest_path.parent
-        self.workbench_projection = project_workbench_manifest(manifest_path)
-        self.collection = build_collection(manifest_path, self.workbench_projection)
-        self.artifacts_by_id = {item["id"]: item for item in self.collection["artifacts"]}
-        self.annotations: dict[str, list[dict[str, Any]]] = {
-            item["id"]: [] for item in self.collection["artifacts"]
-        }
+        self.interaction_overlays: list[dict[str, Any]] = []
+        self.view_state: dict[str, Any] = {}
+        self.context_changed_by: str | None = None
+        self.previous_manifest: str | None = None
+        self.context_changed_at_epoch: int | None = None
+        self.load_manifest(manifest_path, changed_by=None)
         self.updated_at_epoch = int(time.time())
         super().__init__(server_address, WorkbenchHandler)
 
-    def annotation_state(self) -> dict[str, Any]:
+    def load_manifest(self, manifest_path: Path, *, changed_by: str | None) -> None:
+        self.manifest_path = safe_manifest_path(manifest_path)
+        self.artifact_root = self.manifest_path.parent
+        self.workbench_projection = project_workbench_manifest(self.manifest_path)
+        self.collection = build_collection(self.manifest_path, self.workbench_projection)
+        self.artifacts_by_id = {item["id"]: item for item in self.collection["artifacts"]}
+        self.interaction_overlays = []
+        first_artifact = self.collection["artifacts"][0] if self.collection["artifacts"] else None
+        self.view_state = (
+            {
+                "active_artifact_id": first_artifact["id"],
+                "active_index": 0,
+                "updated_at_epoch": int(time.time()),
+            }
+            if first_artifact
+            else {}
+        )
+        if changed_by:
+            self.context_changed_by = changed_by
+            self.context_changed_at_epoch = int(time.time())
+
+    def workbench_state(self) -> dict[str, Any]:
+        contexts = discover_workbench_contexts(self.manifest_path)
         return {
-            "status": "annotation_state",
+            "status": "workbench_state",
             "collection": self.collection,
-            "annotations": self.annotations,
+            "workbench_projection": self.workbench_projection,
+            "interaction_overlays": self.interaction_overlays,
+            "view": self.view_state,
+            "contexts": contexts,
+            "context": {
+                "manifest": str(self.manifest_path.relative_to(REPO_ROOT)),
+                "changed_by": self.context_changed_by,
+                "changed_at_epoch": self.context_changed_at_epoch,
+                "previous_manifest": self.previous_manifest,
+            },
             "updated_at_epoch": self.updated_at_epoch,
         }
 
-    def replace_annotations(self, annotations: Any) -> None:
+    def replace_interaction_overlays(self, overlays: Any) -> None:
         artifact_ids = {item["id"] for item in self.collection["artifacts"]}
-        self.annotations = clean_annotations(annotations, artifact_ids)
+        self.interaction_overlays = clean_interaction_overlays(overlays, artifact_ids)
+        self.updated_at_epoch = int(time.time())
+
+    def replace_view_state(self, view: Any) -> None:
+        if not isinstance(view, dict):
+            return
+        artifact_id_value = str(view.get("active_artifact_id") or "")
+        if artifact_id_value not in self.artifacts_by_id:
+            return
+        artifact_ids = [item["id"] for item in self.collection["artifacts"]]
+        self.view_state = {
+            "active_artifact_id": artifact_id_value,
+            "active_index": artifact_ids.index(artifact_id_value),
+            "updated_at_epoch": int(time.time()),
+        }
+        self.updated_at_epoch = int(time.time())
+
+    def switch_context(self, manifest_value: str, *, changed_by: str) -> None:
+        manifest_path = safe_manifest_path((REPO_ROOT / manifest_value).resolve())
+        previous = str(self.manifest_path.relative_to(REPO_ROOT))
+        self.previous_manifest = previous
+        self.load_manifest(manifest_path, changed_by=changed_by)
         self.updated_at_epoch = int(time.time())
 
     def artifact_path_by_id(self, artifact_id_value: str) -> Path | None:
@@ -380,8 +480,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             self.send_response(HTTPStatus.NO_CONTENT)
             self.end_headers()
             return
-        if parsed.path in {"/api/annotation-state", "/api/collection"}:
-            self.send_json(HTTPStatus.OK, self.server.annotation_state())
+        if parsed.path == WORKBENCH_STATE_PATH:
+            self.send_json(HTTPStatus.OK, self.server.workbench_state())
             return
         if parsed.path == "/api/workbench-projection":
             self.send_json(HTTPStatus.OK, self.server.workbench_projection)
@@ -403,7 +503,7 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path != "/api/annotation-state":
+        if parsed.path not in {WORKBENCH_STATE_PATH, WORKBENCH_CONTEXT_PATH}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         length = int(self.headers.get("content-length", "0"))
@@ -412,8 +512,19 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid JSON"})
             return
-        self.server.replace_annotations(payload.get("annotations"))
-        self.send_json(HTTPStatus.OK, self.server.annotation_state())
+        if parsed.path == WORKBENCH_CONTEXT_PATH:
+            try:
+                self.server.switch_context(str(payload.get("manifest") or ""), changed_by=str(payload.get("changed_by") or "human"))
+            except SystemExit as exc:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return
+            self.send_json(HTTPStatus.OK, self.server.workbench_state())
+            return
+        if "interaction_overlays" in payload:
+            self.server.replace_interaction_overlays(payload.get("interaction_overlays"))
+        if "view" in payload:
+            self.server.replace_view_state(payload.get("view"))
+        self.send_json(HTTPStatus.OK, self.server.workbench_state())
 
     def do_PUT(self) -> None:
         parsed = urlparse(self.path)
@@ -454,7 +565,7 @@ def main() -> int:
     host, port = server.server_address
     print(f"[artifact-viewer] serving {manifest_path}")
     print(f"[artifact-viewer] open http://{host}:{port}/")
-    print(f"[artifact-viewer] annotation state http://{host}:{port}/api/annotation-state")
+    print(f"[artifact-viewer] workbench state http://{host}:{port}{WORKBENCH_STATE_PATH}")
     print(f"[artifact-viewer] workbench projection http://{host}:{port}/api/workbench-projection")
     if args.open:
         print(

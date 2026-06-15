@@ -2,7 +2,7 @@ async (page) => {
   await page.reload();
   const model = await page.evaluate(async () => {
     const [state, projection] = await Promise.all([
-      fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json()),
+      fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json()),
       fetch("/api/workbench-projection", { cache: "no-store" }).then((response) => response.json()),
     ]);
     const collectionIds = new Set((state.collection?.artifacts || []).map((artifact) => artifact.id));
@@ -34,7 +34,7 @@ async (page) => {
   }, model.label, { timeout: 3000 });
 
   return await page.evaluate(async (model) => {
-    const state = await fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json());
+    const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
     const collection = state.collection?.artifacts || [];
     const visibleRows = [...document.querySelectorAll(".artifact-row[data-index]")];
     const visibleIds = visibleRows.map((row) => {

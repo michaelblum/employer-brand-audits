@@ -47,6 +47,25 @@ def _run(args: list[str]) -> int:
     return completed.returncode
 
 
+def _activate_app(app_name: str) -> int:
+    if sys.platform != "darwin":
+        return 0
+    cmd = ["osascript", "-e", f'tell application "{app_name}" to activate']
+    print("+ " + " ".join(str(part) for part in cmd), flush=True)
+    completed = subprocess.run(
+        cmd,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.stdout:
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
+    return completed.returncode
+
+
 def _session_prefix(session: str) -> list[str]:
     return [f"-s={session}"]
 
@@ -96,6 +115,20 @@ def window_maximize(args: argparse.Namespace) -> int:
         "}"
     )
     return _run(_session_prefix(args.session) + ["run-code", code])
+
+
+def window_focus(args: argparse.Namespace) -> int:
+    # Do not add Browser.setWindowBounds here. Focus must not move or resize the
+    # managed workbench window.
+    code = (
+        "async page => {"
+        "await page.bringToFront();"
+        "await page.evaluate(() => window.focus());"
+        "}"
+    )
+    page_result = _run(_session_prefix(args.session) + ["run-code", code])
+    app_result = _activate_app(args.app_name)
+    return page_result if page_result != 0 else app_result
 
 
 def tab_list(args: argparse.Namespace) -> int:
@@ -194,6 +227,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = with_session(sub.add_parser("window-maximize", help="Maximize the browser window on its current display"))
     p.set_defaults(func=window_maximize)
+
+    p = with_session(sub.add_parser("window-focus", help="Bring the browser window to the front"))
+    p.add_argument("--app-name", default="Google Chrome")
+    p.set_defaults(func=window_focus)
 
     p = with_session(sub.add_parser("tab-list", help="List browser tabs"))
     p.set_defaults(func=tab_list)

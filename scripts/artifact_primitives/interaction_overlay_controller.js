@@ -3,17 +3,17 @@
 
   async function runEditorIntent({
     intent,
-    setAnnotations,
+    setInteractionOverlays,
     closeEditor,
-    syncAnnotations,
+    syncInteractionOverlays,
     renderSidebar,
     showToast,
   } = {}) {
     if (!intent) return false;
-    if (typeof setAnnotations === "function") setAnnotations(intent.annotations);
+    if (typeof setInteractionOverlays === "function") setInteractionOverlays(intent.interactionOverlays);
     if (intent.closeEditor && typeof closeEditor === "function") closeEditor();
-    if (intent.syncAnnotations && typeof syncAnnotations === "function") {
-      await syncAnnotations();
+    if (intent.syncInteractionOverlays && typeof syncInteractionOverlays === "function") {
+      await syncInteractionOverlays();
     }
     if (intent.renderSidebar && typeof renderSidebar === "function") renderSidebar();
     if (intent.toast && typeof showToast === "function") showToast(intent.toast);

@@ -398,6 +398,8 @@ def workbench_browser_command(
 
 def command_workbench(args: argparse.Namespace) -> int:
     action = args.workbench_action
+    if action in {"click", "fill", "press"}:
+        assert_dev_command_allowed(REPO_ROOT, "workbench", require_active_turn=True)
     if action == "reset":
         return command_demo(
             argparse.Namespace(
@@ -407,6 +409,22 @@ def command_workbench(args: argparse.Namespace) -> int:
                 json=args.json,
             )
         )
+    if action in {"context", "glance"}:
+        manifest = resolve_manifest(args)
+        command = [
+            sys.executable,
+            str(WORKBENCH_GATE),
+            "state" if action == "context" else "glance",
+            str(manifest),
+            "--port",
+            "8765",
+        ]
+        completed = run(command, capture=True)
+        if completed.stdout:
+            print(completed.stdout, end="")
+        if completed.stderr:
+            print(completed.stderr, file=sys.stderr, end="")
+        return completed.returncode
     values: list[str] = []
     if action == "tab-select":
         values = [str(args.index)]
@@ -604,6 +622,18 @@ def build_parser() -> argparse.ArgumentParser:
     reset.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and demo a named fixture")
     reset.add_argument("--json", action="store_true")
     reset.set_defaults(func=command_workbench)
+
+    context = workbench_subparsers.add_parser("context", help="Print current workbench context and interaction overlays")
+    context.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
+    context.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and inspect a named fixture")
+    context.add_argument("--json", action="store_true")
+    context.set_defaults(func=command_workbench)
+
+    glance = workbench_subparsers.add_parser("glance", help="Print a compact live workbench summary")
+    glance.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
+    glance.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and inspect a named fixture")
+    glance.add_argument("--json", action="store_true")
+    glance.set_defaults(func=command_workbench)
 
     refresh = workbench_subparsers.add_parser("refresh", help="Reload the current workbench page")
     refresh.set_defaults(func=command_workbench, values=[])

@@ -142,6 +142,16 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 "eba-workbench",
             ],
         )
+        self.assertEqual(
+            plan["window_focus_command"],
+            [
+                sys.executable,
+                "scripts/playwright_cli_browser.py",
+                "window-focus",
+                "--session",
+                "eba-workbench",
+            ],
+        )
         self.assertIsNone(plan["initial_resize_command"])
 
     def test_browser_open_plan_keeps_explicit_viewport_resize_available(self) -> None:
@@ -262,6 +272,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertTrue(result["reused"])
         self.assertFalse(result["resized"])
         self.assertTrue(result["window_maximized"])
+        self.assertTrue(result["window_focused"])
         self.assertTrue(result["viewport_synced"])
         self.assertEqual(result["viewport_target"], (1484, 883))
         self.assertEqual(
@@ -288,6 +299,13 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                     "resize",
                     "1484",
                     "883",
+                    "--session",
+                    "eba-workbench",
+                ],
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "window-focus",
                     "--session",
                     "eba-workbench",
                 ],
@@ -389,11 +407,128 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
 
         self.assertTrue(result["reused"])
         self.assertFalse(result["window_maximized"])
+        self.assertTrue(result["window_focused"])
         self.assertFalse(result["viewport_synced"])
         self.assertEqual(
             commands,
             [
                 [sys.executable, "scripts/playwright_cli_browser.py", "goto", "http://127.0.0.1:8765/", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "window-focus", "--session", "eba-workbench"],
+            ],
+        )
+
+    def test_open_with_playwright_uses_visibility_helper_for_reused_session(self) -> None:
+        commands: list[list[str]] = []
+        focus_commands: list[list[str]] = []
+        statuses = [
+            {
+                "session": "eba-workbench",
+                "alive": True,
+                "status": "open",
+            },
+            {
+                "session": "eba-workbench",
+                "alive": True,
+                "status": "open",
+            },
+        ]
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def fake_status(session: str) -> dict[str, object]:
+            self.assertEqual(session, "eba-workbench")
+            return statuses.pop(0)
+
+        def fake_run(command: list[str], log_handle: object) -> Result:
+            commands.append(command)
+            return Result()
+
+        def fake_metrics(session: str) -> dict[str, object]:
+            self.assertEqual(session, "eba-workbench")
+            return {
+                "innerWidth": 1484,
+                "innerHeight": 916,
+                "outerWidth": 1512,
+                "outerHeight": 949,
+                "screenX": 0,
+                "screenY": 33,
+                "devicePixelRatio": 1,
+                "screenAvailLeft": 0,
+                "screenAvailTop": 0,
+                "screenAvailWidth": 1484,
+                "screenAvailHeight": 949,
+            }
+
+        def fake_front(plan: dict[str, object], log_handle: object) -> Result:
+            focus_commands.append(plan["window_focus_command"])  # type: ignore[arg-type]
+            return Result()
+
+        original_require_cli = gate.require_session_aware_cli
+        original_require_wrapper = gate.require_workbench_browser_wrapper
+        original_status = gate.browser_session_status
+        original_run = gate.run_browser_command
+        original_metrics = gate.browser_page_metrics
+        original_front = gate.bring_managed_workbench_to_front
+        try:
+            gate.require_session_aware_cli = lambda: "playwright-cli"  # type: ignore[assignment]
+            gate.require_workbench_browser_wrapper = lambda: gate.BROWSER_WRAPPER  # type: ignore[assignment]
+            gate.browser_session_status = fake_status  # type: ignore[assignment]
+            gate.run_browser_command = fake_run  # type: ignore[assignment]
+            gate.browser_page_metrics = fake_metrics  # type: ignore[assignment]
+            gate.bring_managed_workbench_to_front = fake_front  # type: ignore[assignment]
+
+            with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+                root = Path(tmp)
+                (root / "workbench-browser-state.json").write_text(
+                    json.dumps(
+                        {
+                            "display_signature": {
+                                "screenX": 0,
+                                "screenY": 33,
+                                "screenAvailLeft": 0,
+                                "screenAvailTop": 0,
+                                "screenAvailWidth": 1484,
+                                "screenAvailHeight": 949,
+                                "devicePixelRatio": 1,
+                            }
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                result = gate.open_with_playwright(
+                    "http://127.0.0.1:8765/",
+                    {
+                        "artifact_root": root,
+                        "browser_log": root / "workbench-browser.log",
+                        "browser_state": root / "workbench-browser-state.json",
+                    },
+                    "chrome",
+                    None,
+                    session="eba-workbench",
+                    profile=REPO_ROOT / "chrome-profile" / "workbench",
+                )
+        finally:
+            gate.require_session_aware_cli = original_require_cli  # type: ignore[assignment]
+            gate.require_workbench_browser_wrapper = original_require_wrapper  # type: ignore[assignment]
+            gate.browser_session_status = original_status  # type: ignore[assignment]
+            gate.run_browser_command = original_run  # type: ignore[assignment]
+            gate.browser_page_metrics = original_metrics  # type: ignore[assignment]
+            gate.bring_managed_workbench_to_front = original_front  # type: ignore[assignment]
+
+        self.assertTrue(result["window_focused"])
+        self.assertEqual(
+            commands,
+            [
+                [sys.executable, "scripts/playwright_cli_browser.py", "goto", "http://127.0.0.1:8765/", "--session", "eba-workbench"],
+            ],
+        )
+        self.assertEqual(
+            focus_commands,
+            [
+                [sys.executable, "scripts/playwright_cli_browser.py", "window-focus", "--session", "eba-workbench"],
             ],
         )
 
@@ -427,6 +562,38 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertEqual(commands[1][:2], ["-s=eba-workbench", "run-code"])
         self.assertIn("Browser.setWindowBounds", commands[1][2])
         self.assertIn("maximized", commands[1][2])
+
+    def test_browser_wrapper_can_focus_existing_window_without_changing_bounds(self) -> None:
+        from scripts import playwright_cli_browser as browser
+
+        commands: list[list[str]] = []
+        activated_apps: list[str] = []
+
+        def fake_run(args: list[str]) -> int:
+            commands.append(args)
+            return 0
+
+        def fake_activate_app(app_name: str) -> int:
+            activated_apps.append(app_name)
+            return 0
+
+        original_run = browser._run
+        original_activate_app = browser._activate_app
+        try:
+            browser._run = fake_run  # type: ignore[assignment]
+            browser._activate_app = fake_activate_app  # type: ignore[assignment]
+            browser.window_focus(
+                argparse.Namespace(session="eba-workbench", app_name="Google Chrome")
+            )
+        finally:
+            browser._run = original_run  # type: ignore[assignment]
+            browser._activate_app = original_activate_app  # type: ignore[assignment]
+
+        self.assertEqual(commands[0][:2], ["-s=eba-workbench", "run-code"])
+        self.assertIn("bringToFront", commands[0][2])
+        self.assertIn("window.focus", commands[0][2])
+        self.assertNotIn("Browser.setWindowBounds", commands[0][2])
+        self.assertEqual(activated_apps, ["Google Chrome"])
 
     def test_browser_session_status_reads_session_aware_cli_list(self) -> None:
         payload = {
@@ -524,11 +691,13 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                     "pid": 123,
                     "alive": True,
                     "owned": True,
+                    "repo_owned": True,
                     "health": "200",
                     "asset_health": {"healthy": False, "status": "asset_fingerprint_mismatch"},
                     "manifest": manifest_label,
+                    "active_manifest": manifest_label,
                     "log": log_label,
-                    "annotation_state_url": "http://127.0.0.1:8765/api/annotation-state",
+                    "workbench_state_url": "http://127.0.0.1:8765/api/workbench-state",
                     "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
                     "browser_session": {"session": "eba-workbench", "alive": True},
                 },
@@ -537,11 +706,13 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                     "pid": 456,
                     "alive": True,
                     "owned": True,
+                    "repo_owned": True,
                     "health": "200",
                     "asset_health": {"healthy": True, "status": "ok"},
                     "manifest": manifest_label,
+                    "active_manifest": manifest_label,
                     "log": log_label,
-                    "annotation_state_url": "http://127.0.0.1:8765/api/annotation-state",
+                    "workbench_state_url": "http://127.0.0.1:8765/api/workbench-state",
                     "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
                     "browser_session": {"session": "eba-workbench", "alive": True},
                 },
@@ -558,15 +729,19 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
 
             original_status_payload = gate.status_payload
             original_command_start = gate.command_start
-            original_read_annotation_state = gate.read_annotation_state
+            original_read_workbench_state = gate.read_workbench_state
+            original_stop_owned_pid = gate.stop_owned_pid
+            original_wait_for_port_release = gate.wait_for_port_release
             try:
                 gate.status_payload = fake_status  # type: ignore[assignment]
                 gate.command_start = fake_start  # type: ignore[assignment]
-                gate.read_annotation_state = lambda url: {  # type: ignore[assignment]
+                gate.read_workbench_state = lambda url: {  # type: ignore[assignment]
                     "collection": {"artifacts": []},
-                    "annotations": {},
+                    "interaction_overlays": [],
                     "updated_at_epoch": 1,
                 }
+                gate.stop_owned_pid = lambda pid, paths: "stopped"  # type: ignore[assignment]
+                gate.wait_for_port_release = lambda host, port: True  # type: ignore[assignment]
 
                 with contextlib.redirect_stdout(io.StringIO()):
                     exit_code = gate.command_surface(
@@ -586,10 +761,113 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             finally:
                 gate.status_payload = original_status_payload  # type: ignore[assignment]
                 gate.command_start = original_command_start  # type: ignore[assignment]
-                gate.read_annotation_state = original_read_annotation_state  # type: ignore[assignment]
+                gate.read_workbench_state = original_read_workbench_state  # type: ignore[assignment]
+                gate.stop_owned_pid = original_stop_owned_pid  # type: ignore[assignment]
+                gate.wait_for_port_release = original_wait_for_port_release  # type: ignore[assignment]
 
             self.assertEqual(exit_code, 0)
             self.assertEqual(len(start_calls), 1)
+
+    def test_surface_restarts_owned_server_when_workbench_state_endpoint_is_stale(self) -> None:
+        (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest = Path(tmp) / "manifest.json"
+            manifest.write_text('{"artifacts": []}\n', encoding="utf-8")
+            manifest_label = str(manifest.relative_to(REPO_ROOT))
+            log_label = str((Path(tmp) / "workbench-server.log").relative_to(REPO_ROOT))
+            payloads = [
+                {
+                    "url": "http://127.0.0.1:8765/",
+                    "pid": 123,
+                    "alive": True,
+                    "owned": True,
+                    "repo_owned": True,
+                    "health": "200",
+                    "asset_health": {"healthy": True, "status": "ok"},
+                    "manifest": manifest_label,
+                    "active_manifest": manifest_label,
+                    "log": log_label,
+                    "workbench_state_url": "http://127.0.0.1:8765/api/workbench-state",
+                    "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
+                    "browser_session": {"session": "eba-workbench", "alive": True},
+                },
+                {
+                    "url": "http://127.0.0.1:8765/",
+                    "pid": 456,
+                    "alive": True,
+                    "owned": True,
+                    "repo_owned": True,
+                    "health": "200",
+                    "asset_health": {"healthy": True, "status": "ok"},
+                    "manifest": manifest_label,
+                    "active_manifest": manifest_label,
+                    "log": log_label,
+                    "workbench_state_url": "http://127.0.0.1:8765/api/workbench-state",
+                    "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
+                    "browser_session": {"session": "eba-workbench", "alive": True},
+                },
+            ]
+            start_calls: list[object] = []
+            stop_calls: list[object] = []
+            read_calls = 0
+
+            def fake_status(args: object, manifest_path: Path) -> dict[str, object]:
+                self.assertEqual(manifest_path, manifest)
+                return payloads.pop(0)
+
+            def fake_start(args: object) -> int:
+                start_calls.append(args)
+                return 0
+
+            def fake_read_workbench_state(url: str) -> dict[str, object]:
+                nonlocal read_calls
+                read_calls += 1
+                if read_calls == 1:
+                    raise urllib.error.HTTPError(url, 404, "not found", None, None)
+                return {
+                    "collection": {"artifacts": []},
+                    "interaction_overlays": [],
+                    "updated_at_epoch": 1,
+                }
+
+            original_status_payload = gate.status_payload
+            original_command_start = gate.command_start
+            original_read_workbench_state = gate.read_workbench_state
+            original_stop_owned_pid = gate.stop_owned_pid
+            original_wait_for_port_release = gate.wait_for_port_release
+            try:
+                gate.status_payload = fake_status  # type: ignore[assignment]
+                gate.command_start = fake_start  # type: ignore[assignment]
+                gate.read_workbench_state = fake_read_workbench_state  # type: ignore[assignment]
+                gate.stop_owned_pid = lambda pid, paths: stop_calls.append((pid, paths)) or "stopped"  # type: ignore[assignment]
+                gate.wait_for_port_release = lambda host, port: True  # type: ignore[assignment]
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exit_code = gate.command_surface(
+                        type(
+                            "Args",
+                            (),
+                            {
+                                "manifest": manifest,
+                                "host": "127.0.0.1",
+                                "port": 8765,
+                                "timeout": 10.0,
+                                "no_browser": True,
+                                "json": False,
+                            },
+                        )()
+                    )
+            finally:
+                gate.status_payload = original_status_payload  # type: ignore[assignment]
+                gate.command_start = original_command_start  # type: ignore[assignment]
+                gate.read_workbench_state = original_read_workbench_state  # type: ignore[assignment]
+                gate.stop_owned_pid = original_stop_owned_pid  # type: ignore[assignment]
+                gate.wait_for_port_release = original_wait_for_port_release  # type: ignore[assignment]
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(start_calls), 1)
+            self.assertEqual([call[0] for call in stop_calls], [123])
+            self.assertEqual(read_calls, 2)
 
     def test_stale_asset_restart_waits_for_owned_port_release(self) -> None:
         (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
@@ -664,7 +942,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         from scripts.eba_control_plane import ACTIVE_TURN_REQUIRED_COMMANDS, ALLOWED_DEV_COMMANDS
 
         self.assertIn("workbench", ALLOWED_DEV_COMMANDS)
-        self.assertIn("workbench", ACTIVE_TURN_REQUIRED_COMMANDS)
+        self.assertNotIn("workbench", ACTIVE_TURN_REQUIRED_COMMANDS)
         self.assertEqual(
             workbench_browser_command("refresh"),
             [sys.executable, "scripts/playwright_cli_browser.py", "reload", "--session", "eba-workbench"],
@@ -708,6 +986,184 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             commands,
             [[sys.executable, "scripts/playwright_cli_browser.py", "tab-list", "--session", "eba-workbench"]],
         )
+
+    def test_eba_workbench_context_dispatches_gate_state(self) -> None:
+        from argparse import Namespace
+        from scripts import eba_cli
+
+        commands: list[list[str]] = []
+        manifest = Path("artifacts/easy-audit/latest/manifest.json")
+
+        class Result:
+            returncode = 0
+            stdout = '{"status":"workbench_state"}\n'
+            stderr = ""
+
+        def fake_run(command: list[str], *, capture: bool = True, check: bool = False) -> Result:
+            commands.append(command)
+            return Result()
+
+        original_run = eba_cli.run
+        try:
+            eba_cli.run = fake_run  # type: ignore[assignment]
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = eba_cli.command_workbench(
+                    Namespace(
+                        workbench_action="context",
+                        manifest=manifest,
+                        fixture=None,
+                        json=True,
+                    )
+                )
+        finally:
+            eba_cli.run = original_run  # type: ignore[assignment]
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            commands,
+            [
+                [
+                    sys.executable,
+                    str(eba_cli.WORKBENCH_GATE),
+                    "state",
+                    str(manifest),
+                    "--port",
+                    "8765",
+                ]
+            ],
+        )
+
+    def test_eba_workbench_glance_dispatches_gate_glance(self) -> None:
+        from argparse import Namespace
+        from scripts import eba_cli
+
+        commands: list[list[str]] = []
+        manifest = Path("artifacts/easy-audit/latest/manifest.json")
+
+        class Result:
+            returncode = 0
+            stdout = '{"status":"workbench_glance"}\n'
+            stderr = ""
+
+        def fake_run(command: list[str], *, capture: bool = True, check: bool = False) -> Result:
+            commands.append(command)
+            return Result()
+
+        original_run = eba_cli.run
+        try:
+            eba_cli.run = fake_run  # type: ignore[assignment]
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = eba_cli.command_workbench(
+                    Namespace(
+                        workbench_action="glance",
+                        manifest=manifest,
+                        fixture=None,
+                        json=True,
+                    )
+                )
+        finally:
+            eba_cli.run = original_run  # type: ignore[assignment]
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            commands,
+            [
+                [
+                    sys.executable,
+                    str(eba_cli.WORKBENCH_GATE),
+                    "glance",
+                    str(manifest),
+                    "--port",
+                    "8765",
+                ]
+            ],
+        )
+
+    def test_workbench_glance_summarizes_current_annotations_without_projection_blob(self) -> None:
+        state = {
+            "collection": {
+                "manifest": "artifacts/easy-audit/latest/manifest.json",
+                "artifacts": [
+                    {
+                        "id": "l0-source-urls",
+                        "name": "Seed source URLs",
+                        "type": "json",
+                        "kind": "url_list",
+                        "path": "artifacts/easy-audit/latest/l0-source-urls.json",
+                    },
+                    {
+                        "id": "l1-careers-screenshot",
+                        "name": "Careers page screenshot",
+                        "type": "image",
+                        "kind": "screenshot",
+                        "path": "artifacts/easy-audit/latest/l1-careers-screenshot.png",
+                    },
+                    {
+                        "id": "l4-final-report",
+                        "name": "Final employer brand audit",
+                        "type": "markdown",
+                        "kind": "report",
+                        "path": "artifacts/easy-audit/latest/l4-final-report.md",
+                    },
+                ],
+            },
+            "context": {
+                "manifest": "artifacts/easy-audit/latest/manifest.json",
+                "changed_at_epoch": 123,
+                "changed_by": "user",
+            },
+            "contexts": [
+                {
+                    "active": True,
+                    "label": "Acme Robotics audit",
+                    "manifest": "artifacts/easy-audit/latest/manifest.json",
+                    "subtitle": "Acme Robotics · complete",
+                    "status": "complete",
+                }
+            ],
+            "interaction_overlays": [
+                {
+                    "id": "overlay-1",
+                    "subtype": "annotation",
+                    "subject": {"id": "l1-careers-screenshot", "kind": "artifact"},
+                    "anchor": {
+                        "type": "image_region",
+                        "coordinate_space": "natural_image",
+                        "rect": {"x": 521, "y": 147, "width": 326, "height": 241},
+                    },
+                    "body": {"kind": "comment", "text": "this sucks"},
+                    "created_at_epoch": 1781564957,
+                }
+            ],
+            "updated_at_epoch": 1781564957,
+            "workbench_projection": {"large": "omit me"},
+        }
+
+        glance = gate.summarize_workbench_glance(state)
+
+        self.assertEqual(glance["status"], "workbench_glance")
+        self.assertEqual(glance["current"]["label"], "Acme Robotics audit")
+        self.assertEqual(glance["current_artifact"]["id"], "l1-careers-screenshot")
+        self.assertEqual(glance["model"]["artifact_count"], 3)
+        self.assertEqual(glance["model"]["annotation_count"], 1)
+        self.assertEqual(
+            glance["annotations"],
+            [
+                {
+                    "id": "overlay-1",
+                    "artifact_id": "l1-careers-screenshot",
+                    "artifact_name": "Careers page screenshot",
+                    "text": "this sucks",
+                    "anchor": {
+                        "type": "image_region",
+                        "coordinate_space": "natural_image",
+                        "rect": {"x": 521, "y": 147, "width": 326, "height": 241},
+                    },
+                    "created_at_epoch": 1781564957,
+                }
+            ],
+        )
+        self.assertNotIn("workbench_projection", glance)
 
 
 if __name__ == "__main__":

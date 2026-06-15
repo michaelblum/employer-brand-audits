@@ -65,54 +65,58 @@
   } = {}) {
     const artifactId = artifact?.id || "";
     return {
-      id: `${artifactId}-${Number(nowMs).toString(36)}`,
-      artifact_id: artifactId,
-      kind: "comment",
+      id: `overlay-${artifactId}-${Number(nowMs).toString(36)}`,
+      subtype: ANNOTATION_OVERLAY_SUBTYPE,
+      subject: { kind: "artifact", id: artifactId },
       anchor,
-      comment: normalizeComment(comment),
+      body: { kind: "comment", text: normalizeComment(comment) },
       created_at_epoch: epochFromMilliseconds(nowMs),
       updated_at_epoch: null,
     };
   }
 
-  function copyAnnotationsMap(annotations = {}) {
-    const next = {};
-    for (const [artifactId, notes] of Object.entries(annotations || {})) {
-      next[artifactId] = [...(notes || [])];
-    }
-    return next;
+  function copyInteractionOverlays(interactionOverlays = []) {
+    return [...(interactionOverlays || [])];
   }
 
-  function appendAnnotation({ annotations = {}, artifactId, note } = {}) {
-    const next = copyAnnotationsMap(annotations);
-    next[artifactId] = [...(next[artifactId] || []), note];
-    return next;
+  function overlaySubjectArtifactId(overlay = {}) {
+    return overlay.subject?.kind === "artifact" ? overlay.subject.id || "" : "";
+  }
+
+  function annotationText(overlay = {}) {
+    return overlay.body?.kind === "comment" ? overlay.body.text || "" : "";
+  }
+
+  function annotationOverlays(interactionOverlays = [], artifactId = null) {
+    return (interactionOverlays || []).filter((overlay) => (
+      overlay?.subtype === ANNOTATION_OVERLAY_SUBTYPE
+      && (!artifactId || overlaySubjectArtifactId(overlay) === artifactId)
+    ));
+  }
+
+  function appendAnnotation({ interactionOverlays = [], note } = {}) {
+    return [...copyInteractionOverlays(interactionOverlays), note];
   }
 
   function updateAnnotation({
-    annotations = {},
-    artifactId,
+    interactionOverlays = [],
     noteId,
     comment,
     nowEpoch = epochFromMilliseconds(Date.now()),
   } = {}) {
-    const next = copyAnnotationsMap(annotations);
-    next[artifactId] = (next[artifactId] || []).map((note) => (
+    return copyInteractionOverlays(interactionOverlays).map((note) => (
       note.id === noteId
-        ? { ...note, comment: normalizeComment(comment), updated_at_epoch: nowEpoch }
+        ? { ...note, body: { kind: "comment", text: normalizeComment(comment) }, updated_at_epoch: nowEpoch }
         : note
     ));
-    return next;
   }
 
-  function deleteAnnotation({ annotations = {}, artifactId, noteId } = {}) {
-    const next = copyAnnotationsMap(annotations);
-    next[artifactId] = (next[artifactId] || []).filter((note) => note.id !== noteId);
-    return next;
+  function deleteAnnotation({ interactionOverlays = [], noteId } = {}) {
+    return copyInteractionOverlays(interactionOverlays).filter((note) => note.id !== noteId);
   }
 
   function annotationReorderPlan({
-    annotations = {},
+    interactionOverlays = [],
     artifactId,
     sourceArtifactId,
     sourceAnnotationId,
@@ -120,13 +124,26 @@
   } = {}) {
     if (!artifactId || sourceArtifactId !== artifactId) return null;
     if (!sourceAnnotationId || !targetAnnotationId || sourceAnnotationId === targetAnnotationId) return null;
-    const notes = [...(annotations[artifactId] || [])];
+    const notes = annotationOverlays(interactionOverlays, artifactId);
     const from = notes.findIndex((note) => note.id === sourceAnnotationId);
     const to = notes.findIndex((note) => note.id === targetAnnotationId);
     if (from < 0 || to < 0) return null;
     const [moved] = notes.splice(from, 1);
     notes.splice(to, 0, moved);
-    return { artifactId, notes };
+    const reorderedIds = new Set(notes.map((note) => note.id));
+    const next = [];
+    let inserted = false;
+    for (const overlay of interactionOverlays || []) {
+      if (reorderedIds.has(overlay.id)) {
+        if (!inserted) {
+          next.push(...notes);
+          inserted = true;
+        }
+        continue;
+      }
+      next.push(overlay);
+    }
+    return { artifactId, interactionOverlays: next };
   }
 
   function displayRectForAnchor({
@@ -219,7 +236,7 @@
       subtype: ANNOTATION_OVERLAY_SUBTYPE,
       ...editEditorSession({ note }),
       actionMode: "edit",
-      comment: note.comment || "",
+      comment: annotationText(note),
       anchor,
       placement,
     };
@@ -237,18 +254,18 @@
 
   function annotationEditorEffect({
     action,
-    annotations,
+    interactionOverlays,
     note,
     toast,
-    syncAnnotations = true,
+    syncInteractionOverlays = true,
     renderSidebar = true,
   } = {}) {
     const effect = {
       subtype: ANNOTATION_OVERLAY_SUBTYPE,
       action,
-      annotations,
+      interactionOverlays,
       closeEditor: true,
-      syncAnnotations,
+      syncInteractionOverlays,
       renderSidebar,
       toast: toast || null,
     };
@@ -257,7 +274,7 @@
   }
 
   function commitOverlayEditorIntent({
-    annotations = {},
+    interactionOverlays = [],
     artifact,
     editorMode,
     editing,
@@ -270,9 +287,8 @@
     if (editorMode === "edit" && editing) {
       return annotationEditorEffect({
         action: "update",
-        annotations: updateAnnotation({
-          annotations,
-          artifactId: editing.artifact_id,
+        interactionOverlays: updateAnnotation({
+          interactionOverlays,
           noteId: editing.id,
           comment: normalized,
           nowEpoch: epochFromMilliseconds(nowMs),
@@ -289,23 +305,22 @@
     });
     return annotationEditorEffect({
       action: "append",
-      annotations: appendAnnotation({ annotations, artifactId: artifact.id, note }),
+      interactionOverlays: appendAnnotation({ interactionOverlays, note }),
       note,
       toast: "Comment added",
     });
   }
 
   function secondaryOverlayEditorIntent({
-    annotations = {},
+    interactionOverlays = [],
     editorMode,
     editing,
   } = {}) {
     if (editorMode === "edit" && editing) {
       return annotationEditorEffect({
         action: "delete",
-        annotations: deleteAnnotation({
-          annotations,
-          artifactId: editing.artifact_id,
+        interactionOverlays: deleteAnnotation({
+          interactionOverlays,
           noteId: editing.id,
         }),
         toast: "Comment deleted",
@@ -313,9 +328,9 @@
     }
     return annotationEditorEffect({
       action: "cancel",
-      annotations,
+      interactionOverlays,
       toast: null,
-      syncAnnotations: false,
+      syncInteractionOverlays: false,
       renderSidebar: false,
     });
   }
@@ -396,6 +411,8 @@
   ROOT.interactionOverlay = {
     annotationReorderPlan,
     annotationOverlayTarget,
+    annotationOverlays,
+    annotationText,
     beginOverlayDraft,
     closedEditorSession,
     completeOverlayDraft,
