@@ -34,6 +34,10 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "--check", "scripts/artifact_primitives/artifact_renderer.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/artifact_primitives/workflow_sidebar.js"],
             validation_commands(),
         )
@@ -51,6 +55,10 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn(
             ["node", "tests/document_renderer_primitive_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "tests/artifact_renderer_primitive_check.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -74,6 +82,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-primitives/artifact_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/markdown_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/markdown_interactions.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/image_viewer.js", WORKBENCH_ASSETS)

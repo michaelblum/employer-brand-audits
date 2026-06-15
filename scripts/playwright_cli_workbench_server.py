@@ -56,6 +56,10 @@ WORKBENCH_ASSETS = {
         ARTIFACT_PRIMITIVES_DIR / "document_renderer.js",
         "text/javascript",
     ),
+    "/assets/artifact-primitives/artifact_renderer.js": (
+        ARTIFACT_PRIMITIVES_DIR / "artifact_renderer.js",
+        "text/javascript",
+    ),
     "/assets/artifact-primitives/workflow_sidebar.js": (
         ARTIFACT_PRIMITIVES_DIR / "workflow_sidebar.js",
         "text/javascript",
