@@ -13,6 +13,8 @@ assert.equal(typeof sidebar.workflowFilterPlan, "function");
 assert.equal(typeof sidebar.workflowMovePlan, "function");
 assert.equal(typeof sidebar.renderArtifactTitleHtml, "function");
 assert.equal(typeof sidebar.renderOverviewHtml, "function");
+assert.equal(typeof sidebar.workflowProjectionModel, "function");
+assert.equal(typeof sidebar.workflowSidebarContext, "function");
 
 const artifacts = [
   { id: "hero", name: "Hero <Shot>", path: "hero.png", type: "image" },
@@ -77,6 +79,48 @@ const annotations = {
   ],
 };
 
+const projectionPayload = {
+  workflow: {
+    name: "Easy Audit",
+    status: "ready",
+    steps: [
+      { id: "capture", name: "Capture Page", status: "complete" },
+      { id: "analyze", name: "Analyze Brand", status: "complete" },
+      { name: "Ignored missing id" },
+    ],
+  },
+  artifacts: [
+    projectedArtifactsById.hero,
+    projectedArtifactsById.summary,
+    { produced_by_step_id: "ignored" },
+  ],
+  facets: {
+    slots: [
+      projectedSlotsByValue["landing-page"],
+      projectedSlotsByValue["workflow-summary"],
+      { label: "Ignored missing value" },
+    ],
+  },
+  artifact_groups: [
+    projectedGroupsById.visible,
+    { label: "Ignored missing id", artifact_ids: ["hero"] },
+  ],
+};
+
+const projectionModel = sidebar.workflowProjectionModel(projectionPayload);
+assert.deepEqual(Object.keys(projectionModel.projectedArtifactsById).sort(), ["hero", "summary"]);
+assert.deepEqual(Object.keys(projectionModel.projectedStepsById).sort(), ["analyze", "capture"]);
+assert.deepEqual(Object.keys(projectionModel.projectedSlotsByValue).sort(), ["landing-page", "workflow-summary"]);
+assert.deepEqual(Object.keys(projectionModel.projectedGroupsById).sort(), ["visible"]);
+assert.equal(projectionModel.workbenchProjection, projectionPayload);
+assert.deepEqual(sidebar.workflowProjectionModel(null), {
+  workbenchProjection: null,
+  projectedArtifactsById: {},
+  projectedStepsById: {},
+  projectedSlotsByValue: {},
+  projectedGroupsById: {},
+});
+
 const context = {
   artifacts,
   annotations,
@@ -91,6 +135,28 @@ const context = {
   },
   iconHref: (name) => `/icons.svg#${name}`,
 };
+assert.deepEqual(
+  sidebar.workflowSidebarContext({
+    artifacts,
+    annotations,
+    activeIndex: 1,
+    filters: { stepId: null, slot: null, compositeId: null },
+    projectionModel,
+    iconHref: context.iconHref,
+  }),
+  {
+    artifacts,
+    annotations,
+    activeIndex: 1,
+    filters: { stepId: null, slot: null, compositeId: null },
+    iconHref: context.iconHref,
+    projectedArtifactsById: projectionModel.projectedArtifactsById,
+    projectedGroupsById: projectionModel.projectedGroupsById,
+    projectedSlotsByValue: projectionModel.projectedSlotsByValue,
+    projectedStepsById: projectionModel.projectedStepsById,
+    workbenchProjection: projectionPayload,
+  },
+);
 
 assert.deepEqual(sidebar.visibleArtifactIndexes(context), [0]);
 assert.equal(sidebar.filterSummaryText({ total: 3, visible: 1 }), "1 of 3 artifacts");
