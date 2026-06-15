@@ -79,6 +79,25 @@ def resize(args: argparse.Namespace) -> int:
     return _run(_session_prefix(args.session) + ["resize", str(args.width), str(args.height)])
 
 
+def window_maximize(args: argparse.Namespace) -> int:
+    code = (
+        "async page => {"
+        "const cdp = await page.context().newCDPSession(page);"
+        "const win = await cdp.send('Browser.getWindowForTarget');"
+        "await cdp.send('Browser.setWindowBounds', {"
+        "windowId: win.windowId,"
+        "bounds: { windowState: 'normal' }"
+        "});"
+        "await page.waitForTimeout(100);"
+        "await cdp.send('Browser.setWindowBounds', {"
+        "windowId: win.windowId,"
+        "bounds: { windowState: 'maximized' }"
+        "});"
+        "}"
+    )
+    return _run(_session_prefix(args.session) + ["run-code", code])
+
+
 def tab_list(args: argparse.Namespace) -> int:
     return _run(_session_prefix(args.session) + ["tab-list"])
 
@@ -172,6 +191,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("width", type=int)
     p.add_argument("height", type=int)
     p.set_defaults(func=resize)
+
+    p = with_session(sub.add_parser("window-maximize", help="Maximize the browser window on its current display"))
+    p.set_defaults(func=window_maximize)
 
     p = with_session(sub.add_parser("tab-list", help="List browser tabs"))
     p.set_defaults(func=tab_list)
