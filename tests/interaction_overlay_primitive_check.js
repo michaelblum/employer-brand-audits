@@ -13,6 +13,7 @@ const overlay = window.ArtifactPrimitives.interactionOverlay;
   "closedEditorSession",
   "commitOverlayEditorIntent",
   "completeOverlayDraft",
+  "completeResolvedOverlayDraft",
   "createEditorSession",
   "displayRectForAnchor",
   "editorLabels",
@@ -402,5 +403,73 @@ assert.deepEqual(
     relativeTo: "image",
     renderMarkdownHighlights: false,
     hidePopover: true,
+  },
+);
+
+const resolvedDraftCalls = [];
+assert.deepEqual(
+  overlay.completeResolvedOverlayDraft({
+    type: "markdown",
+    displayRect: { x: 1, y: 2, width: 40, height: 20 },
+    resolveAnchor: ({ type, displayRect }) => {
+      resolvedDraftCalls.push({ type, displayRect });
+      return textAnchor;
+    },
+  }),
+  {
+    action: "create",
+    drag: null,
+    pendingAnchor: textAnchor,
+    displayRect: { x: 1, y: 2, width: 40, height: 20 },
+    relativeTo: "markdown",
+    renderMarkdownHighlights: true,
+    hidePopover: false,
+  },
+);
+assert.deepEqual(resolvedDraftCalls, [
+  { type: "markdown", displayRect: { x: 1, y: 2, width: 40, height: 20 } },
+]);
+assert.deepEqual(
+  overlay.completeResolvedOverlayDraft({
+    type: "markdown",
+    displayRect: { x: 1, y: 2, width: 40, height: 20 },
+    resolveAnchor: () => null,
+  }),
+  {
+    action: "discard",
+    drag: null,
+    hideSelection: false,
+    hideMarkdownMarker: true,
+  },
+);
+assert.deepEqual(
+  overlay.completeResolvedOverlayDraft({
+    type: "image",
+    displayRect: { x: 2, y: 3, width: 40, height: 20 },
+    resolveAnchor: () => imageAnchor,
+  }),
+  {
+    action: "create",
+    drag: null,
+    pendingAnchor: imageAnchor,
+    displayRect: { x: 2, y: 3, width: 40, height: 20 },
+    relativeTo: "image",
+    renderMarkdownHighlights: false,
+    hidePopover: true,
+  },
+);
+assert.deepEqual(
+  overlay.completeResolvedOverlayDraft({
+    type: "image",
+    displayRect: { x: 1, y: 2, width: 7, height: 20 },
+    resolveAnchor: () => {
+      throw new Error("small drafts should not resolve anchors");
+    },
+  }),
+  {
+    action: "discard",
+    drag: null,
+    hideSelection: true,
+    hideMarkdownMarker: true,
   },
 );

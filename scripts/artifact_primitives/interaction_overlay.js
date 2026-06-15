@@ -355,11 +355,32 @@
     };
   }
 
+  function completeResolvedOverlayDraft({
+    type,
+    displayRect,
+    resolveAnchor,
+    minSize = 8,
+  } = {}) {
+    const draft = completeOverlayDraft({ type, displayRect, minSize });
+    if (!draft || draft.action !== "resolve-anchor") return draft;
+    const anchor = typeof resolveAnchor === "function"
+      ? resolveAnchor({ type, displayRect })
+      : null;
+    return completeOverlayDraft({
+      type,
+      displayRect,
+      anchorResolved: true,
+      anchor,
+      minSize,
+    });
+  }
+
   ROOT.interactionOverlay = {
     annotationOverlayTarget,
     beginOverlayDraft,
     closedEditorSession,
     completeOverlayDraft,
+    completeResolvedOverlayDraft,
     commitOverlayEditorIntent,
     createEditorSession,
     displayRectForAnchor,
