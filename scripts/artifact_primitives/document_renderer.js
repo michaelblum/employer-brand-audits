@@ -34,6 +34,19 @@
     }
   }
 
+  function isDocumentArtifact(artifact = {}) {
+    return ["json", "text", "log", "file"].includes(String(artifact.type || "").toLowerCase());
+  }
+
+  function documentReadout(artifact = {}, content = "") {
+    const source = String(content || "");
+    const lines = source ? source.split("\n").length : 0;
+    const size = artifact.size_bytes ? `${artifact.size_bytes} bytes` : "";
+    return [artifact.type || "file", lines ? `${lines} lines` : "", size]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
   function renderMetadata(artifact = {}) {
     const metadata = [
       artifact.mimeType || artifact.mime_type,
@@ -100,6 +113,8 @@
   }
 
   ROOT.document = {
+    documentReadout,
+    isDocumentArtifact,
     renderDocumentArtifact,
   };
 }());

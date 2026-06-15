@@ -50,6 +50,10 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "tests/document_renderer_primitive_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "tests/interaction_overlay_primitive_check.js"],
             validation_commands(),
         )
