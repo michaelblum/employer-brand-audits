@@ -431,6 +431,35 @@ assert.deepEqual(resolvedDraftCalls, [
 ]);
 assert.deepEqual(
   overlay.completeResolvedOverlayDraft({
+    type: "markdown",
+    displayRect: { x: 1, y: 2, width: 40, height: 20 },
+    resolveAnchor: () => null,
+  }),
+  {
+    action: "discard",
+    drag: null,
+    hideSelection: false,
+    hideMarkdownMarker: true,
+  },
+);
+assert.deepEqual(
+  overlay.completeResolvedOverlayDraft({
+    type: "image",
+    displayRect: { x: 2, y: 3, width: 40, height: 20 },
+    resolveAnchor: () => imageAnchor,
+  }),
+  {
+    action: "create",
+    drag: null,
+    pendingAnchor: imageAnchor,
+    displayRect: { x: 2, y: 3, width: 40, height: 20 },
+    relativeTo: "image",
+    renderMarkdownHighlights: false,
+    hidePopover: true,
+  },
+);
+assert.deepEqual(
+  overlay.completeResolvedOverlayDraft({
     type: "image",
     displayRect: { x: 1, y: 2, width: 7, height: 20 },
     resolveAnchor: () => {
