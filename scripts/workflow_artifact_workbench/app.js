@@ -294,21 +294,41 @@
 
     function updateDimensionReadout() {
       const item = artifact();
-      if (isImageArtifact(item)) {
-        const dimensions = item.dimensions || {};
-        const width = dimensions.width || $("artifact-image").naturalWidth || "unknown";
-        const height = dimensions.height || $("artifact-image").naturalHeight || "unknown";
-        $("dimension-readout").textContent = `${width} x ${height} px`;
-        return;
-      }
-      const content = app.markdownContent[item.id] || "";
-      const diagnostics = window.ArtifactPrimitives.markdown.markdownDiagnostics(content);
-      $("dimension-readout").textContent = `${diagnostics.line_count} lines · ${diagnostics.word_count} words · ${diagnostics.heading_count} headings`;
+      $("dimension-readout").textContent = artifactRenderer().artifactReadout({
+        artifact: item,
+        imageNaturalWidth: $("artifact-image").naturalWidth,
+        imageNaturalHeight: $("artifact-image").naturalHeight,
+        markdownContent: app.markdownContent[item.id] || "",
+        documentContent: app.documentContent[item.id] || "",
+        markdown: window.ArtifactPrimitives.markdown,
+        document: documentRenderer(),
+      });
     }
 
-    function updateDocumentReadout(item) {
-      const content = app.documentContent[item.id] || "";
-      $("dimension-readout").textContent = documentRenderer().documentReadout(item, content);
+    function artifactStagePlan(item = artifact()) {
+      return artifactRenderer().artifactStagePlan(item, { document: documentRenderer() });
+    }
+
+    function applyArtifactStagePlan(plan) {
+      const { stage = {}, surfaces = {} } = plan || {};
+      $("stage").classList.toggle("markdown-stage", Boolean(stage.markdownStage));
+      if (stage.resetScroll) $("stage").scrollTo({ left: 0, top: 0 });
+      if (typeof surfaces.imageWrapHidden === "boolean") $("image-wrap").hidden = surfaces.imageWrapHidden;
+      if (typeof surfaces.markdownWrapHidden === "boolean") $("markdown-wrap").hidden = surfaces.markdownWrapHidden;
+      if (surfaces.imageControlsDisplay) $("image-controls").style.display = surfaces.imageControlsDisplay;
+      if (typeof surfaces.markdownControlsVisible === "boolean") {
+        $("markdown-controls").classList.toggle("visible", surfaces.markdownControlsVisible);
+      }
+      if (typeof surfaces.selectionHidden === "boolean") $("selection").hidden = surfaces.selectionHidden;
+      if (typeof surfaces.markdownMarkerHidden === "boolean") $("markdown-marker").hidden = surfaces.markdownMarkerHidden;
+      if (typeof surfaces.markdownPreviewHidden === "boolean") $("markdown-preview").hidden = surfaces.markdownPreviewHidden;
+      if (typeof surfaces.markdownSourceHidden === "boolean") $("markdown-source").hidden = surfaces.markdownSourceHidden;
+      if (surfaces.resetHoverMarker) resetHoverMarker();
+      if (typeof surfaces.commentPopoverHidden === "boolean") $("comment-popover").hidden = surfaces.commentPopoverHidden;
+    }
+
+    function renderArtifactError(renderKind, error) {
+      markdownPreviewBody().innerHTML = artifactRenderer().artifactErrorHtml({ renderKind, error });
     }
 
     function afterImageReady(callback) {
@@ -350,19 +370,10 @@
       $("artifact-title").innerHTML = `${breadcrumbHtml}<span class="artifact-heading">${escapeHtml(item.name)} ${slotHtml} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span></span>`;
     }
 
-    function renderImage() {
+    function renderImage(stagePlan = artifactStagePlan()) {
       const item = artifact();
       const image = $("artifact-image");
-      $("stage").classList.remove("markdown-stage");
-      $("stage").scrollTo({ left: 0, top: 0 });
-      $("image-wrap").hidden = false;
-      $("markdown-wrap").hidden = true;
-      $("image-controls").style.display = "flex";
-      $("markdown-controls").classList.remove("visible");
-      $("selection").hidden = true;
-      $("markdown-marker").hidden = true;
-      resetHoverMarker();
-      $("comment-popover").hidden = true;
+      applyArtifactStagePlan(stagePlan);
       updateDimensionReadout();
       image.onload = () => {
         updateDimensionReadout();
@@ -393,13 +404,19 @@
     }
 
     async function loadDocument(item) {
-      if (Object.prototype.hasOwnProperty.call(app.documentContent, item.id)) return app.documentContent[item.id];
-      if (item.type === "file") {
-        app.documentContent[item.id] = "";
-        return "";
+      const hasCachedContent = Object.prototype.hasOwnProperty.call(app.documentContent, item.id);
+      const plan = artifactRenderer().documentLoadPlan(item, {
+        hasCachedContent,
+        cachedContent: app.documentContent[item.id],
+        url: artifactUrl(item),
+      });
+      if (plan.action === "use-cache") return plan.content;
+      if (plan.action === "use-empty-content") {
+        app.documentContent[item.id] = plan.content;
+        return plan.content;
       }
-      const response = await fetch(artifactUrl(item), { cache: "no-store" });
-      if (!response.ok) throw new Error(`Artifact fetch failed: ${response.status}`);
+      const response = await fetch(plan.url, { cache: plan.cache });
+      if (!response.ok) throw new Error(`${plan.errorPrefix}: ${response.status}`);
       const content = await response.text();
       app.documentContent[item.id] = content;
       return content;
@@ -456,59 +473,38 @@
       }
     }
 
-    async function renderMarkdownArtifact() {
+    async function renderMarkdownArtifact(stagePlan = artifactStagePlan()) {
       const item = artifact();
-      $("stage").classList.add("markdown-stage");
-      $("image-wrap").hidden = true;
-      $("markdown-wrap").hidden = false;
-      $("image-controls").style.display = "none";
-      $("markdown-controls").classList.add("visible");
-      $("selection").hidden = true;
-      resetHoverMarker();
-      $("comment-popover").hidden = true;
+      applyArtifactStagePlan(stagePlan);
       try {
         await loadMarkdown(item);
         renderMarkdownBody(item);
       } catch (error) {
         $("markdown-preview").hidden = false;
         $("markdown-source").hidden = true;
-        markdownPreviewBody().innerHTML = `<p>Failed to load markdown: ${escapeHtml(error.message)}</p>`;
+        renderArtifactError(stagePlan.renderKind, error);
       }
     }
 
-    async function renderDocumentArtifact() {
+    async function renderDocumentArtifact(stagePlan = artifactStagePlan()) {
       const item = artifact();
-      $("stage").classList.add("markdown-stage");
-      $("stage").scrollTo({ left: 0, top: 0 });
-      $("image-wrap").hidden = true;
-      $("markdown-wrap").hidden = false;
-      $("image-controls").style.display = "none";
-      $("markdown-controls").classList.remove("visible");
-      $("selection").hidden = true;
-      $("markdown-marker").hidden = true;
-      resetHoverMarker();
-      $("comment-popover").hidden = true;
-      $("markdown-preview").hidden = false;
-      $("markdown-source").hidden = true;
+      applyArtifactStagePlan(stagePlan);
       try {
         const content = await loadDocument(item);
         if (!window.ArtifactPrimitives?.document) {
           throw new Error("Document renderer primitive is not loaded");
         }
         documentRenderer().renderDocumentArtifact(
-          {
-            ...item,
+          artifactRenderer().documentRenderPayload(item, {
             content,
             url: artifactUrl(item),
-            mimeType: item.mime_type,
-            sizeBytes: item.size_bytes,
-          },
+          }),
           markdownPreviewBody(),
         );
       } catch (error) {
-        markdownPreviewBody().innerHTML = `<p>Failed to load artifact: ${escapeHtml(error.message)}</p>`;
+        renderArtifactError(stagePlan.renderKind, error);
       }
-      updateDocumentReadout(item);
+      updateDimensionReadout();
     }
 
     async function saveMarkdownArtifact() {
@@ -550,16 +546,16 @@
     }
 
     function renderArtifact() {
-      const renderKind = artifactRenderer().artifactRenderKind(artifact(), { document: documentRenderer() });
-      if (renderKind === "markdown") {
-        void renderMarkdownArtifact();
+      const plan = artifactStagePlan();
+      if (plan.renderKind === "markdown") {
+        void renderMarkdownArtifact(plan);
         return;
       }
-      if (renderKind === "document") {
-        void renderDocumentArtifact();
+      if (plan.renderKind === "document") {
+        void renderDocumentArtifact(plan);
         return;
       }
-      renderImage();
+      renderImage(plan);
     }
 
     function renderOverview() {
