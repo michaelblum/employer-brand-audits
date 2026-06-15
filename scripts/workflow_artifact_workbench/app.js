@@ -370,10 +370,8 @@
       $("artifact-title").innerHTML = `${breadcrumbHtml}<span class="artifact-heading">${escapeHtml(item.name)} ${slotHtml} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span></span>`;
     }
 
-    function renderImage(stagePlan = artifactStagePlan()) {
-      const item = artifact();
+    function renderImage({ artifact: item = artifact() } = {}) {
       const image = $("artifact-image");
-      applyArtifactStagePlan(stagePlan);
       updateDimensionReadout();
       image.onload = () => {
         updateDimensionReadout();
@@ -390,6 +388,29 @@
       if (image.complete && image.naturalWidth) {
         image.onload();
       }
+    }
+
+    function renderDocument({ artifact: item = artifact(), content = "" } = {}) {
+      if (!window.ArtifactPrimitives?.document) {
+        throw new Error("Document renderer primitive is not loaded");
+      }
+      documentRenderer().renderDocumentArtifact(
+        artifactRenderer().documentRenderPayload(item, {
+          content,
+          url: artifactUrl(item),
+        }),
+        markdownPreviewBody(),
+      );
+      updateDimensionReadout();
+    }
+
+    function renderArtifactFallback({ renderKind, error } = {}) {
+      if (renderKind === "markdown") {
+        $("markdown-preview").hidden = false;
+        $("markdown-source").hidden = true;
+      }
+      renderArtifactError(renderKind, error);
+      if (renderKind === "document") updateDimensionReadout();
     }
 
     async function loadMarkdown(item) {
@@ -473,40 +494,6 @@
       }
     }
 
-    async function renderMarkdownArtifact(stagePlan = artifactStagePlan()) {
-      const item = artifact();
-      applyArtifactStagePlan(stagePlan);
-      try {
-        await loadMarkdown(item);
-        renderMarkdownBody(item);
-      } catch (error) {
-        $("markdown-preview").hidden = false;
-        $("markdown-source").hidden = true;
-        renderArtifactError(stagePlan.renderKind, error);
-      }
-    }
-
-    async function renderDocumentArtifact(stagePlan = artifactStagePlan()) {
-      const item = artifact();
-      applyArtifactStagePlan(stagePlan);
-      try {
-        const content = await loadDocument(item);
-        if (!window.ArtifactPrimitives?.document) {
-          throw new Error("Document renderer primitive is not loaded");
-        }
-        documentRenderer().renderDocumentArtifact(
-          artifactRenderer().documentRenderPayload(item, {
-            content,
-            url: artifactUrl(item),
-          }),
-          markdownPreviewBody(),
-        );
-      } catch (error) {
-        renderArtifactError(stagePlan.renderKind, error);
-      }
-      updateDimensionReadout();
-    }
-
     async function saveMarkdownArtifact() {
       const item = artifact();
       if (!isMarkdownArtifact(item)) return;
@@ -546,16 +533,20 @@
     }
 
     function renderArtifact() {
-      const plan = artifactStagePlan();
-      if (plan.renderKind === "markdown") {
-        void renderMarkdownArtifact(plan);
-        return;
-      }
-      if (plan.renderKind === "document") {
-        void renderDocumentArtifact(plan);
-        return;
-      }
-      renderImage(plan);
+      const item = artifact();
+      void artifactRenderer().renderArtifact({
+        artifact: item,
+        stagePlan: artifactStagePlan(item),
+        effects: {
+          applyStagePlan: applyArtifactStagePlan,
+          renderImage,
+          loadMarkdown,
+          renderMarkdown: ({ artifact: renderedArtifact }) => renderMarkdownBody(renderedArtifact),
+          loadDocument,
+          renderDocument,
+          renderArtifactError: renderArtifactFallback,
+        },
+      });
     }
 
     function renderOverview() {

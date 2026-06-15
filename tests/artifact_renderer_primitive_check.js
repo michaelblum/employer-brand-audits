@@ -15,6 +15,7 @@ assert.equal(typeof renderer.artifactReadout, "function");
 assert.equal(typeof renderer.artifactErrorHtml, "function");
 assert.equal(typeof renderer.documentLoadPlan, "function");
 assert.equal(typeof renderer.documentRenderPayload, "function");
+assert.equal(typeof renderer.renderArtifact, "function");
 
 assert.equal(renderer.artifactRenderKind({ type: "markdown" }), "markdown");
 assert.equal(renderer.artifactRenderKind({ type: "json" }), "document");
@@ -213,3 +214,99 @@ assert.equal(
   renderer.artifactErrorHtml({ renderKind: "document", error: new Error("Bad <artifact>") }),
   "<p>Failed to load artifact: Bad &lt;artifact&gt;</p>",
 );
+
+(async () => {
+  async function recordControllerRun(artifact, effects = {}) {
+    const calls = [];
+    const stagePlan = renderer.artifactStagePlan(artifact);
+    const result = await renderer.renderArtifact({
+      artifact,
+      stagePlan,
+      effects: {
+        applyStagePlan(plan) {
+          calls.push(["applyStagePlan", plan.renderKind]);
+        },
+        renderImage(payload) {
+          calls.push(["renderImage", payload.artifact.id, payload.stagePlan.renderKind]);
+        },
+        async loadMarkdown(item) {
+          calls.push(["loadMarkdown", item.id]);
+          if (effects.loadMarkdown) return effects.loadMarkdown(item);
+          return "# Markdown";
+        },
+        renderMarkdown(payload) {
+          calls.push(["renderMarkdown", payload.artifact.id, payload.content]);
+        },
+        async loadDocument(item) {
+          calls.push(["loadDocument", item.id]);
+          if (effects.loadDocument) return effects.loadDocument(item);
+          return "{\"ok\":true}";
+        },
+        renderDocument(payload) {
+          calls.push(["renderDocument", payload.artifact.id, payload.content]);
+        },
+        renderArtifactError(payload) {
+          calls.push(["renderArtifactError", payload.artifact.id, payload.renderKind, payload.error.message]);
+        },
+      },
+    });
+    return { calls, result };
+  }
+
+  assert.deepEqual(
+    await recordControllerRun({ id: "img", type: "image" }),
+    {
+      calls: [
+        ["applyStagePlan", "image"],
+        ["renderImage", "img", "image"],
+      ],
+      result: { renderKind: "image", status: "rendered" },
+    },
+  );
+
+  assert.deepEqual(
+    await recordControllerRun({ id: "md", type: "markdown" }),
+    {
+      calls: [
+        ["applyStagePlan", "markdown"],
+        ["loadMarkdown", "md"],
+        ["renderMarkdown", "md", "# Markdown"],
+      ],
+      result: { renderKind: "markdown", status: "rendered" },
+    },
+  );
+
+  assert.deepEqual(
+    await recordControllerRun({ id: "doc", type: "json" }),
+    {
+      calls: [
+        ["applyStagePlan", "document"],
+        ["loadDocument", "doc"],
+        ["renderDocument", "doc", "{\"ok\":true}"],
+      ],
+      result: { renderKind: "document", status: "rendered" },
+    },
+  );
+
+  assert.deepEqual(
+    await recordControllerRun(
+      { id: "broken-md", type: "markdown" },
+      {
+        loadMarkdown() {
+          throw new Error("fetch failed");
+        },
+      },
+    ),
+    {
+      calls: [
+        ["applyStagePlan", "markdown"],
+        ["loadMarkdown", "broken-md"],
+        ["renderArtifactError", "broken-md", "markdown", "fetch failed"],
+      ],
+      result: { renderKind: "markdown", status: "fallback" },
+    },
+  );
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

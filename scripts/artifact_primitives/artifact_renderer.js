@@ -139,6 +139,45 @@
     return `<p>${prefix}: ${escapeHtml(error?.message || error || "Unknown error")}</p>`;
   }
 
+  function requiredEffect(effects, name) {
+    const effect = effects?.[name];
+    if (typeof effect !== "function") {
+      throw new Error(`Artifact render effect missing: ${name}`);
+    }
+    return effect;
+  }
+
+  async function renderArtifact({
+    artifact = {},
+    stagePlan = null,
+    effects = {},
+    options = {},
+  } = {}) {
+    const plan = stagePlan || artifactStagePlan(artifact, options);
+    const renderKind = plan.renderKind || artifactRenderKind(artifact, options);
+    requiredEffect(effects, "applyStagePlan")(plan);
+
+    if (renderKind === "image") {
+      await requiredEffect(effects, "renderImage")({ artifact, stagePlan: plan, renderKind });
+      return { renderKind, status: "rendered" };
+    }
+
+    try {
+      if (renderKind === "markdown") {
+        const content = await requiredEffect(effects, "loadMarkdown")(artifact);
+        await requiredEffect(effects, "renderMarkdown")({ artifact, content, stagePlan: plan, renderKind });
+        return { renderKind, status: "rendered" };
+      }
+
+      const content = await requiredEffect(effects, "loadDocument")(artifact);
+      await requiredEffect(effects, "renderDocument")({ artifact, content, stagePlan: plan, renderKind });
+      return { renderKind, status: "rendered" };
+    } catch (error) {
+      await requiredEffect(effects, "renderArtifactError")({ artifact, error, stagePlan: plan, renderKind });
+      return { renderKind, status: "fallback" };
+    }
+  }
+
   ROOT.artifactRenderer = {
     artifactErrorHtml,
     artifactReadout,
@@ -146,5 +185,6 @@
     artifactRenderKind,
     documentLoadPlan,
     documentRenderPayload,
+    renderArtifact,
   };
 }());
