@@ -423,6 +423,12 @@ def build_workbench_browser_plan(
             "--profile",
             profile_path,
         ],
+        "window_maximize_command": [
+            sys.executable,
+            wrapper,
+            "window-maximize",
+            *common,
+        ],
         "goto_command": [
             sys.executable,
             wrapper,
@@ -539,7 +545,16 @@ def browser_page_metrics(session: str) -> dict[str, Any]:
                 "innerWidth: window.innerWidth,"
                 "innerHeight: window.innerHeight,"
                 "outerWidth: window.outerWidth,"
-                "outerHeight: window.outerHeight"
+                "outerHeight: window.outerHeight,"
+                "screenX: window.screenX,"
+                "screenY: window.screenY,"
+                "devicePixelRatio: window.devicePixelRatio,"
+                "screenWidth: window.screen.width,"
+                "screenHeight: window.screen.height,"
+                "screenAvailWidth: window.screen.availWidth,"
+                "screenAvailHeight: window.screen.availHeight,"
+                "screenAvailLeft: Number.isFinite(window.screen.availLeft) ? window.screen.availLeft : 0,"
+                "screenAvailTop: Number.isFinite(window.screen.availTop) ? window.screen.availTop : 0"
                 "})"
             ),
         ],
@@ -567,23 +582,66 @@ def browser_page_metrics(session: str) -> dict[str, Any]:
     return {"error": "missing_result", "payload": payload}
 
 
-def viewport_width_sync_command(session: str, metrics: dict[str, Any]) -> list[str] | None:
+def metric_number(metrics: dict[str, Any], key: str) -> float:
+    value = metrics[key]
+    if isinstance(value, bool):
+        raise ValueError(key)
+    return float(value)
+
+
+def browser_display_signature(metrics: dict[str, Any]) -> dict[str, float] | None:
+    keys = (
+        "screenX",
+        "screenY",
+        "screenAvailLeft",
+        "screenAvailTop",
+        "screenAvailWidth",
+        "screenAvailHeight",
+        "devicePixelRatio",
+    )
     try:
-        inner_width = int(metrics["innerWidth"])
-        inner_height = int(metrics["innerHeight"])
-        outer_width = int(metrics["outerWidth"])
+        return {key: metric_number(metrics, key) for key in keys}
     except (KeyError, TypeError, ValueError):
         return None
-    if inner_width <= 0 or inner_height <= 0 or outer_width <= 0:
+
+
+def viewport_target_from_metrics(metrics: dict[str, Any]) -> tuple[int, int] | None:
+    try:
+        avail_width = metric_number(metrics, "screenAvailWidth")
+        avail_height = metric_number(metrics, "screenAvailHeight")
+        if avail_width > 0 and avail_height > 0:
+            return int(round(avail_width)), int(round(avail_height))
+    except (KeyError, TypeError, ValueError):
+        pass
+    try:
+        return (
+            int(metric_number(metrics, "outerWidth")),
+            int(metric_number(metrics, "outerHeight")),
+        )
+    except (KeyError, TypeError, ValueError):
         return None
-    if abs(inner_width - outer_width) <= 1:
+
+
+def viewport_sync_command(session: str, metrics: dict[str, Any]) -> list[str] | None:
+    try:
+        inner_width = int(metric_number(metrics, "innerWidth"))
+        inner_height = int(metric_number(metrics, "innerHeight"))
+    except (KeyError, TypeError, ValueError):
+        return None
+    target = viewport_target_from_metrics(metrics)
+    if target is None:
+        return None
+    target_width, target_height = target
+    if inner_width <= 0 or inner_height <= 0 or target_width <= 0 or target_height <= 0:
+        return None
+    if abs(inner_width - target_width) <= 1 and abs(inner_height - target_height) <= 1:
         return None
     return [
         sys.executable,
         relative_path(BROWSER_WRAPPER),
         "resize",
-        str(outer_width),
-        str(inner_height),
+        str(target_width),
+        str(target_height),
         "--session",
         session,
     ]
@@ -610,11 +668,15 @@ def open_with_playwright(
         profile=profile,
     )
     before = browser_session_status(session)
+    previous_browser_state = read_json(paths["browser_state"], {})
     action_command = plan["goto_command"] if before.get("alive") else plan["open_command"]
     action = "goto" if before.get("alive") else "open"
     resize_result = None
+    window_maximize_result = None
     viewport_sync_result = None
     viewport_metrics = None
+    display_signature = None
+    viewport_target = None
     with paths["browser_log"].open("a", encoding="utf-8") as log_handle:
         log_handle.write(f"\n## {action} {int(time.time())} {url}\n")
         action_result = run_browser_command(action_command, log_handle)
@@ -622,9 +684,38 @@ def open_with_playwright(
             resize_result = run_browser_command(plan["initial_resize_command"], log_handle)
         if viewport_size is None and action_result.returncode == 0:
             viewport_metrics = browser_page_metrics(session)
-            viewport_sync_command = viewport_width_sync_command(session, viewport_metrics)
-            if viewport_sync_command is not None:
-                viewport_sync_result = run_browser_command(viewport_sync_command, log_handle)
+            display_signature = browser_display_signature(viewport_metrics)
+            previous_signature = (
+                previous_browser_state.get("display_signature")
+                if isinstance(previous_browser_state, dict)
+                else None
+            )
+            should_reset_window = (
+                action == "open"
+                or previous_signature is None
+                or (
+                    display_signature is not None
+                    and previous_signature != display_signature
+                )
+            )
+            if should_reset_window:
+                window_maximize_result = run_browser_command(
+                    plan["window_maximize_command"],
+                    log_handle,
+                )
+                if window_maximize_result.returncode == 0:
+                    viewport_metrics = browser_page_metrics(session)
+                    display_signature = browser_display_signature(viewport_metrics)
+                sync_command = viewport_sync_command(session, viewport_metrics)
+                viewport_target = viewport_target_from_metrics(viewport_metrics)
+                if sync_command is not None:
+                    viewport_sync_result = run_browser_command(sync_command, log_handle)
+                    if viewport_sync_result.returncode == 0:
+                        viewport_metrics = browser_page_metrics(session)
+                        display_signature = browser_display_signature(viewport_metrics)
+                        viewport_target = viewport_target_from_metrics(viewport_metrics)
+            else:
+                viewport_target = viewport_target_from_metrics(viewport_metrics)
     if action_result.returncode != 0:
         raise SystemExit(
             f"Workbench browser {action} failed. See {relative_path(paths['browser_log'])}."
@@ -632,6 +723,10 @@ def open_with_playwright(
     if resize_result is not None and resize_result.returncode != 0:
         raise SystemExit(
             f"Workbench browser resize failed. See {relative_path(paths['browser_log'])}."
+        )
+    if window_maximize_result is not None and window_maximize_result.returncode != 0:
+        raise SystemExit(
+            f"Workbench browser window maximize failed. See {relative_path(paths['browser_log'])}."
         )
     if viewport_sync_result is not None and viewport_sync_result.returncode != 0:
         raise SystemExit(
@@ -644,6 +739,9 @@ def open_with_playwright(
             "session": session,
             "profile": plan["profile"],
             "status": after,
+            "display_signature": display_signature,
+            "viewport_target": viewport_target,
+            "viewport_metrics": viewport_metrics,
             "updated_at_epoch": int(time.time()),
         },
     )
@@ -653,8 +751,11 @@ def open_with_playwright(
         "session": session,
         "reused": bool(before.get("alive")),
         "resized": resize_result is not None,
+        "window_maximized": window_maximize_result is not None,
         "viewport_synced": viewport_sync_result is not None,
         "viewport_metrics": viewport_metrics,
+        "display_signature": display_signature,
+        "viewport_target": viewport_target,
         "status": after,
         "log": str(paths["browser_log"].relative_to(REPO_ROOT)),
         "channel": channel,

@@ -99,8 +99,12 @@ been satisfied, use the managed workbench control surface:
 `reset` starts or reuses the managed `eba-workbench` browser session. Reusing an
 existing session must navigate in place and must not resize or reposition the
 window; if a human has moved the workbench to a display, agents should leave it
-there. Use the same `./eba dev workbench` surface for snapshot/click/fill/press
-operations instead of raw browser-control tools.
+there. The demo/reset path may maximize the managed window and sync Playwright's
+fixed viewport to the current display's visible bounds when the workbench opens,
+has no recorded display state, or appears to have moved displays. Capture and
+smoke flows keep their fixed deterministic viewport settings. Use the same
+`./eba dev workbench` surface for snapshot/click/fill/press operations instead
+of raw browser-control tools.
 
 For controlled/debug use after the same active `./eba begin` turn gate has
 been satisfied, the lower-level surface command is:

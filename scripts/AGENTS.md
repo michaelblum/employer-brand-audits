@@ -28,7 +28,9 @@ artifact workbench implementation, and checked-in Playwright snippets.
 - Keep command routes typed, small, and honest; do not add routes that are not
   wired or validated.
 - Preserve managed `eba-workbench` session behavior: reuse should not resize or
-  reposition a human-moved browser window.
+  reposition a human-moved native browser window. Viewport-emulation sync may
+  target the current display's visible bounds after the managed window opens or
+  moves displays, and must not choose arbitrary dimensions.
 - Keep fixture generation separate from generated runtime output.
 
 ## Verification
