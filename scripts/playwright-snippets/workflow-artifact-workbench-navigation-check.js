@@ -21,7 +21,7 @@ async (page) => {
     const stepId = Object.entries(countsByStepId)
       .sort((left, right) => right[1] - left[1])
       .map(([id]) => id)
-      .find((id) => projectedStepsById[id]);
+      .find((id) => projectedStepsById[id] && countsByStepId[id] > 1);
     if (!stepId) throw new Error("No projected step filter target found");
     return {
       artifactCount: collection.length,
@@ -67,6 +67,7 @@ async (page) => {
     return {
       activeIndex: activeRow.dataset.index,
       filteredRowCount: visibleRows.length,
+      visibleIndexes: visibleRows.map((row) => row.dataset.index),
       title: document.querySelector("#artifact-title")?.textContent?.trim(),
       visibleIds,
     };
@@ -75,6 +76,32 @@ async (page) => {
   if (filteredState.filteredRowCount !== model.selectedStepCount) {
     throw new Error(`Filtered row count mismatch: expected ${model.selectedStepCount} got ${filteredState.filteredRowCount}`);
   }
+  if (filteredState.visibleIndexes.length < 2) {
+    throw new Error(`Filtered Prev/Next smoke needs at least two visible artifacts: ${JSON.stringify(filteredState)}`);
+  }
+
+  const initialPosition = filteredState.visibleIndexes.indexOf(filteredState.activeIndex);
+  const expectedNextIndex = filteredState.visibleIndexes[(initialPosition + 1) % filteredState.visibleIndexes.length];
+  await page.click("#next", { timeout: 3000 });
+  await page.waitForFunction((index) => {
+    const activeRow = document.querySelector(".artifact-row.active[data-index]");
+    return activeRow?.dataset.index === index;
+  }, expectedNextIndex, { timeout: 3000 });
+
+  const filteredNextState = await page.evaluate(() => ({
+    activeIndex: document.querySelector(".artifact-row.active[data-index]")?.dataset.index,
+    visibleIndexes: [...document.querySelectorAll(".artifact-row[data-index]")].map((row) => row.dataset.index),
+    title: document.querySelector("#artifact-title")?.textContent?.trim(),
+  }));
+  if (JSON.stringify(filteredNextState.visibleIndexes) !== JSON.stringify(filteredState.visibleIndexes)) {
+    throw new Error(`Next changed the filtered row set: ${JSON.stringify({ before: filteredState, after: filteredNextState })}`);
+  }
+
+  await page.click("#prev", { timeout: 3000 });
+  await page.waitForFunction((index) => {
+    const activeRow = document.querySelector(".artifact-row.active[data-index]");
+    return activeRow?.dataset.index === index;
+  }, filteredState.activeIndex, { timeout: 3000 });
 
   await page.click("#overview", { timeout: 3000 });
   await page.waitForSelector("#overview-popover [data-index]", { timeout: 3000 });
@@ -132,6 +159,11 @@ async (page) => {
   return {
     selectedStep: model.selectedStep.id,
     filteredRowCount: filteredState.filteredRowCount,
+    filteredNavigation: {
+      initialIndex: filteredState.activeIndex,
+      nextIndex: filteredNextState.activeIndex,
+      visibleIndexes: filteredState.visibleIndexes,
+    },
     overviewCount: overviewState.optionCount,
     overviewNavigation,
     clearedRowCount: clearedState.rowCount,
