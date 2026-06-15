@@ -567,58 +567,24 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         from scripts import playwright_cli_browser as browser
 
         commands: list[list[str]] = []
-        activated_apps: list[str] = []
 
         def fake_run(args: list[str]) -> int:
             commands.append(args)
             return 0
 
-        def fake_activate_app(app_name: str) -> int:
-            activated_apps.append(app_name)
-            return 0
-
         original_run = browser._run
-        original_activate_app = browser._activate_app
         try:
             browser._run = fake_run  # type: ignore[assignment]
-            browser._activate_app = fake_activate_app  # type: ignore[assignment]
             browser.window_focus(
-                argparse.Namespace(session="eba-workbench", app_name="Google Chrome")
+                argparse.Namespace(session="eba-workbench")
             )
         finally:
             browser._run = original_run  # type: ignore[assignment]
-            browser._activate_app = original_activate_app  # type: ignore[assignment]
 
         self.assertEqual(commands[0][:2], ["-s=eba-workbench", "run-code"])
         self.assertIn("bringToFront", commands[0][2])
         self.assertIn("window.focus", commands[0][2])
         self.assertNotIn("Browser.setWindowBounds", commands[0][2])
-        self.assertEqual(activated_apps, ["Google Chrome"])
-
-    def test_browser_wrapper_focus_ignores_app_activation_failure(self) -> None:
-        from scripts import playwright_cli_browser as browser
-
-        def fake_run(args: list[str]) -> int:
-            self.assertEqual(args[:2], ["-s=eba-workbench", "run-code"])
-            return 0
-
-        def fake_activate_app(app_name: str) -> int:
-            self.assertEqual(app_name, "Google Chrome")
-            return 1
-
-        original_run = browser._run
-        original_activate_app = browser._activate_app
-        try:
-            browser._run = fake_run  # type: ignore[assignment]
-            browser._activate_app = fake_activate_app  # type: ignore[assignment]
-            result = browser.window_focus(
-                argparse.Namespace(session="eba-workbench", app_name="Google Chrome")
-            )
-        finally:
-            browser._run = original_run  # type: ignore[assignment]
-            browser._activate_app = original_activate_app  # type: ignore[assignment]
-
-        self.assertEqual(result, 0)
 
     def test_browser_session_status_reads_session_aware_cli_list(self) -> None:
         payload = {
