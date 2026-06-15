@@ -276,15 +276,15 @@
 
     function updateDimensionReadout() {
       const item = artifact();
-      $("dimension-readout").textContent = artifactRenderer().artifactReadout({
+      $("dimension-readout").textContent = artifactRenderer().artifactReadout(artifactRenderer().artifactReadoutPlan({
         artifact: item,
         imageNaturalWidth: $("artifact-image").naturalWidth,
         imageNaturalHeight: $("artifact-image").naturalHeight,
-        markdownContent: app.markdownContent[item.id] || "",
-        documentContent: app.documentContent[item.id] || "",
+        markdownContentById: app.markdownContent,
+        documentContentById: app.documentContent,
         markdown: window.ArtifactPrimitives.markdown,
         document: documentRenderer(),
-      });
+      }));
     }
 
     function artifactStagePlan(item = artifact()) {
@@ -327,11 +327,15 @@
     }
 
     function setArtifact(index) {
-      const count = app.collection.artifacts.length;
-      app.index = (index + count) % count;
-      closeEditor();
-      hideAnnotationMarker();
-      render();
+      const plan = artifactRenderer().artifactSelectionPlan({
+        requestedIndex: index,
+        artifactCount: app.collection.artifacts.length,
+      });
+      if (!plan.canSelect) return;
+      app.index = plan.activeIndex;
+      if (plan.closeEditor) closeEditor();
+      if (plan.hideAnnotationMarker) hideAnnotationMarker();
+      if (plan.render) render();
     }
 
     function move(delta) {
@@ -389,14 +393,20 @@
     }
 
     async function loadMarkdown(item) {
-      if (Object.prototype.hasOwnProperty.call(app.markdownContent, item.id)) return app.markdownContent[item.id];
-      const response = await fetch(artifactUrl(item), { cache: "no-store" });
-      if (!response.ok) throw new Error(`Markdown fetch failed: ${response.status}`);
-      const content = await response.text();
-      app.markdownContent[item.id] = content;
-      app.markdownSavedContent[item.id] = content;
-      app.markdownDirty[item.id] = false;
-      return content;
+      const hasCachedContent = Object.prototype.hasOwnProperty.call(app.markdownContent, item.id);
+      const plan = artifactRenderer().markdownLoadPlan(item, {
+        hasCachedContent,
+        cachedContent: app.markdownContent[item.id],
+        url: artifactUrl(item),
+      });
+      if (plan.action === "use-cache") return plan.content;
+      const response = await fetch(plan.url, { cache: plan.cache });
+      if (!response.ok) throw new Error(`${plan.errorPrefix}: ${response.status}`);
+      const result = artifactRenderer().markdownLoadResultPlan({ content: await response.text() });
+      app.markdownContent[item.id] = result.content;
+      app.markdownSavedContent[item.id] = result.savedContent;
+      app.markdownDirty[item.id] = result.dirty;
+      return result.content;
     }
 
     async function loadDocument(item) {
@@ -406,16 +416,15 @@
         cachedContent: app.documentContent[item.id],
         url: artifactUrl(item),
       });
-      if (plan.action === "use-cache") return plan.content;
-      if (plan.action === "use-empty-content") {
-        app.documentContent[item.id] = plan.content;
-        return plan.content;
+      let fetchedContent = "";
+      if (plan.action === "fetch-text") {
+        const response = await fetch(plan.url, { cache: plan.cache });
+        if (!response.ok) throw new Error(`${plan.errorPrefix}: ${response.status}`);
+        fetchedContent = await response.text();
       }
-      const response = await fetch(plan.url, { cache: plan.cache });
-      if (!response.ok) throw new Error(`${plan.errorPrefix}: ${response.status}`);
-      const content = await response.text();
-      app.documentContent[item.id] = content;
-      return content;
+      const result = artifactRenderer().documentLoadResultPlan(plan, { fetchedContent });
+      if (result.cacheContent !== null) app.documentContent[item.id] = result.cacheContent;
+      return result.content;
     }
 
     function storedArtifactDocumentTheme() {
