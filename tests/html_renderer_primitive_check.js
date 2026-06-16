@@ -29,12 +29,19 @@ assert.equal(
   ),
   "html · 3 elements · 2048 bytes",
 );
+assert.equal(
+  renderer.htmlReadout(
+    { type: "html" },
+    "<main><br><hr><input></main>",
+  ),
+  "html · 4 elements",
+);
 
 const iframe = { srcdoc: "", title: "", setAttribute(name, value) { this[name] = value; } };
 const container = {
   innerHTML: "",
   querySelector(selector) {
-    return selector === "iframe" ? iframe : null;
+    return selector === "[data-html-frame]" ? iframe : null;
   },
 };
 assert.deepEqual(
@@ -49,6 +56,7 @@ assert.deepEqual(
 );
 assert.match(container.innerHTML, /data-artifact-renderer="html"/);
 assert.match(container.innerHTML, /sandbox="allow-same-origin"/);
+assert.doesNotMatch(container.innerHTML, /allow-scripts/);
 assert.match(container.innerHTML, /Audit &lt;Report&gt;/);
 assert.match(iframe.srcdoc, /<h1>Report<\/h1>/);
 

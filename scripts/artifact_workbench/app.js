@@ -483,9 +483,31 @@
       return markdownPreviewBody().querySelector("[data-html-frame]");
     }
 
+    function liveHtmlElementForAnchor(anchor) {
+      const documentRoot = htmlFrameElement()?.contentDocument;
+      for (const selector of anchor?.selector_candidates || []) {
+        try {
+          const match = documentRoot?.querySelector?.(selector);
+          if (match) return match;
+        } catch (_error) {
+          // Invalid fallback selectors should not block saved rect placement.
+        }
+      }
+      return null;
+    }
+
+    function liveHtmlAnchor(anchor) {
+      const match = liveHtmlElementForAnchor(anchor);
+      if (!match || typeof htmlRenderer()?.htmlElementAnchorForElement !== "function") return null;
+      return htmlRenderer().htmlElementAnchorForElement(match, {
+        sourceUrl: anchor?.source_url || sourceUrlForHtmlArtifact(),
+      });
+    }
+
     function displayRectForHtmlElementAnchor(anchor) {
+      const resolvedAnchor = liveHtmlAnchor(anchor) || anchor;
       return htmlRenderer()?.displayRectForHtmlElementAnchor?.({
-        anchor,
+        anchor: resolvedAnchor,
         frameEl: htmlFrameElement(),
         wrapEl: $("markdown-wrap"),
       }) || null;
@@ -973,18 +995,7 @@
     }
 
     function scrollHtmlElementIntoView(anchor) {
-      const documentRoot = htmlFrameElement()?.contentDocument;
-      for (const selector of anchor?.selector_candidates || []) {
-        try {
-          const match = documentRoot?.querySelector?.(selector);
-          if (match) {
-            match.scrollIntoView({ block: "center", inline: "center" });
-            return;
-          }
-        } catch (_error) {
-          // Invalid fallback selectors should not block saved rect placement.
-        }
-      }
+      liveHtmlElementForAnchor(anchor)?.scrollIntoView({ block: "center", inline: "center" });
     }
 
     function openExistingEditor(note) {

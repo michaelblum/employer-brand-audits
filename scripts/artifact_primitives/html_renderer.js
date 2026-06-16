@@ -66,7 +66,7 @@
         </div>
       </article>
     `;
-    const frame = containerEl.querySelector("iframe");
+    const frame = containerEl.querySelector("[data-html-frame]");
     if (frame) frame.srcdoc = String(artifact.content || "");
     return { ok: true, state: "complete", errorMessage: "" };
   }
@@ -180,9 +180,11 @@
     const frame = rootEl?.querySelector?.("[data-html-frame]");
     if (!frame) return () => {};
     const abort = new AbortController();
+    let boundDocument = null;
     const bindFrame = () => {
       const doc = frame.contentDocument;
-      if (!doc) return;
+      if (!doc || doc === boundDocument) return;
+      boundDocument = doc;
       const elementFromEvent = (event) => {
         const target = event.target;
         if (!target || !target.tagName || ["html", "body"].includes(String(target.tagName).toLowerCase())) {
