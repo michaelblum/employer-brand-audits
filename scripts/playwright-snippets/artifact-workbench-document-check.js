@@ -13,12 +13,16 @@ async (page) => {
     const imageWrap = document.querySelector("#image-wrap");
     const source = document.querySelector("[data-document-source]");
     const renderer = document.querySelector("[data-artifact-renderer='document']");
+    const readout = document.querySelector("#artifact-readout")?.textContent || "";
     return markdownWrap
       && imageWrap
       && !markdownWrap.hidden
       && imageWrap.hidden
       && renderer
       && source
+      && document.querySelector("#image-controls") === null
+      && document.querySelector("#markdown-controls") === null
+      && /lines|bytes/.test(readout)
       && /acme\.example|knowledge|identity|logistics/.test(source.textContent || "");
   }, null, { timeout: 3000 });
 
@@ -33,7 +37,9 @@ async (page) => {
       documentVisible: !document.querySelector("#markdown-wrap")?.hidden,
       rendererType: documentNode?.getAttribute("data-document-type"),
       hasSource: Boolean(source),
-      readout: document.querySelector("#dimension-readout")?.textContent?.trim(),
+      readout: document.querySelector("#artifact-readout")?.textContent?.trim(),
+      imageControlsMounted: Boolean(document.querySelector("#image-controls")),
+      markdownControlsMounted: Boolean(document.querySelector("#markdown-controls")),
     };
   });
 }

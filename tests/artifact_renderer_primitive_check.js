@@ -5,14 +5,21 @@ global.window = { ArtifactPrimitives: {} };
 
 require(path.join(__dirname, "../scripts/artifact_primitives/document_renderer.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_renderer.js"));
+require(path.join(__dirname, "../scripts/artifacts/core/artifact_common.js"));
+require(path.join(__dirname, "../scripts/artifacts/types/image_artifact.js"));
+require(path.join(__dirname, "../scripts/artifacts/types/markdown_artifact.js"));
+require(path.join(__dirname, "../scripts/artifacts/types/document_artifact.js"));
+require(path.join(__dirname, "../scripts/artifacts/artifact_registry.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/artifact_renderer.js"));
 
 const renderer = window.ArtifactPrimitives.artifactRenderer;
+const registry = window.Artifacts.registry;
 
-assert.equal(typeof renderer.artifactRenderKind, "function");
-assert.equal(typeof renderer.artifactStagePlan, "function");
-assert.equal(typeof renderer.artifactReadout, "function");
-assert.equal(typeof renderer.artifactReadoutPlan, "function");
+assert.equal(renderer.artifactRenderKind, undefined);
+assert.equal(renderer.artifactStagePlan, undefined);
+assert.equal(renderer.artifactReadout, undefined);
+assert.equal(renderer.artifactReadoutPlan, undefined);
+assert.equal(renderer.artifactToolbarPlan, undefined);
 assert.equal(typeof renderer.artifactErrorHtml, "function");
 assert.equal(typeof renderer.artifactSelectionPlan, "function");
 assert.equal(typeof renderer.documentLoadPlan, "function");
@@ -26,88 +33,6 @@ assert.equal(typeof renderer.markdownModePlan, "function");
 assert.equal(typeof renderer.markdownInputPlan, "function");
 assert.equal(typeof renderer.markdownSavePlan, "function");
 assert.equal(typeof renderer.markdownRevertPlan, "function");
-
-assert.equal(renderer.artifactRenderKind({ type: "markdown" }), "markdown");
-assert.equal(renderer.artifactRenderKind({ type: "json" }), "document");
-assert.equal(renderer.artifactRenderKind({ type: "text" }), "document");
-assert.equal(renderer.artifactRenderKind({ type: "log" }), "document");
-assert.equal(renderer.artifactRenderKind({ type: "file" }), "document");
-assert.equal(renderer.artifactRenderKind({ type: "image" }), "image");
-assert.equal(renderer.artifactRenderKind({ type: "unknown" }), "image");
-assert.equal(renderer.artifactRenderKind({}), "image");
-
-assert.equal(
-  renderer.artifactRenderKind(
-    { type: "pdf" },
-    { document: { isDocumentArtifact: () => true } },
-  ),
-  "document",
-);
-assert.equal(
-  renderer.artifactRenderKind(
-    { type: "markdown" },
-    { document: { isDocumentArtifact: () => true } },
-  ),
-  "markdown",
-);
-
-assert.deepEqual(
-  renderer.artifactStagePlan({ type: "markdown" }),
-  {
-    renderKind: "markdown",
-    stage: { markdownStage: true, resetScroll: false },
-    surfaces: {
-      imageWrapHidden: true,
-      markdownWrapHidden: false,
-      imageControlsDisplay: "none",
-      markdownControlsVisible: true,
-      selectionHidden: true,
-      markdownMarkerHidden: null,
-      resetHoverMarker: true,
-      commentPopoverHidden: true,
-      markdownPreviewHidden: null,
-      markdownSourceHidden: null,
-    },
-  },
-);
-assert.deepEqual(
-  renderer.artifactStagePlan({ type: "json" }),
-  {
-    renderKind: "document",
-    stage: { markdownStage: true, resetScroll: true },
-    surfaces: {
-      imageWrapHidden: true,
-      markdownWrapHidden: false,
-      imageControlsDisplay: "none",
-      markdownControlsVisible: false,
-      selectionHidden: true,
-      markdownMarkerHidden: true,
-      resetHoverMarker: true,
-      commentPopoverHidden: true,
-      markdownPreviewHidden: false,
-      markdownSourceHidden: true,
-    },
-  },
-);
-assert.deepEqual(
-  renderer.artifactStagePlan({ type: "image" }),
-  {
-    renderKind: "image",
-    stage: { markdownStage: false, resetScroll: true },
-    surfaces: {
-      imageWrapHidden: false,
-      markdownWrapHidden: true,
-      imageControlsDisplay: "flex",
-      markdownControlsVisible: false,
-      selectionHidden: true,
-      markdownMarkerHidden: true,
-      resetHoverMarker: true,
-      commentPopoverHidden: true,
-      markdownPreviewHidden: null,
-      markdownSourceHidden: null,
-    },
-  },
-);
 
 assert.deepEqual(
   renderer.documentLoadPlan(
@@ -232,58 +157,6 @@ assert.deepEqual(
   },
 );
 
-assert.equal(
-  renderer.artifactReadout({
-    artifact: { type: "image", dimensions: { width: 640, height: 480 } },
-    imageNaturalWidth: 800,
-    imageNaturalHeight: 600,
-  }),
-  "640 x 480 px",
-);
-assert.equal(
-  renderer.artifactReadout({
-    artifact: { type: "image" },
-    imageNaturalWidth: 800,
-    imageNaturalHeight: 600,
-  }),
-  "800 x 600 px",
-);
-assert.equal(
-  renderer.artifactReadout({
-    artifact: { type: "markdown" },
-    markdownContent: "# Heading\n\nBody words",
-    markdown: window.ArtifactPrimitives.markdown,
-  }),
-  "3 lines · 4 words · 1 headings",
-);
-assert.equal(
-  renderer.artifactReadout({
-    artifact: { type: "json", size_bytes: 42 },
-    documentContent: "{\"ok\":true}",
-    document: window.ArtifactPrimitives.document,
-  }),
-  "json · 1 lines · 42 bytes",
-);
-assert.deepEqual(
-  renderer.artifactReadoutPlan({
-    artifact: { id: "md", type: "markdown" },
-    imageNaturalWidth: 800,
-    imageNaturalHeight: 600,
-    markdownContentById: { md: "# Heading" },
-    documentContentById: { doc: "{\"ok\":true}" },
-    markdown: window.ArtifactPrimitives.markdown,
-    document: window.ArtifactPrimitives.document,
-  }),
-  {
-    artifact: { id: "md", type: "markdown" },
-    imageNaturalWidth: 800,
-    imageNaturalHeight: 600,
-    markdownContent: "# Heading",
-    documentContent: "",
-    markdown: window.ArtifactPrimitives.markdown,
-    document: window.ArtifactPrimitives.document,
-  },
-);
 assert.deepEqual(
   renderer.artifactSelectionPlan({ requestedIndex: -1, artifactCount: 3 }),
   {
@@ -407,7 +280,7 @@ assert.deepEqual(
 (async () => {
   async function recordControllerRun(artifact, effects = {}) {
     const calls = [];
-    const stagePlan = renderer.artifactStagePlan(artifact);
+    const stagePlan = registry.artifactStagePlan(artifact);
     const result = await renderer.renderArtifact({
       artifact,
       stagePlan,

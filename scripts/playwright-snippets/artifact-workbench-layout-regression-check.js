@@ -1,4 +1,5 @@
 async (page) => {
+  await page.evaluate(() => window.localStorage.removeItem("eba.artifactWorkbench.artifactDocumentTheme"));
   await page.evaluate(() => window.localStorage.removeItem("eba.workflowArtifactWorkbench.artifactDocumentTheme"));
   await page.evaluate(() => window.localStorage.removeItem("eba.workflowArtifactWorkbench.markdownTheme"));
   await page.reload();

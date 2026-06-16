@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Repo-level validation checks for the control plane, easy-audit fixture, workflow
-artifact workbench browser control, and JavaScript primitive behavior.
+Repo-level validation checks for the control plane, easy-audit fixture, artifact
+workbench browser control, and JavaScript primitive behavior.
 
 ## Ownership
 

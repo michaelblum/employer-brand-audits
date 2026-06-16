@@ -31,9 +31,9 @@ def require(condition: bool, message: str) -> None:
 def fixture_manifest(root: Path) -> Path:
     page_dir = root / "fixture-page"
     page_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = page_dir / "workflow-summary.md"
+    summary_path = page_dir / "artifact-summary.md"
     summary_path.write_text(
-        """# Fixture Workflow Summary
+        """# Fixture Artifact Summary
 
 ```mermaid
 flowchart TD

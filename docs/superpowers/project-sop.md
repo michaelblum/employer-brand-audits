@@ -95,7 +95,7 @@ before handing it to the user:
 4. Avoid making the user do agentic management tasks such as restarting
    services, finding ports, or navigating verbose setup instructions.
 
-For the current workflow artifact workbench, use the command surface directly
+For the current artifact workbench, use the command surface directly
 for view-only user requests:
 
 ```bash
@@ -139,7 +139,7 @@ Agents should prefer `./eba dev ...` for common project mechanisms:
 - `./eba dev gh` for GitHub prose mutations with automatic `EBA-Sig` footers.
 - `./eba dev hooks install` to install the local commit-message footer hook.
 - `./eba dev validate` for the current validation ladder.
-- `./eba dev demo` for a prepared workflow artifact workbench inspection surface.
+- `./eba dev demo` for a prepared artifact workbench inspection surface.
 - `./eba dev workbench` for managed `eba-workbench` context, refresh, tab,
   snapshot, glance, and interaction controls.
 

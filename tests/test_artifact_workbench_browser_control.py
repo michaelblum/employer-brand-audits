@@ -4,6 +4,7 @@ import json
 import contextlib
 import io
 import argparse
+import re
 import sys
 import tempfile
 import unittest
@@ -16,12 +17,12 @@ sys.path.insert(0, str(REPO_ROOT))
 from scripts import playwright_cli_workbench_gate as gate
 
 
-class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
+class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
     def test_browser_control_tests_are_part_of_validation_surface(self) -> None:
         from scripts.eba_cli import validation_commands
 
         self.assertIn(
-            [sys.executable, "tests/test_workflow_artifact_workbench_browser_control.py"],
+            [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
             validation_commands(),
         )
 
@@ -38,7 +39,27 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/artifact_primitives/workflow_sidebar.js"],
+            ["node", "--check", "scripts/artifacts/core/artifact_common.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/types/image_artifact.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/types/markdown_artifact.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/types/document_artifact.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/artifact_registry.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/navigation/artifact_navigator.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -50,7 +71,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
-            ["node", "tests/workflow_sidebar_primitive_check.js"],
+            ["node", "tests/artifact_navigator_check.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -59,6 +80,14 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn(
             ["node", "tests/artifact_renderer_primitive_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "tests/artifact_toolbar_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "tests/artifact_registry_check.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -82,29 +111,102 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-image-artifact-check.js"],
+            ["node", "--check", "scripts/artifact_workbench/artifact_toolbar.js"],
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-markdown-artifact-check.js"],
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-image-check.js"],
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-navigation-check.js"],
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-markdown-check.js"],
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-annotation-reorder-check.js"],
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-navigation-check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-annotation-reorder-check.js"],
             validation_commands(),
         )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/core/artifact_common.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/types/image_artifact.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/types/markdown_artifact.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/types/document_artifact.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/artifact_registry.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/artifact_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/markdown_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/markdown_interactions.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/image_viewer.js", WORKBENCH_ASSETS)
-        self.assertIn("/assets/artifact-primitives/workflow_sidebar.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/navigation/artifact_navigator.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay_controller.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-toolbar.js", WORKBENCH_ASSETS)
+
+    def test_workbench_index_references_served_assets_and_icons(self) -> None:
+        from scripts.playwright_cli_workbench_server import WORKBENCH_ASSETS, WORKBENCH_INDEX
+
+        html = WORKBENCH_INDEX.read_text(encoding="utf-8")
+        refs = set(re.findall(r"""(?:src|href)=["']([^"']+)["']""", html))
+        asset_refs = {ref.split("#", 1)[0] for ref in refs if ref.startswith("/assets/")}
+        self.assertGreater(len(asset_refs), 0)
+        self.assertEqual(set(), asset_refs - set(WORKBENCH_ASSETS))
+
+        icon_file = WORKBENCH_ASSETS["/assets/artifact-workbench-icons.svg"][0]
+        icon_text = icon_file.read_text(encoding="utf-8")
+        icon_ids = set(re.findall(r"""<symbol[^>]+id=["']([^"']+)["']""", icon_text))
+        index_icon_refs = {
+            ref.split("#", 1)[1]
+            for ref in refs
+            if ref.startswith("/assets/artifact-workbench-icons.svg#")
+        }
+        module_icon_refs = set()
+        for path, _content_type in WORKBENCH_ASSETS.values():
+            if path.suffix != ".js":
+                continue
+            source = path.read_text(encoding="utf-8")
+            module_icon_refs.update(re.findall(r"""renderIconUse\(["']([^"']+)["']\)""", source))
+            module_icon_refs.update(re.findall(r"""/assets/artifact-workbench-icons\.svg#([^"'`<>\s)]+)""", source))
+        module_icon_refs = {ref for ref in module_icon_refs if "${" not in ref}
+        self.assertEqual(set(), (index_icon_refs | module_icon_refs) - icon_ids)
+
+    def test_active_workbench_names_do_not_regress_to_stale_workflow_or_review_terms(self) -> None:
+        forbidden = [
+            "workflow" + "_artifact_workbench",
+            "workflow" + "-artifact-workbench",
+            "workflow" + "-artifact-toolbar",
+            "Workflow" + "ArtifactWorkbench",
+            "workflow" + "-summary",
+            "Workflow" + " summary",
+            "review" + "-workbench",
+            "review" + "_workbench",
+        ]
+        search_roots = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "docs" / "superpowers" / "project-sop.md",
+            REPO_ROOT / "docs" / "AGENTS.md",
+            REPO_ROOT / "scripts",
+            REPO_ROOT / "tests",
+        ]
+        offenders: list[str] = []
+        for root in search_roots:
+            paths = [root] if root.is_file() else [
+                path for path in root.rglob("*")
+                if path.is_file() and ".pyc" not in path.suffixes
+            ]
+            for path in paths:
+                if any(part in {"__pycache__", "vendor"} for part in path.parts):
+                    continue
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue
+                for token in forbidden:
+                    if token in text:
+                        offenders.append(f"{path.relative_to(REPO_ROOT)}: {token}")
+        self.assertEqual([], offenders)
 
     def test_browser_open_plan_uses_named_repo_wrapper_session(self) -> None:
         plan = gate.build_workbench_browser_plan(
@@ -771,7 +873,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertTrue(asset_health["healthy"])
         self.assertEqual(asset_health["status"], "ok")
         self.assertIn("http://127.0.0.1:8765/api/workbench-assets", requested_urls)
-        self.assertIn("http://127.0.0.1:8765/assets/workflow-artifact-workbench.js", requested_urls)
+        self.assertIn("http://127.0.0.1:8765/assets/artifact-workbench.js", requested_urls)
 
     def test_workbench_asset_health_rejects_missing_manifest_endpoint(self) -> None:
         def fake_urlopen(request: object, timeout: float = 1.0) -> object:

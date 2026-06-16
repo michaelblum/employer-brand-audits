@@ -193,7 +193,7 @@ def command_situation(args: argparse.Namespace) -> int:
             **status,
             **parse_ahead_behind(),
         },
-        "workflow_artifact_workbench": workbench_status(manifest),
+        "artifact_workbench": workbench_status(manifest),
         "command_surface": {
             "validate": "./eba dev validate",
             "demo": "./eba dev demo",
@@ -229,8 +229,8 @@ def command_situation(args: argparse.Namespace) -> int:
         print(f"branch={status['branch_line']}")
         print(f"dirty_files={len(status['dirty_files'])}")
         print(f"ahead={payload['git']['ahead']} behind={payload['git']['behind']}")
-        workbench = payload["workflow_artifact_workbench"] or {}
-        print(f"workflow_artifact_workbench={workbench.get('url', 'unavailable')} health={workbench.get('health', 'unknown')}")
+        workbench = payload["artifact_workbench"] or {}
+        print(f"artifact_workbench={workbench.get('url', 'unavailable')} health={workbench.get('health', 'unknown')}")
         print(f"onboarding_token={payload['onboarding']['token']}")
     return 0
 
@@ -263,32 +263,40 @@ def validation_commands() -> list[list[str]]:
     commands = [
         [sys.executable, "-m", "py_compile", *COMPILE_TARGETS],
         [sys.executable, "tests/test_easy_audit_fixture.py"],
-        [sys.executable, "tests/test_workflow_artifact_workbench_browser_control.py"],
+        [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
         [sys.executable, "scripts/workbench_projection_shape_check.py"],
         ["node", "--check", "scripts/artifact_primitives/mermaid_renderer.js"],
         ["node", "--check", "scripts/artifact_primitives/markdown_renderer.js"],
         ["node", "--check", "scripts/artifact_primitives/markdown_interactions.js"],
         ["node", "--check", "scripts/artifact_primitives/image_viewer.js"],
         ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
+        ["node", "--check", "scripts/artifacts/core/artifact_common.js"],
+        ["node", "--check", "scripts/artifacts/types/image_artifact.js"],
+        ["node", "--check", "scripts/artifacts/types/markdown_artifact.js"],
+        ["node", "--check", "scripts/artifacts/types/document_artifact.js"],
+        ["node", "--check", "scripts/artifacts/artifact_registry.js"],
         ["node", "--check", "scripts/artifact_primitives/artifact_renderer.js"],
-        ["node", "--check", "scripts/artifact_primitives/workflow_sidebar.js"],
+        ["node", "--check", "scripts/artifacts/navigation/artifact_navigator.js"],
         ["node", "--check", "scripts/artifact_primitives/interaction_overlay.js"],
         ["node", "--check", "scripts/artifact_primitives/interaction_overlay_controller.js"],
         ["node", "tests/document_renderer_primitive_check.js"],
+        ["node", "tests/artifact_registry_check.js"],
         ["node", "tests/artifact_renderer_primitive_check.js"],
-        ["node", "tests/workflow_sidebar_primitive_check.js"],
+        ["node", "tests/artifact_toolbar_check.js"],
+        ["node", "tests/artifact_navigator_check.js"],
         ["node", "tests/interaction_overlay_primitive_check.js"],
         ["node", "tests/interaction_overlay_controller_check.js"],
-        ["node", "--check", "scripts/workflow_artifact_workbench/app.js"],
-        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-composite-artifact-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-document-artifact-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-image-artifact-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-layout-regression-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-markdown-artifact-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-mermaid-artifact-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-navigation-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-annotation-reorder-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-interaction-overlay-check.js"],
+        ["node", "--check", "scripts/artifact_workbench/app.js"],
+        ["node", "--check", "scripts/artifact_workbench/artifact_toolbar.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-composition-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-document-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-image-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-layout-regression-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-markdown-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-mermaid-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-navigation-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-annotation-reorder-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-interaction-overlay-check.js"],
     ]
     venv_python = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "python"
     pytest = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "pytest"
@@ -358,12 +366,12 @@ def command_demo(args: argparse.Namespace) -> int:
         print()
         print("Self-guided demo recipe:")
         if args.fixture == "easy-audit":
-            print("1. Confirm the workflow header shows the Acme Robotics audit, not the public-page matrix.")
-            print("2. Inspect the projected L0-L4 workflow steps and provenance edges in the sidebar.")
+            print("1. Confirm the artifact summary shows the Acme Robotics audit, not the public-page matrix.")
+            print("2. Inspect the projected L0-L4 steps and provenance edges in the sidebar.")
             print("3. Open the final report and confirm the Mermaid diagram renders from markdown.")
             print("4. Open the JSON/text artifacts and confirm they render as inspectable document views.")
         else:
-            print("1. Inspect the workflow header in the right sidebar.")
+            print("1. Inspect the artifact summary in the right sidebar.")
             print("2. Toggle page and slot filter chips; previous/next should follow the filtered set.")
             print("3. Open a markdown summary artifact and confirm edit/annotation still works.")
             print("4. Inspect tall/full-page captures; viewer zoom should fit without mutating image bytes.")
@@ -650,7 +658,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--json", action="store_true")
     validate.set_defaults(func=command_validate)
 
-    demo = dev_subparsers.add_parser("demo", help="Prepare the workflow artifact workbench demo surface")
+    demo = dev_subparsers.add_parser("demo", help="Prepare the artifact workbench demo surface")
     demo.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
     demo.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and demo a named fixture")
     demo.add_argument("--no-browser", action="store_true")

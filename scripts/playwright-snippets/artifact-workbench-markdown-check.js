@@ -19,12 +19,16 @@ async (page) => {
     const markdownWrap = document.querySelector("#markdown-wrap");
     const imageWrap = document.querySelector("#image-wrap");
     const preview = document.querySelector("#markdown-preview");
+    const readout = document.querySelector("#artifact-readout")?.textContent || "";
     return markdownWrap
       && imageWrap
       && !markdownWrap.hidden
       && imageWrap.hidden
+      && document.querySelector("#image-controls") === null
+      && document.querySelector("#markdown-controls") !== null
+      && /lines/.test(readout)
       && /Acme Robotics Employer Brand Audit/.test(preview?.textContent || "")
-      && document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href")?.includes("workflow-artifact-workbench-icons.svg");
+      && document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href")?.includes("artifact-workbench-icons.svg");
   }, null, { timeout: 3000 });
 
   return await page.evaluate(() => {
@@ -34,6 +38,7 @@ async (page) => {
     const editButton = document.querySelector("#markdown-source-mode");
     const revertButton = document.querySelector("#markdown-revert");
     const saveButton = document.querySelector("#markdown-save");
+    const imageControls = document.querySelector("#image-controls");
     return {
       activeArtifactTitle: document.querySelector("#artifact-title")?.textContent?.trim(),
       activeType: markdownIcon?.getAttribute("title"),
@@ -51,6 +56,8 @@ async (page) => {
       editButtonText: editButton?.textContent?.trim(),
       revertButtonText: revertButton?.textContent?.trim(),
       saveButtonText: saveButton?.textContent?.trim(),
+      imageControlsMounted: Boolean(imageControls),
+      readout: document.querySelector("#artifact-readout")?.textContent?.trim(),
       markdownHeading: document.querySelector("#markdown-preview h1")?.textContent?.trim(),
     };
   });

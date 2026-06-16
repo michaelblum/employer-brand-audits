@@ -26,13 +26,13 @@ Provider-specific files such as `.claude/CLAUDE.md` should only point here.
 
 This project is a provider-flexible agent workflow prototype for Employer Brand
 Audits. It has a Python mechanical layer, Playwright CLI browser capture, an
-MCP imaging server, and a local workflow artifact workbench.
+MCP imaging server, and a local artifact workbench.
 
 - MCP server and image processing: `mcp-server/`
 - MCP tests: `mcp-server/tests/`
 - Browser automation: Playwright CLI and thin repo wrappers only
-- Workflow artifact workbench implementation: `scripts/playwright_cli_workbench_server.py`,
-  `scripts/playwright_cli_workbench_gate.py`, and `scripts/workflow_artifact_workbench/`
+- Artifact workbench implementation: `scripts/playwright_cli_workbench_server.py`,
+  `scripts/playwright_cli_workbench_gate.py`, and `scripts/artifact_workbench/`
 - Command surface for agents: `./eba dev ...`
 
 ## Hard Invariants
@@ -81,8 +81,8 @@ version:
 
 ## Browser And Demo Flow
 
-For the current workflow-artifact-workbench implementation of the workflow
-artifact workbench, prefer the command surface. For user requests to view or
+For the current artifact workbench implementation, prefer the command surface.
+For user requests to view or
 refresh the workbench, run this fast path first:
 
 ```bash
@@ -141,8 +141,8 @@ This runs the project’s current focused validation ladder:
   projection, normalization, and the current workbench server implementation.
 - Projection shape checks for the normalized Mermaid/composite workbench
   contract.
-- `node --check` for the workflow artifact workbench app, shared artifact primitives, and
-  checked-in workflow artifact workbench smoke snippets.
+- `node --check` for the artifact workbench app, shared artifact primitives, and
+  checked-in artifact workbench smoke snippets.
 - `mcp-server` pytest suite when `mcp-server/.venv` exists.
 - `git diff --check`
 
@@ -264,7 +264,7 @@ AGENTS.md.
 - `mcp-server/AGENTS.md` - stdio MCP server, imaging package, requirements, and
   MCP-local tests.
 - `scripts/AGENTS.md` - `./eba` command implementation, browser/capture helpers,
-  projection code, workflow artifact workbench assets, and checked-in
+  projection code, artifact workbench assets, and checked-in
   Playwright snippets.
 - `tests/AGENTS.md` - repo-level Python and Node validation checks outside the
   MCP package.

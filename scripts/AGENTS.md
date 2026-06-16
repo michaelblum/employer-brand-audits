@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Project command surface, browser/capture helpers, projection code, workflow
-artifact workbench implementation, and checked-in Playwright snippets.
+Project command surface, browser/capture helpers, projection code, artifact
+workbench implementation, and checked-in Playwright snippets.
 
 ## Ownership
 
@@ -44,10 +44,13 @@ artifact workbench implementation, and checked-in Playwright snippets.
 
 ## Child DOX Index
 
-- `scripts/artifact_primitives/AGENTS.md` - reusable workbench primitives.
+- `scripts/artifacts/AGENTS.md` - artifact-level registry, type components,
+  shared artifact helpers, and navigation planning.
+- `scripts/artifact_primitives/AGENTS.md` - lower-level workbench renderer and
+  interaction primitives.
 - `scripts/playwright-snippets/AGENTS.md` - checked-in snippets for Playwright
   CLI `run-code`.
-- `scripts/workflow_artifact_workbench/AGENTS.md` - browser-loaded workbench app
+- `scripts/artifact_workbench/AGENTS.md` - browser-loaded workbench app
   shell, styles, icons, and page assets.
 
 `scripts/playwright-fixtures/` remains owned here until it grows local rules.

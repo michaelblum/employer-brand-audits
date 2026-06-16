@@ -1,75 +1,11 @@
 (function () {
   const ROOT = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
 
-  const DOCUMENT_TYPES = ["json", "text", "log", "file"];
-
-  function fallbackIsDocumentArtifact(artifact = {}) {
-    return DOCUMENT_TYPES.includes(String(artifact.type || "").toLowerCase());
-  }
-
-  function artifactRenderKind(artifact = {}, { document } = {}) {
-    const type = String(artifact.type || "").toLowerCase();
-    if (type === "markdown") return "markdown";
-    const documentPrimitive = document || ROOT.document;
-    const isDocument = typeof documentPrimitive?.isDocumentArtifact === "function"
-      ? documentPrimitive.isDocumentArtifact(artifact)
-      : fallbackIsDocumentArtifact(artifact);
-    return isDocument ? "document" : "image";
-  }
-
-  function artifactStagePlan(artifact = {}, options = {}) {
-    const renderKind = artifactRenderKind(artifact, options);
-    const shared = {
-      selectionHidden: true,
-      resetHoverMarker: true,
-      commentPopoverHidden: true,
-    };
-    if (renderKind === "markdown") {
-      return {
-        renderKind,
-        stage: { markdownStage: true, resetScroll: false },
-        surfaces: {
-          imageWrapHidden: true,
-          markdownWrapHidden: false,
-          imageControlsDisplay: "none",
-          markdownControlsVisible: true,
-          ...shared,
-          markdownMarkerHidden: null,
-          markdownPreviewHidden: null,
-          markdownSourceHidden: null,
-        },
-      };
+  function artifactRegistry() {
+    if (!window.Artifacts?.registry) {
+      throw new Error("Artifact registry is not loaded");
     }
-    if (renderKind === "document") {
-      return {
-        renderKind,
-        stage: { markdownStage: true, resetScroll: true },
-        surfaces: {
-          imageWrapHidden: true,
-          markdownWrapHidden: false,
-          imageControlsDisplay: "none",
-          markdownControlsVisible: false,
-          ...shared,
-          markdownMarkerHidden: true,
-          markdownPreviewHidden: false,
-          markdownSourceHidden: true,
-        },
-      };
-    }
-    return {
-      renderKind,
-      stage: { markdownStage: false, resetScroll: true },
-      surfaces: {
-        imageWrapHidden: false,
-        markdownWrapHidden: true,
-        imageControlsDisplay: "flex",
-        markdownControlsVisible: false,
-        ...shared,
-        markdownMarkerHidden: true,
-        markdownPreviewHidden: null,
-        markdownSourceHidden: null,
-      },
-    };
+    return window.Artifacts.registry;
   }
 
   function documentLoadPlan(artifact = {}, {
@@ -138,49 +74,6 @@
     };
   }
 
-  function artifactReadoutPlan({
-    artifact = {},
-    imageNaturalWidth = null,
-    imageNaturalHeight = null,
-    markdownContentById = {},
-    documentContentById = {},
-    markdown = ROOT.markdown,
-    document = ROOT.document,
-  } = {}) {
-    return {
-      artifact,
-      imageNaturalWidth,
-      imageNaturalHeight,
-      markdownContent: markdownContentById[artifact.id] || "",
-      documentContent: documentContentById[artifact.id] || "",
-      markdown,
-      document,
-    };
-  }
-
-  function artifactReadout({
-    artifact = {},
-    imageNaturalWidth = null,
-    imageNaturalHeight = null,
-    markdownContent = "",
-    documentContent = "",
-    markdown = ROOT.markdown,
-    document = ROOT.document,
-  } = {}) {
-    const renderKind = artifactRenderKind(artifact, { document });
-    if (renderKind === "document" && typeof document?.documentReadout === "function") {
-      return document.documentReadout(artifact, documentContent);
-    }
-    if (renderKind === "markdown" && typeof markdown?.markdownDiagnostics === "function") {
-      const diagnostics = markdown.markdownDiagnostics(markdownContent);
-      return `${diagnostics.line_count} lines · ${diagnostics.word_count} words · ${diagnostics.heading_count} headings`;
-    }
-    const dimensions = artifact.dimensions || {};
-    const width = dimensions.width || imageNaturalWidth || "unknown";
-    const height = dimensions.height || imageNaturalHeight || "unknown";
-    return `${width} x ${height} px`;
-  }
-
   function artifactSelectionPlan({ requestedIndex = 0, artifactCount = 0 } = {}) {
     const count = Number(artifactCount || 0);
     if (count <= 0) {
@@ -203,13 +96,7 @@
   }
 
   function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    }[char]));
+    return window.Artifacts.common.escapeHtml(value);
   }
 
   function artifactErrorHtml({ renderKind = "document", error } = {}) {
@@ -288,8 +175,8 @@
     effects = {},
     options = {},
   } = {}) {
-    const plan = stagePlan || artifactStagePlan(artifact, options);
-    const renderKind = plan.renderKind || artifactRenderKind(artifact, options);
+    const plan = stagePlan || artifactRegistry().artifactStagePlan(artifact, options);
+    const renderKind = plan.renderKind || artifactRegistry().artifactRenderKind(artifact, options);
     requiredEffect(effects, "applyStagePlan")(plan);
 
     if (renderKind === "image") {
@@ -316,11 +203,7 @@
   ROOT.artifactRenderer = {
     artifactFallbackPlan,
     artifactErrorHtml,
-    artifactReadoutPlan,
-    artifactReadout,
     artifactSelectionPlan,
-    artifactStagePlan,
-    artifactRenderKind,
     documentLoadPlan,
     documentLoadResultPlan,
     documentRenderPayload,

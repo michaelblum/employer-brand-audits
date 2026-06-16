@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EBA Workbench</title>
-  <link rel="stylesheet" href="/assets/workflow-artifact-workbench.css">
+  <link rel="stylesheet" href="/assets/artifact-workbench.css">
 </head>
 <body>
   <div class="toolbar primary">
@@ -26,48 +26,7 @@
   <main class="shell" id="shell">
     <div class="stage-column">
       <div class="toolbar secondary">
-        <div class="dimension-readout" id="dimension-readout"></div>
-        <div class="image-controls" id="image-controls">
-          <div class="zoom-control" id="zoom-control">
-            <button class="zoom-fit" id="zoom-fit" type="button" aria-label="Smart fit" title="Smart fit">
-              <svg aria-hidden="true">
-                <use href="/assets/workflow-artifact-workbench-icons.svg#icon-fit"></use>
-              </svg>
-            </button>
-            <input id="zoom-input" type="text" inputmode="numeric" aria-label="Zoom percentage">
-            <div class="zoom-steps">
-              <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
-              <button id="zoom-out" type="button" aria-label="Zoom out">-</button>
-            </div>
-          </div>
-        </div>
-        <div class="markdown-controls" id="markdown-controls">
-          <div class="segmented" role="group" aria-label="Markdown view mode">
-            <button id="markdown-preview-mode" class="tool-button" type="button" data-markdown-mode="preview" aria-label="Preview" title="Preview">
-              <svg aria-hidden="true">
-                <use href="/assets/workflow-artifact-workbench-icons.svg#icon-preview"></use>
-              </svg>
-            </button>
-            <button id="markdown-source-mode" class="tool-button" type="button" data-markdown-mode="source" aria-label="Edit" title="Edit">
-              <span aria-hidden="true">&lt;/&gt;</span>
-            </button>
-          </div>
-          <button class="action-button icon-only" id="markdown-theme-toggle" type="button" aria-label="Use light markdown theme" title="Use light markdown theme">
-            <svg aria-hidden="true">
-              <use href="/assets/workflow-artifact-workbench-icons.svg#icon-theme"></use>
-            </svg>
-          </button>
-          <button class="action-button icon-only" id="markdown-revert" type="button" aria-label="Revert" title="Revert">
-            <svg aria-hidden="true">
-              <use href="/assets/workflow-artifact-workbench-icons.svg#icon-revert"></use>
-            </svg>
-          </button>
-          <button class="action-button icon-only primary" id="markdown-save" type="button" aria-label="Save" title="Save">
-            <svg aria-hidden="true">
-              <use href="/assets/workflow-artifact-workbench-icons.svg#icon-save"></use>
-            </svg>
-          </button>
-        </div>
+        <div class="artifact-toolbar" id="artifact-toolbar"></div>
       </div>
       <section class="stage" id="stage">
         <div class="image-wrap" id="image-wrap">
@@ -88,7 +47,7 @@
             <button class="dictation-control" id="comment-dictation" type="button" aria-label="Start dictation" title="Start dictation">
               <span class="dictation-icon" aria-hidden="true">
                 <svg>
-                  <use href="/assets/workflow-artifact-workbench-icons.svg#icon-dictation"></use>
+                  <use href="/assets/artifact-workbench-icons.svg#icon-dictation"></use>
                 </svg>
               </span>
               <span class="dictation-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
@@ -112,8 +71,14 @@
   <script src="/assets/artifact-primitives/markdown_interactions.js" defer></script>
   <script src="/assets/artifact-primitives/image_viewer.js" defer></script>
   <script src="/assets/artifact-primitives/document_renderer.js" defer></script>
+  <script src="/assets/artifacts/core/artifact_common.js" defer></script>
+  <script src="/assets/artifacts/types/image_artifact.js" defer></script>
+  <script src="/assets/artifacts/types/markdown_artifact.js" defer></script>
+  <script src="/assets/artifacts/types/document_artifact.js" defer></script>
+  <script src="/assets/artifacts/artifact_registry.js" defer></script>
   <script src="/assets/artifact-primitives/artifact_renderer.js" defer></script>
-  <script src="/assets/artifact-primitives/workflow_sidebar.js" defer></script>
+  <script src="/assets/artifacts/navigation/artifact_navigator.js" defer></script>
   <script src="/assets/artifact-primitives/interaction_overlay.js" defer></script>
   <script src="/assets/artifact-primitives/interaction_overlay_controller.js" defer></script>
-  <script src="/assets/workflow-artifact-workbench.js" defer></script>
+  <script src="/assets/artifact-toolbar.js" defer></script>
+  <script src="/assets/artifact-workbench.js" defer></script>

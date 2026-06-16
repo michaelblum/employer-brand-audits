@@ -1,5 +1,7 @@
 (function () {
-  const ROOT = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
+  const ROOT = window.Artifacts = window.Artifacts || {};
+  const PRIMITIVES = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
+  const common = ROOT.common;
 
   const ARTIFACT_TYPE_META = {
     image: { icon: "image", className: "image" },
@@ -11,17 +13,17 @@
   };
 
   function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    }[char]));
+    return common.escapeHtml(value);
   }
 
   function formatSlot(value) {
     return String(value || "").replace(/[._-]/g, " ");
+  }
+
+  function projectionMetaValues(values = []) {
+    return values
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
   }
 
   function projectedArtifact(context, item) {
@@ -42,7 +44,7 @@
     return context.filters?.compositeId ? context.projectedGroupsById?.[context.filters.compositeId] || null : null;
   }
 
-  function workflowProjectionModel(payload = null) {
+  function artifactProjectionModel(payload = null) {
     const workbenchProjection = payload && typeof payload === "object" ? payload : null;
     const model = {
       workbenchProjection,
@@ -66,7 +68,7 @@
     return model;
   }
 
-  function workflowSidebarContext({
+  function artifactNavigationContext({
     artifacts = [],
     interactionOverlays = [],
     contexts = [],
@@ -76,7 +78,7 @@
     iconHref = null,
     projectionModel = null,
   } = {}) {
-    const model = projectionModel || workflowProjectionModel(null);
+    const model = projectionModel || artifactProjectionModel(null);
     return {
       artifacts,
       interactionOverlays,
@@ -98,7 +100,7 @@
   }
 
   function artifactAnnotations(context, artifactId) {
-    const overlay = ROOT.interactionOverlay;
+    const overlay = PRIMITIVES.interactionOverlay;
     if (overlay && typeof overlay.annotationOverlays === "function") {
       return overlay.annotationOverlays(context.interactionOverlays || [], artifactId);
     }
@@ -114,7 +116,7 @@
   }
 
   function annotationText(note) {
-    const overlay = ROOT.interactionOverlay;
+    const overlay = PRIMITIVES.interactionOverlay;
     if (overlay && typeof overlay.annotationText === "function") {
       return overlay.annotationText(note);
     }
@@ -140,7 +142,7 @@
 
   function artifactIconHref(context, name) {
     if (typeof context.iconHref === "function") return context.iconHref(name);
-    return `/assets/workflow-artifact-workbench-icons.svg#icon-artifact-${name}`;
+    return `/assets/artifact-workbench-icons.svg#icon-artifact-${name}`;
   }
 
   function artifactTypeIcon(context, item) {
@@ -181,7 +183,7 @@
     };
   }
 
-  function workflowFilterPlan(context = {}) {
+  function artifactFilterPlan(context = {}) {
     const filters = normalizedFilters(context.filters);
     const kind = context.filterKind;
     const value = context.filterValue || null;
@@ -203,7 +205,7 @@
     };
   }
 
-  function workflowMovePlan(context = {}) {
+  function artifactMovePlan(context = {}) {
     const visibleIndexes = visibleArtifactIndexes(context);
     const activeIndex = context.activeIndex || 0;
     if (!visibleIndexes.length) return { activeIndex };
@@ -304,7 +306,7 @@
     return visible === total ? `${total} artifacts` : `${visible} of ${total} artifacts`;
   }
 
-  function renderWorkflowHeader(context = {}) {
+  function renderArtifactNavigationHeader(context = {}) {
     const workflow = context.workbenchProjection?.workflow;
     if (!workflow) return "";
     const artifacts = context.artifacts || [];
@@ -316,7 +318,7 @@
     const composites = filterComposites(context);
     const visible = visibleArtifactIndexes(context).length;
     return `
-        <div class="workflow-summary">
+        <div class="artifact-summary">
           <div class="summary-kicker">${escapeHtml(workflow.status || "unknown")}</div>
           <div class="summary-title">${escapeHtml(workflow.name || "Workflow")}</div>
           <div class="summary-grid">
@@ -360,6 +362,13 @@
     const projected = projectedArtifact(context, item);
     const step = projectedStep(context, item);
     const slot = projectedSlot(context, item);
+    const projectionMeta = projected
+      ? projectionMetaValues([
+        slot?.label || formatSlot(projected.slot),
+        projected.source_page?.slug,
+        step?.status || projected.status,
+      ])
+      : [];
     const annotationHtml = notes.length
       ? notes.map((note) => `
             <div class="annotation" draggable="true" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
@@ -374,11 +383,9 @@
               ${artifactTypeIcon(context, item)}
               <div class="name">${escapeHtml(item.name)}</div>
             </div>
-            ${projected ? `
+            ${projectionMeta.length ? `
               <div class="projection-meta">
-                <span>${escapeHtml(slot?.label || formatSlot(projected.slot))}</span>
-                <span>${escapeHtml(projected.source_page?.slug || "")}</span>
-                <span>${escapeHtml(step?.status || projected.status || "")}</span>
+                ${projectionMeta.map((value) => `<span>${escapeHtml(value)}</span>`).join("")}
               </div>
             ` : ""}
             ${annotationHtml}
@@ -390,11 +397,11 @@
     const artifactRows = visibleArtifactIndexes(context)
       .map((index) => renderArtifactRow(context, index))
       .join("");
-    return renderWorkflowHeader(context)
+    return renderArtifactNavigationHeader(context)
       + (artifactRows || '<div class="empty-filter">No artifacts match the active filters.</div>');
   }
 
-  ROOT.workflowSidebar = {
+  ROOT.navigation = {
     activeComposite,
     anchorSummary,
     artifactMatchesFilters,
@@ -408,12 +415,12 @@
     renderSidebarHtml,
     renderArtifactTitleHtml,
     renderOverviewHtml,
-    renderWorkflowHeader,
+    renderArtifactNavigationHeader,
     visibleArtifactIndexes,
     ensureVisibleArtifactIndex,
-    workflowProjectionModel,
-    workflowSidebarContext,
-    workflowFilterPlan,
-    workflowMovePlan,
+    artifactProjectionModel,
+    artifactNavigationContext,
+    artifactFilterPlan,
+    artifactMovePlan,
   };
 }());

@@ -23,7 +23,7 @@
       markdownDirty: {},
       documentContent: {},
       artifactDocumentTheme: "dark",
-      workflowProjectionModel: null,
+      artifactProjectionModel: null,
       filters: {
         stepId: null,
         slot: null,
@@ -35,17 +35,15 @@
       },
     };
     const $ = (id) => document.getElementById(id);
-    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[char]));
+    const escapeHtml = (value) => window.Artifacts.common.escapeHtml(value);
     const artifact = () => app.collection.artifacts[app.index];
     const artifactAnnotations = (id) => interactionOverlay().annotationOverlays(app.interactionOverlays, id);
     const artifactIndexById = (id) => app.collection.artifacts.findIndex((item) => item.id === id);
     const annotationById = (artifactId, annotationId) => artifactAnnotations(artifactId).find((note) => note.id === annotationId);
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
-    const isImageArtifact = (item = artifact()) => item.type === "image";
-    const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
+    const artifactRegistry = () => window.Artifacts.registry;
     const artifactRenderer = () => window.ArtifactPrimitives.artifactRenderer;
+    const artifactToolbar = () => window.WorkbenchArtifactToolbar;
     const documentRenderer = () => window.ArtifactPrimitives.document;
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
@@ -57,7 +55,7 @@
       if (!epoch) return "";
       return new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     };
-    const iconHref = (name) => `/assets/workflow-artifact-workbench-icons.svg#icon-artifact-${name}`;
+    const iconHref = (name) => `/assets/artifact-workbench-icons.svg#icon-artifact-${name}`;
     const interactionOverlay = () => window.ArtifactPrimitives.interactionOverlay;
     let overlayControllerInstance = null;
     function overlayController() {
@@ -112,7 +110,7 @@
                 render,
                 requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
                 afterImageReady,
-                isImageArtifact,
+                shouldWaitForImageReady: supportsImageRegionAnnotations,
                 placeMarkerForAnchor,
                 openExistingEditor,
               },
@@ -138,8 +136,9 @@
       }
       return overlayControllerInstance;
     }
-    const workflowSidebar = () => window.ArtifactPrimitives.workflowSidebar;
-    const workflowSidebarContext = () => workflowSidebar().workflowSidebarContext({
+    const artifactNavigation = () => window.Artifacts.navigation;
+    let unbindArtifactControls = null;
+    const artifactNavigationContext = () => artifactNavigation().artifactNavigationContext({
       artifacts: app.collection.artifacts,
       interactionOverlays: app.interactionOverlays,
       contexts: app.contexts,
@@ -147,7 +146,7 @@
       activeIndex: app.index,
       filters: app.filters,
       iconHref,
-      projectionModel: app.workflowProjectionModel,
+      projectionModel: app.artifactProjectionModel,
     });
 
     async function fetchWorkbenchProjection() {
@@ -182,7 +181,7 @@
       app.interactionOverlays = payload.interaction_overlays || [];
       app.contexts = payload.contexts || [];
       app.context = payload.context || null;
-      app.workflowProjectionModel = workflowSidebar().workflowProjectionModel(payload.workbench_projection || null);
+      app.artifactProjectionModel = artifactNavigation().artifactProjectionModel(payload.workbench_projection || null);
     }
 
     async function switchWorkbenchContext(manifest) {
@@ -304,9 +303,8 @@
       applyZoom(result.value, result.mode);
     }
 
-    function updateDimensionReadout() {
-      const item = artifact();
-      $("dimension-readout").textContent = artifactRenderer().artifactReadout(artifactRenderer().artifactReadoutPlan({
+    function artifactToolbarPlan(item = artifact()) {
+      return artifactRegistry().artifactToolbarPlan({
         artifact: item,
         imageNaturalWidth: $("artifact-image").naturalWidth,
         imageNaturalHeight: $("artifact-image").naturalHeight,
@@ -314,11 +312,90 @@
         documentContentById: app.documentContent,
         markdown: window.ArtifactPrimitives.markdown,
         document: documentRenderer(),
-      }));
+      });
+    }
+
+    function selectedArtifactComponent(item = artifact()) {
+      return artifactRegistry().resolveArtifactComponent(item, { document: documentRenderer() });
+    }
+
+    function artifactCapabilities(item = artifact()) {
+      return selectedArtifactComponent(item)?.capabilities || {};
+    }
+
+    function artifactSupports(capability, item = artifact()) {
+      return Boolean(artifactCapabilities(item)[capability]);
+    }
+
+    function supportsImageRegionAnnotations(item = artifact()) {
+      return artifactSupports("imageRegionAnnotations", item);
+    }
+
+    function supportsImageZoom(item = artifact()) {
+      return artifactSupports("imageZoom", item);
+    }
+
+    function supportsMarkdownEditing(item = artifact()) {
+      return artifactSupports("markdownEditing", item);
+    }
+
+    function supportsTextRangeAnnotations(item = artifact()) {
+      return artifactSupports("textRangeAnnotations", item);
+    }
+
+    function artifactControlState(item = artifact()) {
+      return {
+        artifactDocumentTheme: app.artifactDocumentTheme,
+        markdownDirty: app.markdownDirty,
+        markdownMode: app.markdownMode,
+        zoomMode: app.zoomMode,
+        zoomPercent: app.zoomPercent,
+        artifact: item,
+      };
+    }
+
+    function artifactControlActions() {
+      return {
+        applyZoom: (value, options = {}) => applyZoom(options.relative ? app.zoomPercent + value : value),
+        revertMarkdownArtifact,
+        saveMarkdownArtifact,
+        setMarkdownMode,
+        smartFit,
+        toggleMarkdownTheme,
+      };
+    }
+
+    function bindArtifactControls(item = artifact()) {
+      if (unbindArtifactControls) unbindArtifactControls();
+      const component = selectedArtifactComponent(item);
+      unbindArtifactControls = typeof component.bindControls === "function"
+        ? component.bindControls({
+          rootEl: $("artifact-toolbar"),
+          actions: artifactControlActions(),
+          state: artifactControlState(item),
+          artifact: item,
+        })
+        : null;
+    }
+
+    function syncArtifactControls(item = artifact()) {
+      const component = selectedArtifactComponent(item);
+      if (typeof component.syncControls !== "function") return;
+      component.syncControls({
+        rootEl: $("artifact-toolbar"),
+        state: artifactControlState(item),
+        artifact: item,
+      });
+    }
+
+    function updateArtifactToolbar(item = artifact()) {
+      artifactToolbar().mountToolbar($("artifact-toolbar"), artifactToolbarPlan(item));
+      bindArtifactControls(item);
+      syncArtifactControls(item);
     }
 
     function artifactStagePlan(item = artifact()) {
-      return artifactRenderer().artifactStagePlan(item, { document: documentRenderer() });
+      return artifactRegistry().artifactStagePlan(item, { document: documentRenderer() });
     }
 
     function applyArtifactStagePlan(plan) {
@@ -327,10 +404,6 @@
       if (stage.resetScroll) $("stage").scrollTo({ left: 0, top: 0 });
       if (typeof surfaces.imageWrapHidden === "boolean") $("image-wrap").hidden = surfaces.imageWrapHidden;
       if (typeof surfaces.markdownWrapHidden === "boolean") $("markdown-wrap").hidden = surfaces.markdownWrapHidden;
-      if (surfaces.imageControlsDisplay) $("image-controls").style.display = surfaces.imageControlsDisplay;
-      if (typeof surfaces.markdownControlsVisible === "boolean") {
-        $("markdown-controls").classList.toggle("visible", surfaces.markdownControlsVisible);
-      }
       if (typeof surfaces.selectionHidden === "boolean") $("selection").hidden = surfaces.selectionHidden;
       if (typeof surfaces.markdownMarkerHidden === "boolean") $("markdown-marker").hidden = surfaces.markdownMarkerHidden;
       if (typeof surfaces.markdownPreviewHidden === "boolean") $("markdown-preview").hidden = surfaces.markdownPreviewHidden;
@@ -344,7 +417,7 @@
       if (typeof surfaces.markdownPreviewHidden === "boolean") $("markdown-preview").hidden = surfaces.markdownPreviewHidden;
       if (typeof surfaces.markdownSourceHidden === "boolean") $("markdown-source").hidden = surfaces.markdownSourceHidden;
       markdownPreviewBody().innerHTML = plan.html || "";
-      if (plan.updateReadout) updateDimensionReadout();
+      if (plan.updateReadout) updateArtifactToolbar();
     }
 
     function afterImageReady(callback) {
@@ -369,8 +442,8 @@
     }
 
     function move(delta) {
-      const plan = workflowSidebar().workflowMovePlan({
-        ...workflowSidebarContext(),
+      const plan = artifactNavigation().artifactMovePlan({
+        ...artifactNavigationContext(),
         delta,
       });
       if (plan.activeIndex === app.index) return;
@@ -378,17 +451,17 @@
     }
 
     function renderTitle() {
-      $("artifact-title").innerHTML = workflowSidebar().renderArtifactTitleHtml({
-        ...workflowSidebarContext(),
+      $("artifact-title").innerHTML = artifactNavigation().renderArtifactTitleHtml({
+        ...artifactNavigationContext(),
         formatTime,
       });
     }
 
     function renderImage({ artifact: item = artifact() } = {}) {
       const image = $("artifact-image");
-      updateDimensionReadout();
+      updateArtifactToolbar();
       image.onload = () => {
-        updateDimensionReadout();
+        updateArtifactToolbar();
         if (app.zoomMode === "stage-fit") {
           applyZoom(smartFitZoom(), "stage-fit");
         } else if (app.zoomMode === "actual-size") {
@@ -415,7 +488,7 @@
         }),
         markdownPreviewBody(),
       );
-      updateDimensionReadout();
+      updateArtifactToolbar();
     }
 
     function renderArtifactFallback({ renderKind, error } = {}) {
@@ -481,13 +554,13 @@
         themeButtonEl: $("markdown-theme-toggle"),
         theme: app.artifactDocumentTheme,
       });
-      updateDimensionReadout();
+      updateArtifactToolbar();
       renderMarkdownHighlights();
     }
 
     function renderMarkdownHighlights() {
       markdownPreviewBody().querySelectorAll(".line-hit").forEach((node) => node.classList.remove("line-hit"));
-      if (app.markdownMode !== "preview" || !isMarkdownArtifact()) return;
+      if (app.markdownMode !== "preview" || !supportsTextRangeAnnotations()) return;
       for (const note of artifactAnnotations(artifact().id)) {
         const anchor = textRangeAnchor(note);
         if (!anchor) continue;
@@ -510,7 +583,7 @@
 
     async function saveMarkdownArtifact() {
       const item = artifact();
-      if (!isMarkdownArtifact(item)) return;
+      if (!supportsMarkdownEditing(item)) return;
       const content = app.markdownContent[item.id] || "";
       const response = await fetch(`/api/artifact-content/${encodeURIComponent(item.id)}`, {
         method: "PUT",
@@ -530,7 +603,7 @@
 
     function revertMarkdownArtifact() {
       const item = artifact();
-      if (!isMarkdownArtifact(item)) return;
+      if (!supportsMarkdownEditing(item)) return;
       const plan = artifactRenderer().markdownRevertPlan({ savedContent: app.markdownSavedContent[item.id] });
       app.markdownContent[item.id] = plan.content;
       app.markdownDirty[item.id] = plan.dirty;
@@ -551,6 +624,7 @@
 
     function renderArtifact() {
       const item = artifact();
+      updateArtifactToolbar(item);
       void artifactRenderer().renderArtifact({
         artifact: item,
         stagePlan: artifactStagePlan(item),
@@ -567,7 +641,7 @@
     }
 
     function renderOverview() {
-      $("overview-popover").innerHTML = workflowSidebar().renderOverviewHtml(workflowSidebarContext());
+      $("overview-popover").innerHTML = artifactNavigation().renderOverviewHtml(artifactNavigationContext());
       const select = $("overview-popover").querySelector("[data-context-select]");
       if (select) {
         select.addEventListener("change", () => {
@@ -582,7 +656,7 @@
       });
     }
 
-    function applyWorkflowFilterPlan(plan = {}) {
+    function applyArtifactFilterPlan(plan = {}) {
       if (plan.filters) app.filters = plan.filters;
       if (Number.isInteger(plan.activeIndex)) app.index = plan.activeIndex;
       closeEditor();
@@ -591,12 +665,12 @@
     }
 
     function renderSidebar() {
-      $("sidebar").innerHTML = workflowSidebar().renderSidebarHtml(workflowSidebarContext());
+      $("sidebar").innerHTML = artifactNavigation().renderSidebarHtml(artifactNavigationContext());
       $("sidebar").querySelectorAll("[data-filter-kind]").forEach((button) => {
         button.addEventListener("click", (event) => {
           event.stopPropagation();
-          applyWorkflowFilterPlan(workflowSidebar().workflowFilterPlan({
-            ...workflowSidebarContext(),
+          applyArtifactFilterPlan(artifactNavigation().artifactFilterPlan({
+            ...artifactNavigationContext(),
             filterKind: button.dataset.filterKind,
             filterValue: button.dataset.filterValue,
           }));
@@ -846,7 +920,7 @@
 
     function startDrag(event) {
       if (event.button !== 0) return;
-      if (event.target.closest("#image-wrap")) {
+      if (supportsImageRegionAnnotations() && event.target.closest("#image-wrap")) {
         const point = imagePoint(event);
         applyOverlayDraftStart(interactionOverlay().beginOverlayDraft({
           type: "image",
@@ -854,7 +928,7 @@
         }), placeSelection);
         return;
       }
-      if (isMarkdownArtifact() && app.markdownMode === "preview" && event.target.closest("#markdown-preview")) {
+      if (supportsTextRangeAnnotations() && app.markdownMode === "preview" && event.target.closest("#markdown-preview")) {
         const point = window.ArtifactPrimitives.markdownInteractions.pointInWrap({
           event,
           wrapEl: $("markdown-wrap"),
@@ -1057,19 +1131,6 @@
       $("copy-path").addEventListener("click", () => copyText(artifact().path));
       $("secondary-comment-action").addEventListener("click", secondaryEditorAction);
       $("primary-comment-action").addEventListener("click", commitEditor);
-      $("zoom-in").addEventListener("click", () => applyZoom(app.zoomPercent + 10));
-      $("zoom-out").addEventListener("click", () => applyZoom(app.zoomPercent - 10));
-      $("zoom-input").addEventListener("change", () => applyZoom($("zoom-input").value.replace("%", "")));
-      $("zoom-fit").addEventListener("click", smartFit);
-      $("zoom-control").addEventListener("wheel", (event) => {
-        event.preventDefault();
-        applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
-      });
-      $("markdown-preview-mode").addEventListener("click", () => setMarkdownMode("preview"));
-      $("markdown-source-mode").addEventListener("click", () => setMarkdownMode("source"));
-      $("markdown-theme-toggle").addEventListener("click", toggleMarkdownTheme);
-      $("markdown-save").addEventListener("click", saveMarkdownArtifact);
-      $("markdown-revert").addEventListener("click", revertMarkdownArtifact);
       $("markdown-source").addEventListener("input", () => {
         const item = artifact();
         const plan = artifactRenderer().markdownInputPlan({
@@ -1078,8 +1139,7 @@
         });
         app.markdownContent[item.id] = plan.content;
         app.markdownDirty[item.id] = plan.dirty;
-        $("markdown-save").disabled = plan.saveDisabled;
-        if (plan.updateReadout) updateDimensionReadout();
+        if (plan.updateReadout) updateArtifactToolbar();
       });
       $("markdown-source").addEventListener("keydown", (event) => {
         const key = String(event.key || "").toLowerCase();
@@ -1095,7 +1155,7 @@
       $("markdown-preview").addEventListener("mousedown", startDrag);
       $("artifact-image").addEventListener("dragstart", (event) => event.preventDefault());
       window.addEventListener("resize", () => {
-        if (!isImageArtifact()) {
+        if (!supportsImageZoom()) {
           updateMooringOverlays();
         } else if (app.zoomMode === "stage-fit") {
           applyZoom(smartFitZoom(), "stage-fit");
@@ -1108,7 +1168,7 @@
       $("markdown-preview").addEventListener("scroll", updateMooringOverlays);
       $("markdown-source").addEventListener("scroll", updateMooringOverlays);
       $("stage").addEventListener("wheel", (event) => {
-        if (!event.ctrlKey || !isImageArtifact()) return;
+        if (!event.ctrlKey || !supportsImageZoom()) return;
         event.preventDefault();
         applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
       }, { passive: false });

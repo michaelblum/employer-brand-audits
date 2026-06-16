@@ -106,7 +106,7 @@ class EasyAuditFixtureTests(unittest.TestCase):
             self.assertIn("stickyObscuredTarget", source)
             self.assertIn("#sticky-obscured-target", source)
 
-    def test_live_capture_artifacts_are_added_to_review_manifest(self) -> None:
+    def test_live_capture_artifacts_are_added_to_audit_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             progress = Path(tmp) / "l1-animation-progress.png"
             sticky = Path(tmp) / "l1-sticky-obscured-target.png"
