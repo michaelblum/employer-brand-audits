@@ -156,6 +156,71 @@ async (page) => {
     activeFilterCount: document.querySelectorAll("[data-filter-kind].active").length,
   }));
 
+  const compositeModel = await page.evaluate(async () => {
+    const [state, projection] = await Promise.all([
+      fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json()),
+      fetch("/api/workbench-projection", { cache: "no-store" }).then((response) => response.json()),
+    ]);
+    const collection = state.collection?.artifacts || [];
+    const collectionIds = new Set(collection.map((artifact) => artifact.id));
+    const group = (projection.artifact_groups || [])
+      .map((item) => ({
+        ...item,
+        visibleArtifactIds: (item.artifact_ids || []).filter((artifactId) => collectionIds.has(artifactId)),
+      }))
+      .find((item) => item.visibleArtifactIds.length > 1);
+    if (!group) throw new Error("No projected composite filter target found");
+    return {
+      selectedComposite: {
+        id: group.id,
+        label: group.label || group.id,
+        visibleArtifactIds: group.visibleArtifactIds,
+      },
+    };
+  });
+
+  await page.evaluate((compositeId) => {
+    const button = document.querySelector(`[data-filter-kind="composite"][data-filter-value="${CSS.escape(compositeId)}"]`);
+    if (!button) throw new Error(`Composite filter button not found: ${compositeId}`);
+    button.click();
+  }, compositeModel.selectedComposite.id);
+
+  await page.waitForFunction((compositeId) => {
+    const active = document.querySelector(`[data-filter-kind="composite"][data-filter-value="${CSS.escape(compositeId)}"]`);
+    return active?.classList.contains("active") && document.querySelectorAll(".artifact-row[data-index]").length > 0;
+  }, compositeModel.selectedComposite.id, { timeout: 3000 });
+
+  const compositeState = await page.evaluate(async ({ compositeId, expectedIds, label }) => {
+    const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
+    const collection = state.collection?.artifacts || [];
+    const visibleRows = [...document.querySelectorAll(".artifact-row[data-index]")];
+    const visibleIds = visibleRows.map((row) => {
+      const index = Number(row.dataset.index);
+      const artifact = collection[index];
+      if (!artifact) throw new Error(`Composite visible row has no collection artifact at index ${row.dataset.index}`);
+      return artifact.id;
+    });
+    const unexpected = visibleIds.filter((id) => !expectedIds.includes(id));
+    const missing = expectedIds.filter((id) => !visibleIds.includes(id));
+    if (unexpected.length || missing.length) {
+      throw new Error(`Composite filter mismatch: ${JSON.stringify({ compositeId, unexpected, missing, visibleIds, expectedIds })}`);
+    }
+    const title = document.querySelector("#artifact-title")?.textContent?.trim() || "";
+    if (!title.includes(label)) {
+      throw new Error(`Composite breadcrumb missing label: ${JSON.stringify({ label, title })}`);
+    }
+    return {
+      compositeId,
+      label,
+      visibleIds,
+      title,
+    };
+  }, {
+    compositeId: compositeModel.selectedComposite.id,
+    expectedIds: compositeModel.selectedComposite.visibleArtifactIds,
+    label: compositeModel.selectedComposite.label,
+  });
+
   return {
     selectedStep: model.selectedStep.id,
     filteredRowCount: filteredState.filteredRowCount,
@@ -168,5 +233,10 @@ async (page) => {
     overviewNavigation,
     clearedRowCount: clearedState.rowCount,
     activeFilterCount: clearedState.activeFilterCount,
+    composite: {
+      id: compositeState.compositeId,
+      label: compositeState.label,
+      visibleIds: compositeState.visibleIds,
+    },
   };
 }

@@ -162,8 +162,47 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     }
     artifact_ids = {artifact.get("id") for artifact in artifacts}
     require(isinstance(groups, list), "ADR-002 projection must emit artifact_groups as a list")
-    require(groups == [], "ADR-002 fixture must not derive artifact_groups from provenance parent_ids")
     require("composites" not in facets, "ADR-002 projection must not restore facets.composites")
+    group_id = "composite:audit-report:l4-report"
+    report_bundle = next((group for group in groups if group.get("id") == group_id), None)
+    expected_report_bundle_ids = {
+        "l0-source-urls",
+        "l1-careers-text",
+        "l1-careers-screenshot",
+        "l2-kilos-json",
+        "l2-kilos-analysis",
+        "l3-synthesis-notes",
+        "l4-final-report",
+        "l4-final-report-html",
+    }
+    require(isinstance(report_bundle, dict), f"Missing ADR-002 report composite group: {group_id}")
+    require(report_bundle.get("kind") == "audit_report_bundle", "ADR-002 report composite kind drifted")
+    require(report_bundle.get("slot") == "audit.report.bundle", "ADR-002 report composite slot drifted")
+    require(
+        report_bundle.get("source") == {
+            "kind": "audit_report_step",
+            "step_id": "l4-report",
+            "artifact_ids": ["l4-final-report", "l4-final-report-html"],
+        },
+        "ADR-002 report composite source drifted",
+    )
+    require(
+        set(report_bundle.get("artifact_ids") or []) == expected_report_bundle_ids,
+        "ADR-002 report composite artifact ids drifted",
+    )
+    require(
+        not any(artifact.get("id") == group_id for artifact in artifacts),
+        "ADR-002 report composite must not be emitted as a durable artifact",
+    )
+    for artifact_id in expected_report_bundle_ids:
+        require(
+            any(
+                edge.get("id") == f"edge:{group_id}:{artifact_id}"
+                and edge.get("kind") == "contains"
+                for edge in edges
+            ),
+            f"Missing ADR-002 report composite contains edge for {artifact_id}",
+        )
     require(payload.get("workflow", {}).get("status") == "complete", "ADR-002 workflow status drifted")
     require(step_ids == expected_step_ids, "Easy-audit step graph drifted")
     require(

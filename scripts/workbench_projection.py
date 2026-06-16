@@ -232,6 +232,70 @@ def derived_workflow_status(steps: list[dict[str, Any]]) -> str:
     return "unknown"
 
 
+def collect_artifact_lineage_ids(
+    root_ids: list[str],
+    artifact_order: list[str],
+    artifacts_by_id: dict[str, dict[str, Any]],
+) -> list[str]:
+    seen: set[str] = set()
+    pending = list(root_ids)
+    while pending:
+        artifact_id = pending.pop(0)
+        if artifact_id in seen or artifact_id not in artifacts_by_id:
+            continue
+        seen.add(artifact_id)
+        for parent_id in artifacts_by_id[artifact_id].get("parent_ids") or []:
+            if parent_id not in seen:
+                pending.append(str(parent_id))
+    return [artifact_id for artifact_id in artifact_order if artifact_id in seen]
+
+
+def audit_report_artifact_groups(
+    workflow_steps: list[dict[str, Any]],
+    artifacts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    artifact_order = [str(artifact.get("id")) for artifact in artifacts if artifact.get("id")]
+    artifacts_by_id = {str(artifact.get("id")): artifact for artifact in artifacts if artifact.get("id")}
+    groups: list[dict[str, Any]] = []
+    for step in workflow_steps:
+        step_id = str(step.get("id") or "")
+        if not step_id:
+            continue
+        step_artifact_ids = [
+            artifact_id
+            for artifact_id in (str(value) for value in (step.get("artifact_ids") or []))
+            if artifact_id in artifacts_by_id
+        ]
+        report_artifact_ids = [
+            artifact_id
+            for artifact_id in step_artifact_ids
+            if artifacts_by_id[artifact_id].get("layer") == 4
+            or artifacts_by_id[artifact_id].get("kind") in {"report", "html"}
+        ]
+        if not report_artifact_ids:
+            continue
+        group_id = f"composite:audit-report:{step_id}"
+        group_artifact_ids = collect_artifact_lineage_ids(report_artifact_ids, artifact_order, artifacts_by_id)
+        if not group_artifact_ids:
+            continue
+        groups.append(
+            {
+                "id": group_id,
+                "kind": "audit_report_bundle",
+                "label": f"{step.get('name') or step_id} bundle",
+                "artifact_ids": group_artifact_ids,
+                "edge_ids": [f"edge:{group_id}:{artifact_id}" for artifact_id in group_artifact_ids],
+                "source": {
+                    "kind": "audit_report_step",
+                    "step_id": step_id,
+                    "artifact_ids": report_artifact_ids,
+                },
+                "slot": "audit.report.bundle",
+            }
+        )
+    return groups
+
+
 def add_slot_facet(slot_index: dict[str, dict[str, Any]], slot: str, label: str, artifact_id: str) -> None:
     slot_index.setdefault(
         slot,
@@ -745,6 +809,18 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
             for parent_id in parent_ids
         )
 
+    artifact_groups = audit_report_artifact_groups(workflow_steps, artifacts)
+    edges.extend(
+        {
+            "id": edge_id,
+            "kind": "contains",
+            "from": group["id"],
+            "to": artifact_id,
+        }
+        for group in artifact_groups
+        for artifact_id, edge_id in zip(group["artifact_ids"], group["edge_ids"])
+    )
+
     return {
         "schema_version": "workbench_projection.v0",
         "source": {
@@ -767,7 +843,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
         },
         "resources": resources,
         "artifacts": artifacts,
-        "artifact_groups": [],
+        "artifact_groups": artifact_groups,
         "edges": edges,
         "facets": {
             "hosts": sorted(host_index.values(), key=lambda item: item["value"]),
@@ -775,7 +851,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
         },
         "extension_points": {
             "workflow_slots": "TODO: move slot definitions to workflow-pack metadata when packs exist.",
-            "artifact_groups": "TODO: derive audit-native workbench subjects from real artifact provenance when needed.",
+            "artifact_groups": "Projection-only report bundles derive from ADR-002 report steps and artifact provenance.",
         },
     }
 
