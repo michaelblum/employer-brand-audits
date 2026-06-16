@@ -16,6 +16,7 @@ assert.equal(typeof navigator.renderArtifactTitleHtml, "function");
 assert.equal(typeof navigator.renderOverviewHtml, "function");
 assert.equal(typeof navigator.artifactProjectionModel, "function");
 assert.equal(typeof navigator.artifactNavigationContext, "function");
+assert.equal(typeof navigator.renderActiveCompositeReadoutHtml, "function");
 
 const artifacts = [
   { id: "hero", name: "Hero <Shot>", path: "hero.png", type: "image" },
@@ -80,7 +81,13 @@ const projectedSlotsByValue = {
   "artifact-summary": { value: "artifact-summary", label: "Artifact summary" },
 };
 const projectedGroupsById = {
-  visible: { id: "visible", label: "Visible bundle", artifact_ids: ["hero", "summary"] },
+  visible: {
+    id: "visible",
+    label: "Visible bundle",
+    kind: "audit_report_bundle",
+    artifact_ids: ["hero", "summary"],
+    source: { kind: "audit_report_step", step_id: "analyze" },
+  },
 };
 const interactionOverlays = [
   {
@@ -211,10 +218,16 @@ const html = navigator.renderSidebarHtml(context);
 assert.match(html, /Easy Audit/);
 assert.match(html, /1 of 4 artifacts/);
 assert.match(html, /data-filter-kind="clear"/);
+assert.match(html, /composite-readout/);
+assert.match(html, /Visible bundle/);
+assert.match(html, /audit report bundle/);
+assert.match(html, /2 artifacts/);
+assert.match(html, /Analyze Brand/);
+assert.match(html, /data-composite-member/);
 assert.match(html, /Hero &lt;Shot&gt;/);
 assert.match(html, /Contrast &lt;needs&gt; work/);
 assert.match(html, /image 10,20 30x40/);
-assert.doesNotMatch(html, /Summary/);
+assert.doesNotMatch(html, /artifact-row[^>]+data-index="1"/);
 
 const unfilteredHtml = navigator.renderSidebarHtml({
   ...context,
@@ -326,6 +339,24 @@ assert.match(titleHtml, /Easy Audit -&gt; Visible bundle/);
 assert.match(titleHtml, /Summary/);
 assert.match(titleHtml, /Artifact summary/);
 assert.match(titleHtml, /\(now\)/);
+
+const compositeReadoutHtml = navigator.renderActiveCompositeReadoutHtml({
+  ...context,
+  activeIndex: 1,
+  filters: { stepId: null, slot: null, compositeId: "visible" },
+});
+assert.match(compositeReadoutHtml, /Visible bundle/);
+assert.match(compositeReadoutHtml, /audit report bundle/);
+assert.match(compositeReadoutHtml, /2 artifacts/);
+assert.match(compositeReadoutHtml, /Analyze Brand/);
+assert.match(compositeReadoutHtml, /data-composite-member="0"/);
+assert.match(compositeReadoutHtml, /data-composite-member="1"/);
+assert.match(compositeReadoutHtml, /Hero &lt;Shot&gt;/);
+assert.match(compositeReadoutHtml, /artifact-summary/);
+assert.equal(navigator.renderActiveCompositeReadoutHtml({
+  ...context,
+  filters: { stepId: null, slot: null, compositeId: null },
+}), "");
 
 const overviewHtml = navigator.renderOverviewHtml({
   ...context,

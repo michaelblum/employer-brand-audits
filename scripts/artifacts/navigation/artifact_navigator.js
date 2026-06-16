@@ -237,6 +237,70 @@
     return `${parts.join(" · ")} · ${item.path}`;
   }
 
+  function compositeKindLabel(group = {}) {
+    return formatSlot(group.kind || "composite");
+  }
+
+  function compositeSourceLabel(context = {}, group = {}) {
+    const source = group.source || {};
+    if (source.kind === "audit_report_step" && source.step_id) {
+      const step = context.projectedStepsById?.[source.step_id] || null;
+      return `Report step: ${step?.name || source.step_id}`;
+    }
+    if (source.kind && source.step_id) return `${formatSlot(source.kind)}: ${source.step_id}`;
+    if (source.kind) return formatSlot(source.kind);
+    return "";
+  }
+
+  function compositeMemberEntries(context = {}, group = activeComposite(context)) {
+    if (!group) return [];
+    return (group.artifact_ids || [])
+      .map((artifactId) => {
+        const index = artifactIndexById(context, artifactId);
+        if (index < 0) return null;
+        return {
+          index,
+          item: (context.artifacts || [])[index],
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function renderCompositeMemberHtml(context, entry) {
+    const item = entry.item || {};
+    return `
+      <div class="composite-member" data-composite-member="${escapeHtml(String(entry.index))}">
+        ${artifactTypeIcon(context, item)}
+        <div class="composite-member-copy">
+          <div class="name">${escapeHtml(item.name)}</div>
+          <div class="small">${escapeHtml(artifactProjectionLine({ ...context, item }))}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderActiveCompositeReadoutHtml(context = {}) {
+    const composite = activeComposite(context);
+    if (!composite) return "";
+    const members = compositeMemberEntries(context, composite);
+    const sourceLabel = compositeSourceLabel(context, composite);
+    const countLabel = `${members.length} ${members.length === 1 ? "artifact" : "artifacts"}`;
+    return `
+      <section class="composite-readout" data-composite-id="${escapeHtml(composite.id)}">
+        <div class="summary-kicker">Composite</div>
+        <div class="composite-readout-title">${escapeHtml(composite.label || composite.id)}</div>
+        <div class="projection-meta">
+          <span>${escapeHtml(compositeKindLabel(composite))}</span>
+          <span>${escapeHtml(countLabel)}</span>
+          ${sourceLabel ? `<span>${escapeHtml(sourceLabel)}</span>` : ""}
+        </div>
+        <div class="composite-members">
+          ${members.map((entry) => renderCompositeMemberHtml(context, entry)).join("")}
+        </div>
+      </section>
+    `;
+  }
+
   function renderArtifactTitleHtml(context = {}) {
     const item = (context.artifacts || [])[context.activeIndex || 0] || {};
     const projected = projectedArtifact(context, item);
@@ -406,6 +470,7 @@
       .map((index) => renderArtifactRow(context, index))
       .join("");
     return renderArtifactNavigationHeader(context)
+      + renderActiveCompositeReadoutHtml(context)
       + (artifactRows || '<div class="empty-filter">No artifacts match the active filters.</div>');
   }
 
@@ -421,6 +486,7 @@
     filterSummaryText,
     formatSlot,
     renderSidebarHtml,
+    renderActiveCompositeReadoutHtml,
     renderArtifactTitleHtml,
     renderOverviewHtml,
     renderArtifactNavigationHeader,
