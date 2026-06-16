@@ -7,8 +7,8 @@ and app shell JavaScript.
 
 ## Ownership
 
-- Owns `app.js`, `artifact_toolbar.js`, `index.html`, `styles.css`, and
-  `icons.svg`.
+- Owns `app.js`, `artifact_toolbar.js`, `artifact_binding.js`, `index.html`,
+  `styles.css`, and `icons.svg`.
 - Does not own reusable primitives in `scripts/artifact_primitives/`, server
   routes, or Playwright smoke snippets.
 
@@ -41,6 +41,8 @@ and app shell JavaScript.
 - Run `node --check scripts/artifact_workbench/app.js` for app changes.
 - Run `node --check scripts/artifact_workbench/artifact_toolbar.js`
   and `node tests/artifact_toolbar_check.js` for toolbar changes.
+- Run `node --check scripts/artifact_workbench/artifact_binding.js`
+  and `node tests/artifact_binding_check.js` for artifact binding changes.
 - Run `node tests/artifact_registry_check.js` when toolbar ownership or
   artifact component behavior changes.
 - Run `./eba dev demo --fixture easy-audit --json` for tangible workbench changes.
