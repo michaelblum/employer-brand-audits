@@ -41,6 +41,17 @@ assert.match(imageHtml, /class="zoom-steps"/);
 assert.match(imageHtml, /id="zoom-in"[\s\S]*id="zoom-out"/);
 assert.doesNotMatch(imageHtml, /markdown-controls/);
 
+const emptyReadoutHtml = toolbar.renderToolbarHtml({
+  kind: "image",
+  readout: [
+    { id: "image-dimensions", label: "Dimensions", value: "" },
+  ],
+  controls: [],
+});
+assert.match(emptyReadoutHtml, /id="artifact-readout"/);
+assert.doesNotMatch(emptyReadoutHtml, /data-readout-id="image-dimensions"/);
+assert.doesNotMatch(emptyReadoutHtml, /title="Dimensions:/);
+
 const markdownHtml = toolbar.renderToolbarHtml({
   kind: "markdown",
   readout: [

@@ -19,6 +19,10 @@ and app shell JavaScript.
 - The workspace and artifact toolbar are shell-owned mount points. The selected
   artifact component owns type-specific stage, readout, controls, and control
   binding inside those mount points through `scripts/artifacts/`.
+- `styles.css` owns the static workbench stylesheet, including shared toolbar
+  and current type-control classes, until a deliberate per-type CSS asset
+  boundary exists. Do not add artifact-type behavior to the shell JavaScript to
+  compensate for CSS staying here.
 - Keep shared slot rendering generic in this folder; do not hardcode image,
   markdown, or future artifact-type toolbar controls in the app shell.
 - Workbench assets must remain compatible with the server asset manifest and

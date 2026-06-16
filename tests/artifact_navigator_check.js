@@ -3,6 +3,7 @@ const path = require("node:path");
 
 global.window = { ArtifactPrimitives: {}, Artifacts: {} };
 
+require(path.join(__dirname, "../scripts/artifacts/core/artifact_common.js"));
 require(path.join(__dirname, "../scripts/artifacts/navigation/artifact_navigator.js"));
 
 const navigator = window.Artifacts.navigation;

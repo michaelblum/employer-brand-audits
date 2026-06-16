@@ -21,9 +21,12 @@
   }
 
   function renderReadout(readout = []) {
+    const items = readout
+      .map((item) => ({ ...item, value: String(item.value || "").trim() }))
+      .filter((item) => item.value);
     return `
       <div class="artifact-readout" id="artifact-readout" data-slot="readout">
-        ${readout.map(renderReadoutItem).join("")}
+        ${items.map(renderReadoutItem).join("")}
       </div>
     `;
   }

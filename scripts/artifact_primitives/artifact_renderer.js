@@ -8,14 +8,6 @@
     return window.Artifacts.registry;
   }
 
-  function artifactRenderKind(artifact = {}, { document } = {}) {
-    return artifactRegistry().artifactRenderKind(artifact, { document });
-  }
-
-  function artifactStagePlan(artifact = {}, options = {}) {
-    return artifactRegistry().artifactStagePlan(artifact, options);
-  }
-
   function documentLoadPlan(artifact = {}, {
     hasCachedContent = false,
     cachedContent = "",
@@ -82,50 +74,6 @@
     };
   }
 
-  function artifactReadoutPlan({
-    artifact = {},
-    imageNaturalWidth = null,
-    imageNaturalHeight = null,
-    markdownContentById = {},
-    documentContentById = {},
-    markdown = ROOT.markdown,
-    document = ROOT.document,
-  } = {}) {
-    return {
-      artifact,
-      imageNaturalWidth,
-      imageNaturalHeight,
-      markdownContent: markdownContentById[artifact.id] || "",
-      documentContent: documentContentById[artifact.id] || "",
-      markdown,
-      document,
-    };
-  }
-
-  function artifactReadout({
-    artifact = {},
-    imageNaturalWidth = null,
-    imageNaturalHeight = null,
-    markdownContent = "",
-    documentContent = "",
-    markdown = ROOT.markdown,
-    document = ROOT.document,
-  } = {}) {
-    return artifactRegistry().artifactReadout({
-      artifact,
-      imageNaturalWidth,
-      imageNaturalHeight,
-      markdownContent,
-      documentContent,
-      markdown,
-      document,
-    });
-  }
-
-  function artifactToolbarPlan(options = {}) {
-    return artifactRegistry().artifactToolbarPlan(artifactReadoutPlan(options));
-  }
-
   function artifactSelectionPlan({ requestedIndex = 0, artifactCount = 0 } = {}) {
     const count = Number(artifactCount || 0);
     if (count <= 0) {
@@ -148,13 +96,7 @@
   }
 
   function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    }[char]));
+    return window.Artifacts.common.escapeHtml(value);
   }
 
   function artifactErrorHtml({ renderKind = "document", error } = {}) {
@@ -233,8 +175,8 @@
     effects = {},
     options = {},
   } = {}) {
-    const plan = stagePlan || artifactStagePlan(artifact, options);
-    const renderKind = plan.renderKind || artifactRenderKind(artifact, options);
+    const plan = stagePlan || artifactRegistry().artifactStagePlan(artifact, options);
+    const renderKind = plan.renderKind || artifactRegistry().artifactRenderKind(artifact, options);
     requiredEffect(effects, "applyStagePlan")(plan);
 
     if (renderKind === "image") {
@@ -261,12 +203,7 @@
   ROOT.artifactRenderer = {
     artifactFallbackPlan,
     artifactErrorHtml,
-    artifactReadoutPlan,
-    artifactReadout,
-    artifactToolbarPlan,
     artifactSelectionPlan,
-    artifactStagePlan,
-    artifactRenderKind,
     documentLoadPlan,
     documentLoadResultPlan,
     documentRenderPayload,

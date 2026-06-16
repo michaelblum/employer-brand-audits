@@ -152,7 +152,7 @@ def read_workbench_html() -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Serve a local artifact viewer for supported workflow artifact manifests."
+        description="Serve a local artifact viewer for supported artifact manifests."
     )
     parser.add_argument(
         "manifest",

@@ -237,8 +237,8 @@
                 }
               };
               if (
-                typeof annotationTargetEffects.isImageArtifact === "function"
-                && annotationTargetEffects.isImageArtifact()
+                typeof annotationTargetEffects.shouldWaitForImageReady === "function"
+                && annotationTargetEffects.shouldWaitForImageReady()
                 && typeof annotationTargetEffects.afterImageReady === "function"
               ) {
                 annotationTargetEffects.afterImageReady(placeMarker);

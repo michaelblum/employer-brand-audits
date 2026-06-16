@@ -35,16 +35,12 @@
       },
     };
     const $ = (id) => document.getElementById(id);
-    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[char]));
+    const escapeHtml = (value) => window.Artifacts.common.escapeHtml(value);
     const artifact = () => app.collection.artifacts[app.index];
     const artifactAnnotations = (id) => interactionOverlay().annotationOverlays(app.interactionOverlays, id);
     const artifactIndexById = (id) => app.collection.artifacts.findIndex((item) => item.id === id);
     const annotationById = (artifactId, annotationId) => artifactAnnotations(artifactId).find((note) => note.id === annotationId);
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
-    const isImageArtifact = (item = artifact()) => item.type === "image";
-    const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
     const artifactRegistry = () => window.Artifacts.registry;
     const artifactRenderer = () => window.ArtifactPrimitives.artifactRenderer;
     const artifactToolbar = () => window.WorkbenchArtifactToolbar;
@@ -114,7 +110,7 @@
                 render,
                 requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
                 afterImageReady,
-                isImageArtifact,
+                shouldWaitForImageReady: supportsImageRegionAnnotations,
                 placeMarkerForAnchor,
                 openExistingEditor,
               },
@@ -323,6 +319,30 @@
       return artifactRegistry().resolveArtifactComponent(item, { document: documentRenderer() });
     }
 
+    function artifactCapabilities(item = artifact()) {
+      return selectedArtifactComponent(item)?.capabilities || {};
+    }
+
+    function artifactSupports(capability, item = artifact()) {
+      return Boolean(artifactCapabilities(item)[capability]);
+    }
+
+    function supportsImageRegionAnnotations(item = artifact()) {
+      return artifactSupports("imageRegionAnnotations", item);
+    }
+
+    function supportsImageZoom(item = artifact()) {
+      return artifactSupports("imageZoom", item);
+    }
+
+    function supportsMarkdownEditing(item = artifact()) {
+      return artifactSupports("markdownEditing", item);
+    }
+
+    function supportsTextRangeAnnotations(item = artifact()) {
+      return artifactSupports("textRangeAnnotations", item);
+    }
+
     function artifactControlState(item = artifact()) {
       return {
         artifactDocumentTheme: app.artifactDocumentTheme,
@@ -375,7 +395,7 @@
     }
 
     function artifactStagePlan(item = artifact()) {
-      return artifactRenderer().artifactStagePlan(item, { document: documentRenderer() });
+      return artifactRegistry().artifactStagePlan(item, { document: documentRenderer() });
     }
 
     function applyArtifactStagePlan(plan) {
@@ -540,7 +560,7 @@
 
     function renderMarkdownHighlights() {
       markdownPreviewBody().querySelectorAll(".line-hit").forEach((node) => node.classList.remove("line-hit"));
-      if (app.markdownMode !== "preview" || !isMarkdownArtifact()) return;
+      if (app.markdownMode !== "preview" || !supportsTextRangeAnnotations()) return;
       for (const note of artifactAnnotations(artifact().id)) {
         const anchor = textRangeAnchor(note);
         if (!anchor) continue;
@@ -563,7 +583,7 @@
 
     async function saveMarkdownArtifact() {
       const item = artifact();
-      if (!isMarkdownArtifact(item)) return;
+      if (!supportsMarkdownEditing(item)) return;
       const content = app.markdownContent[item.id] || "";
       const response = await fetch(`/api/artifact-content/${encodeURIComponent(item.id)}`, {
         method: "PUT",
@@ -583,7 +603,7 @@
 
     function revertMarkdownArtifact() {
       const item = artifact();
-      if (!isMarkdownArtifact(item)) return;
+      if (!supportsMarkdownEditing(item)) return;
       const plan = artifactRenderer().markdownRevertPlan({ savedContent: app.markdownSavedContent[item.id] });
       app.markdownContent[item.id] = plan.content;
       app.markdownDirty[item.id] = plan.dirty;
@@ -900,7 +920,7 @@
 
     function startDrag(event) {
       if (event.button !== 0) return;
-      if (event.target.closest("#image-wrap")) {
+      if (supportsImageRegionAnnotations() && event.target.closest("#image-wrap")) {
         const point = imagePoint(event);
         applyOverlayDraftStart(interactionOverlay().beginOverlayDraft({
           type: "image",
@@ -908,7 +928,7 @@
         }), placeSelection);
         return;
       }
-      if (isMarkdownArtifact() && app.markdownMode === "preview" && event.target.closest("#markdown-preview")) {
+      if (supportsTextRangeAnnotations() && app.markdownMode === "preview" && event.target.closest("#markdown-preview")) {
         const point = window.ArtifactPrimitives.markdownInteractions.pointInWrap({
           event,
           wrapEl: $("markdown-wrap"),
@@ -1135,7 +1155,7 @@
       $("markdown-preview").addEventListener("mousedown", startDrag);
       $("artifact-image").addEventListener("dragstart", (event) => event.preventDefault());
       window.addEventListener("resize", () => {
-        if (!isImageArtifact()) {
+        if (!supportsImageZoom()) {
           updateMooringOverlays();
         } else if (app.zoomMode === "stage-fit") {
           applyZoom(smartFitZoom(), "stage-fit");
@@ -1148,7 +1168,7 @@
       $("markdown-preview").addEventListener("scroll", updateMooringOverlays);
       $("markdown-source").addEventListener("scroll", updateMooringOverlays);
       $("stage").addEventListener("wheel", (event) => {
-        if (!event.ctrlKey || !isImageArtifact()) return;
+        if (!event.ctrlKey || !supportsImageZoom()) return;
         event.preventDefault();
         applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
       }, { passive: false });

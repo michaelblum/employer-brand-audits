@@ -75,6 +75,10 @@
 
   ROOT.types.image = {
     bindControls,
+    capabilities: {
+      imageRegionAnnotations: true,
+      imageZoom: true,
+    },
     kind: "image",
     matches: (artifact = {}) => String(artifact.type || "").toLowerCase() === "image",
     readout,

@@ -24,6 +24,91 @@ assert.equal(registry.resolveArtifactComponent({ type: "image" }).kind, "image")
 assert.equal(registry.resolveArtifactComponent({ type: "markdown" }).kind, "markdown");
 assert.equal(registry.resolveArtifactComponent({ type: "json" }).kind, "document");
 assert.equal(registry.resolveArtifactComponent({ type: "unknown" }).kind, "image");
+assert.deepEqual(registry.resolveArtifactComponent({ type: "image" }).capabilities, {
+  imageRegionAnnotations: true,
+  imageZoom: true,
+});
+assert.deepEqual(registry.resolveArtifactComponent({ type: "markdown" }).capabilities, {
+  markdownEditing: true,
+  textRangeAnnotations: true,
+});
+assert.deepEqual(registry.resolveArtifactComponent({ type: "json" }).capabilities, {});
+
+assert.equal(registry.artifactRenderKind({ type: "markdown" }), "markdown");
+assert.equal(registry.artifactRenderKind({ type: "json" }), "document");
+assert.equal(registry.artifactRenderKind({ type: "text" }), "document");
+assert.equal(registry.artifactRenderKind({ type: "log" }), "document");
+assert.equal(registry.artifactRenderKind({ type: "file" }), "document");
+assert.equal(registry.artifactRenderKind({ type: "image" }), "image");
+assert.equal(registry.artifactRenderKind({ type: "unknown" }), "image");
+assert.equal(registry.artifactRenderKind({}), "image");
+
+assert.equal(
+  registry.artifactRenderKind(
+    { type: "pdf" },
+    { document: { isDocumentArtifact: () => true } },
+  ),
+  "document",
+);
+assert.equal(
+  registry.artifactRenderKind(
+    { type: "markdown" },
+    { document: { isDocumentArtifact: () => true } },
+  ),
+  "markdown",
+);
+
+assert.deepEqual(
+  registry.artifactStagePlan({ type: "markdown" }),
+  {
+    renderKind: "markdown",
+    stage: { markdownStage: true, resetScroll: false },
+    surfaces: {
+      imageWrapHidden: true,
+      markdownWrapHidden: false,
+      selectionHidden: true,
+      markdownMarkerHidden: null,
+      resetHoverMarker: true,
+      commentPopoverHidden: true,
+      markdownPreviewHidden: null,
+      markdownSourceHidden: null,
+    },
+  },
+);
+assert.deepEqual(
+  registry.artifactStagePlan({ type: "json" }),
+  {
+    renderKind: "document",
+    stage: { markdownStage: true, resetScroll: true },
+    surfaces: {
+      imageWrapHidden: true,
+      markdownWrapHidden: false,
+      selectionHidden: true,
+      markdownMarkerHidden: true,
+      resetHoverMarker: true,
+      commentPopoverHidden: true,
+      markdownPreviewHidden: false,
+      markdownSourceHidden: true,
+    },
+  },
+);
+assert.deepEqual(
+  registry.artifactStagePlan({ type: "image" }),
+  {
+    renderKind: "image",
+    stage: { markdownStage: false, resetScroll: true },
+    surfaces: {
+      imageWrapHidden: false,
+      markdownWrapHidden: true,
+      selectionHidden: true,
+      markdownMarkerHidden: true,
+      resetHoverMarker: true,
+      commentPopoverHidden: true,
+      markdownPreviewHidden: null,
+      markdownSourceHidden: null,
+    },
+  },
+);
 
 const imageToolbar = registry.artifactToolbarPlan({
   artifact: { id: "image", type: "image", dimensions: { width: 1000, height: 720 } },
@@ -55,6 +140,39 @@ assert.match(markdownToolbar.controls[0].html, /id="markdown-save"/);
 assert.doesNotMatch(markdownToolbar.controls[0].html, /image-controls/);
 assert.equal(typeof registry.resolveArtifactComponent({ type: "markdown" }).bindControls, "function");
 assert.equal(typeof registry.resolveArtifactComponent({ type: "markdown" }).syncControls, "function");
+
+assert.equal(
+  registry.artifactReadout({
+    artifact: { type: "image", dimensions: { width: 640, height: 480 } },
+    imageNaturalWidth: 800,
+    imageNaturalHeight: 600,
+  }),
+  "640 x 480 px",
+);
+assert.equal(
+  registry.artifactReadout({
+    artifact: { type: "image" },
+    imageNaturalWidth: 800,
+    imageNaturalHeight: 600,
+  }),
+  "800 x 600 px",
+);
+assert.equal(
+  registry.artifactReadout({
+    artifact: { type: "markdown" },
+    markdownContent: "# Heading\n\nBody words",
+    markdown: window.ArtifactPrimitives.markdown,
+  }),
+  "3 lines · 4 words · 1 headings",
+);
+assert.equal(
+  registry.artifactReadout({
+    artifact: { type: "json", size_bytes: 42 },
+    documentContent: "{\"ok\":true}",
+    document: window.ArtifactPrimitives.document,
+  }),
+  "json · 1 lines · 42 bytes",
+);
 
 const documentToolbar = registry.artifactToolbarPlan({
   artifact: { id: "doc", type: "json", size_bytes: 42 },

@@ -134,7 +134,7 @@ assert.equal(typeof controller.selectAnnotation, "function");
           shellCalls.push(["targetAfterImageReady"]);
           callback();
         },
-        isImageArtifact: () => true,
+        shouldWaitForImageReady: () => true,
         placeMarkerForAnchor: (anchor) => shellCalls.push(["placeMarkerForAnchor", anchor]),
         openExistingEditor: (note) => shellCalls.push(["openExistingEditor", note]),
       },

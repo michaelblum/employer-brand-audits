@@ -1,6 +1,7 @@
 (function () {
   const ROOT = window.Artifacts = window.Artifacts || {};
   const PRIMITIVES = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
+  const common = ROOT.common;
 
   const ARTIFACT_TYPE_META = {
     image: { icon: "image", className: "image" },
@@ -12,13 +13,7 @@
   };
 
   function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    }[char]));
+    return common.escapeHtml(value);
   }
 
   function formatSlot(value) {

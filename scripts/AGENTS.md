@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Project command surface, browser/capture helpers, projection code, workflow
-artifact workbench implementation, and checked-in Playwright snippets.
+Project command surface, browser/capture helpers, projection code, artifact
+workbench implementation, and checked-in Playwright snippets.
 
 ## Ownership
 

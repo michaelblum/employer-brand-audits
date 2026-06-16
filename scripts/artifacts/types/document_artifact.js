@@ -51,6 +51,7 @@
   }
 
   ROOT.types.document = {
+    capabilities: {},
     kind: "document",
     matches: isDocumentArtifact,
     readout,

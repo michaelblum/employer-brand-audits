@@ -4,6 +4,7 @@ import json
 import contextlib
 import io
 import argparse
+import re
 import sys
 import tempfile
 import unittest
@@ -143,6 +144,69 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertIn("/assets/artifact-primitives/interaction_overlay.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay_controller.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-toolbar.js", WORKBENCH_ASSETS)
+
+    def test_workbench_index_references_served_assets_and_icons(self) -> None:
+        from scripts.playwright_cli_workbench_server import WORKBENCH_ASSETS, WORKBENCH_INDEX
+
+        html = WORKBENCH_INDEX.read_text(encoding="utf-8")
+        refs = set(re.findall(r"""(?:src|href)=["']([^"']+)["']""", html))
+        asset_refs = {ref.split("#", 1)[0] for ref in refs if ref.startswith("/assets/")}
+        self.assertGreater(len(asset_refs), 0)
+        self.assertEqual(set(), asset_refs - set(WORKBENCH_ASSETS))
+
+        icon_file = WORKBENCH_ASSETS["/assets/artifact-workbench-icons.svg"][0]
+        icon_text = icon_file.read_text(encoding="utf-8")
+        icon_ids = set(re.findall(r"""<symbol[^>]+id=["']([^"']+)["']""", icon_text))
+        index_icon_refs = {
+            ref.split("#", 1)[1]
+            for ref in refs
+            if ref.startswith("/assets/artifact-workbench-icons.svg#")
+        }
+        module_icon_refs = set()
+        for path, _content_type in WORKBENCH_ASSETS.values():
+            if path.suffix != ".js":
+                continue
+            source = path.read_text(encoding="utf-8")
+            module_icon_refs.update(re.findall(r"""renderIconUse\(["']([^"']+)["']\)""", source))
+            module_icon_refs.update(re.findall(r"""/assets/artifact-workbench-icons\.svg#([^"'`<>\s)]+)""", source))
+        module_icon_refs = {ref for ref in module_icon_refs if "${" not in ref}
+        self.assertEqual(set(), (index_icon_refs | module_icon_refs) - icon_ids)
+
+    def test_active_workbench_names_do_not_regress_to_stale_workflow_or_review_terms(self) -> None:
+        forbidden = [
+            "workflow" + "_artifact_workbench",
+            "workflow" + "-artifact-workbench",
+            "workflow" + "-artifact-toolbar",
+            "Workflow" + "ArtifactWorkbench",
+            "workflow" + "-summary",
+            "Workflow" + " summary",
+            "review" + "-workbench",
+            "review" + "_workbench",
+        ]
+        search_roots = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "docs" / "superpowers" / "project-sop.md",
+            REPO_ROOT / "docs" / "AGENTS.md",
+            REPO_ROOT / "scripts",
+            REPO_ROOT / "tests",
+        ]
+        offenders: list[str] = []
+        for root in search_roots:
+            paths = [root] if root.is_file() else [
+                path for path in root.rglob("*")
+                if path.is_file() and ".pyc" not in path.suffixes
+            ]
+            for path in paths:
+                if any(part in {"__pycache__", "vendor"} for part in path.parts):
+                    continue
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue
+                for token in forbidden:
+                    if token in text:
+                        offenders.append(f"{path.relative_to(REPO_ROOT)}: {token}")
+        self.assertEqual([], offenders)
 
     def test_browser_open_plan_uses_named_repo_wrapper_session(self) -> None:
         plan = gate.build_workbench_browser_plan(

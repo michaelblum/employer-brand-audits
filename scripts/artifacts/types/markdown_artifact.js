@@ -90,6 +90,10 @@
 
   ROOT.types.markdown = {
     bindControls,
+    capabilities: {
+      markdownEditing: true,
+      textRangeAnnotations: true,
+    },
     kind: "markdown",
     matches: (artifact = {}) => String(artifact.type || "").toLowerCase() === "markdown",
     readout,

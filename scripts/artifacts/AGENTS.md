@@ -22,6 +22,9 @@ artifact type components, artifact navigation, and the artifact registry.
 - `artifact_registry.js` composes registered artifact types; keep it small.
 - Add type-specific workspace, stage, readout, toolbar, and control-binding
   behavior to the owning type module, not to the app shell or registry.
+- Type modules may emit class hooks for controls, but the static stylesheet
+  currently stays in `scripts/artifact_workbench/styles.css`; do not duplicate
+  per-type CSS here until a CSS asset boundary is deliberately introduced.
 - Keep broad artifact abstractions here. Keep parser/viewer internals in
   `scripts/artifact_primitives/` until deliberately migrated.
 
