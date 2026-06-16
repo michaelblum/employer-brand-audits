@@ -17,9 +17,10 @@ markdown, Mermaid, images, sidebars, and interaction overlays.
 - Primitives should not take over app-level routing, persistence, or generated
   artifact ownership unless that boundary is deliberately moved.
 - Artifact render controller primitives may own render sequencing, fallback,
-  selection, content-cache, and readout planning decisions; the workbench app
-  shell must still execute DOM, fetch, image, and persistence side effects
-  through explicit callbacks or local state application.
+  selection, content-cache, readout planning, and artifact toolbar slot planning
+  decisions; the workbench app shell must still execute DOM, fetch, image,
+  interaction, and persistence side effects through explicit callbacks or local
+  state application.
 - Markdown/document surface planners may own mode normalization, dirty-state,
   save/revert outcome, and fallback display plans; the workbench app shell must
   still execute DOM updates, focus, network writes, rendering, and toasts.

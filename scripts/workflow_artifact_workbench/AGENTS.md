@@ -7,7 +7,8 @@ and app shell JavaScript.
 
 ## Ownership
 
-- Owns `app.js`, `index.html`, `styles.css`, and `icons.svg`.
+- Owns `app.js`, `artifact_toolbar.js`, `index.html`, `styles.css`, and
+  `icons.svg`.
 - Does not own reusable primitives in `scripts/artifact_primitives/`, server
   routes, or Playwright smoke snippets.
 
@@ -15,8 +16,9 @@ and app shell JavaScript.
 
 - Viewer code owns interaction, centering, and zoom bounds.
 - Keep app shell responsibilities distinct from reusable artifact primitives.
-- The managed workbench should reuse an existing `eba-workbench` browser session
-  without resizing or repositioning it.
+- The artifact toolbar is a shell-owned mount point with readout and controls
+  slots; artifact primitives may plan slot content, but this folder owns the
+  mounted control DOM and delegated browser events.
 - Workbench assets must remain compatible with the server asset manifest and
   stale-server detection.
 
@@ -31,6 +33,8 @@ and app shell JavaScript.
 ## Verification
 
 - Run `node --check scripts/workflow_artifact_workbench/app.js` for app changes.
+- Run `node --check scripts/workflow_artifact_workbench/artifact_toolbar.js`
+  and `node tests/artifact_toolbar_check.js` for toolbar changes.
 - Run `./eba dev demo --fixture easy-audit --json` for tangible workbench changes.
 - Run relevant Playwright snippets from `scripts/playwright-snippets/` for live
   smoke proof.

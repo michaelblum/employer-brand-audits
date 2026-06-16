@@ -13,6 +13,7 @@ assert.equal(typeof renderer.artifactRenderKind, "function");
 assert.equal(typeof renderer.artifactStagePlan, "function");
 assert.equal(typeof renderer.artifactReadout, "function");
 assert.equal(typeof renderer.artifactReadoutPlan, "function");
+assert.equal(typeof renderer.artifactToolbarPlan, "function");
 assert.equal(typeof renderer.artifactErrorHtml, "function");
 assert.equal(typeof renderer.artifactSelectionPlan, "function");
 assert.equal(typeof renderer.documentLoadPlan, "function");
@@ -59,8 +60,6 @@ assert.deepEqual(
     surfaces: {
       imageWrapHidden: true,
       markdownWrapHidden: false,
-      imageControlsDisplay: "none",
-      markdownControlsVisible: true,
       selectionHidden: true,
       markdownMarkerHidden: null,
       resetHoverMarker: true,
@@ -78,8 +77,6 @@ assert.deepEqual(
     surfaces: {
       imageWrapHidden: true,
       markdownWrapHidden: false,
-      imageControlsDisplay: "none",
-      markdownControlsVisible: false,
       selectionHidden: true,
       markdownMarkerHidden: true,
       resetHoverMarker: true,
@@ -97,8 +94,6 @@ assert.deepEqual(
     surfaces: {
       imageWrapHidden: false,
       markdownWrapHidden: true,
-      imageControlsDisplay: "flex",
-      markdownControlsVisible: false,
       selectionHidden: true,
       markdownMarkerHidden: true,
       resetHoverMarker: true,
@@ -282,6 +277,52 @@ assert.deepEqual(
     documentContent: "",
     markdown: window.ArtifactPrimitives.markdown,
     document: window.ArtifactPrimitives.document,
+  },
+);
+assert.deepEqual(
+  renderer.artifactToolbarPlan({
+    artifact: { id: "image", type: "image", dimensions: { width: 1000, height: 720 } },
+    imageNaturalWidth: 1000,
+    imageNaturalHeight: 720,
+  }),
+  {
+    kind: "image",
+    readout: [
+      { id: "image-dimensions", label: "Dimensions", value: "1000 x 720 px" },
+    ],
+    controls: [
+      { id: "image-zoom", kind: "image-zoom" },
+    ],
+  },
+);
+assert.deepEqual(
+  renderer.artifactToolbarPlan({
+    artifact: { id: "md", type: "markdown" },
+    markdownContentById: { md: "# Heading\n\nBody words" },
+    markdown: window.ArtifactPrimitives.markdown,
+  }),
+  {
+    kind: "markdown",
+    readout: [
+      { id: "markdown-diagnostics", label: "Markdown", value: "3 lines · 4 words · 1 headings" },
+    ],
+    controls: [
+      { id: "markdown-controls", kind: "markdown-controls" },
+    ],
+  },
+);
+assert.deepEqual(
+  renderer.artifactToolbarPlan({
+    artifact: { id: "doc", type: "json", size_bytes: 42 },
+    documentContentById: { doc: "{\"ok\":true}" },
+    document: window.ArtifactPrimitives.document,
+  }),
+  {
+    kind: "document",
+    readout: [
+      { id: "document-summary", label: "Document", value: "json · 1 lines · 42 bytes" },
+    ],
+    controls: [],
   },
 );
 assert.deepEqual(

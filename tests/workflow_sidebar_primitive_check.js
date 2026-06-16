@@ -47,6 +47,13 @@ const projectedArtifactsById = {
     facets: { artifact_type: "json" },
   },
 };
+const projectedWithoutSourcePage = {
+  id: "raw",
+  produced_by_step_id: "capture",
+  slot: "diagnostics",
+  status: "warning",
+  facets: { artifact_type: "json" },
+};
 const projectedStepsById = {
   capture: { id: "capture", name: "Capture Page", status: "complete" },
   analyze: { id: "analyze", name: "Analyze Brand", status: "complete" },
@@ -187,6 +194,17 @@ const unfilteredHtml = sidebar.renderSidebarHtml({
 assert.match(unfilteredHtml, /Workflow summary/);
 assert.match(unfilteredHtml, /lines 2-4/);
 assert.match(unfilteredHtml, /artifact-row active/);
+
+const noEmptyProjectionPillHtml = sidebar.renderSidebarHtml({
+  ...context,
+  artifacts: [{ id: "raw", name: "Raw", path: "raw.json", type: "json" }],
+  projectedArtifactsById: { raw: projectedWithoutSourcePage },
+  activeIndex: 0,
+  filters: { stepId: null, slot: null, compositeId: null },
+});
+assert.match(noEmptyProjectionPillHtml, /diagnostics/);
+assert.match(noEmptyProjectionPillHtml, /complete/);
+assert.doesNotMatch(noEmptyProjectionPillHtml, /<span><\/span>/);
 
 assert.deepEqual(
   sidebar.workflowFilterPlan({

@@ -360,6 +360,13 @@
     const projected = projectedArtifact(context, item);
     const step = projectedStep(context, item);
     const slot = projectedSlot(context, item);
+    const projectionMeta = projected
+      ? [
+        slot?.label || formatSlot(projected.slot),
+        projected.source_page?.slug,
+        step?.status || projected.status,
+      ].filter(Boolean)
+      : [];
     const annotationHtml = notes.length
       ? notes.map((note) => `
             <div class="annotation" draggable="true" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
@@ -374,11 +381,9 @@
               ${artifactTypeIcon(context, item)}
               <div class="name">${escapeHtml(item.name)}</div>
             </div>
-            ${projected ? `
+            ${projectionMeta.length ? `
               <div class="projection-meta">
-                <span>${escapeHtml(slot?.label || formatSlot(projected.slot))}</span>
-                <span>${escapeHtml(projected.source_page?.slug || "")}</span>
-                <span>${escapeHtml(step?.status || projected.status || "")}</span>
+                ${projectionMeta.map((value) => `<span>${escapeHtml(value)}</span>`).join("")}
               </div>
             ` : ""}
             ${annotationHtml}

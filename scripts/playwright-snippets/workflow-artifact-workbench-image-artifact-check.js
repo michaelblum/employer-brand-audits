@@ -22,7 +22,7 @@ async (page) => {
     const markdownWrap = document.querySelector("#markdown-wrap");
     const imageControls = document.querySelector("#image-controls");
     const markdownControls = document.querySelector("#markdown-controls");
-    const readout = document.querySelector("#dimension-readout")?.textContent || "";
+    const readout = document.querySelector("#artifact-readout")?.textContent || "";
     return image
       && image.complete
       && image.naturalWidth > 0
@@ -32,7 +32,7 @@ async (page) => {
       && markdownWrap.hidden
       && !stage?.classList.contains("markdown-stage")
       && getComputedStyle(imageControls).display === "flex"
-      && !markdownControls?.classList.contains("visible")
+      && markdownControls === null
       && /\d+ x \d+ px/.test(readout);
   }, null, { timeout: 5000 });
 
@@ -49,10 +49,10 @@ async (page) => {
       documentHidden: document.querySelector("#markdown-wrap")?.hidden,
       stageHasMarkdownClass: stage?.classList.contains("markdown-stage"),
       imageControlsDisplay: getComputedStyle(imageControls).display,
-      markdownControlsVisible: markdownControls?.classList.contains("visible"),
+      markdownControlsMounted: Boolean(markdownControls),
       imageNaturalWidth: image?.naturalWidth,
       imageNaturalHeight: image?.naturalHeight,
-      readout: document.querySelector("#dimension-readout")?.textContent?.trim(),
+      readout: document.querySelector("#artifact-readout")?.textContent?.trim(),
     };
   });
 }

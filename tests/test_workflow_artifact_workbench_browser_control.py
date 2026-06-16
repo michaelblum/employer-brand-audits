@@ -62,6 +62,10 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "tests/artifact_toolbar_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "tests/interaction_overlay_primitive_check.js"],
             validation_commands(),
         )
@@ -79,6 +83,10 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn(
             ["node", "--check", "scripts/artifact_primitives/image_viewer.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/workflow_artifact_workbench/artifact_toolbar.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -105,6 +113,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertIn("/assets/artifact-primitives/workflow_sidebar.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay_controller.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/workflow-artifact-toolbar.js", WORKBENCH_ASSETS)
 
     def test_browser_open_plan_uses_named_repo_wrapper_session(self) -> None:
         plan = gate.build_workbench_browser_plan(

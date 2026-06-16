@@ -37,6 +37,7 @@ WORKBENCH_CONTEXT_PATH = "/api/workbench-context"
 WORKBENCH_ASSETS = {
     "/assets/workflow-artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
     "/assets/workflow-artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
+    "/assets/workflow-artifact-toolbar.js": (WORKBENCH_DIR / "artifact_toolbar.js", "text/javascript"),
     "/assets/workflow-artifact-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
     "/assets/artifact-primitives/mermaid_renderer.js": (
         ARTIFACT_PRIMITIVES_DIR / "mermaid_renderer.js",

@@ -84,7 +84,7 @@
     }
     .toolbar.secondary {
       height: 56px;
-      justify-content: space-between;
+      justify-content: stretch;
     }
     .group {
       display: flex;
@@ -254,17 +254,42 @@
       overflow: hidden;
       place-items: stretch center;
     }
+    .artifact-toolbar {
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .artifact-readout {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .artifact-readout-item {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .artifact-controls {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
     .image-controls {
       width: 100%;
       display: flex;
       align-items: center;
       justify-content: flex-end;
       gap: 10px;
-    }
-    .dimension-readout {
-      color: var(--muted);
-      font-size: 12px;
-      white-space: nowrap;
     }
     .zoom-control {
       display: grid;

@@ -31,8 +31,6 @@
         surfaces: {
           imageWrapHidden: true,
           markdownWrapHidden: false,
-          imageControlsDisplay: "none",
-          markdownControlsVisible: true,
           ...shared,
           markdownMarkerHidden: null,
           markdownPreviewHidden: null,
@@ -47,8 +45,6 @@
         surfaces: {
           imageWrapHidden: true,
           markdownWrapHidden: false,
-          imageControlsDisplay: "none",
-          markdownControlsVisible: false,
           ...shared,
           markdownMarkerHidden: true,
           markdownPreviewHidden: false,
@@ -62,8 +58,6 @@
       surfaces: {
         imageWrapHidden: false,
         markdownWrapHidden: true,
-        imageControlsDisplay: "flex",
-        markdownControlsVisible: false,
         ...shared,
         markdownMarkerHidden: true,
         markdownPreviewHidden: null,
@@ -179,6 +173,32 @@
     const width = dimensions.width || imageNaturalWidth || "unknown";
     const height = dimensions.height || imageNaturalHeight || "unknown";
     return `${width} x ${height} px`;
+  }
+
+  function artifactToolbarPlan(options = {}) {
+    const readoutPlan = artifactReadoutPlan(options);
+    const kind = artifactRenderKind(readoutPlan.artifact, { document: readoutPlan.document });
+    const readoutValue = artifactReadout(readoutPlan);
+    const readoutId = kind === "image"
+      ? "image-dimensions"
+      : kind === "markdown"
+        ? "markdown-diagnostics"
+        : "document-summary";
+    const readoutLabel = kind === "image"
+      ? "Dimensions"
+      : kind === "markdown"
+        ? "Markdown"
+        : "Document";
+    const controls = kind === "image"
+      ? [{ id: "image-zoom", kind: "image-zoom" }]
+      : kind === "markdown"
+        ? [{ id: "markdown-controls", kind: "markdown-controls" }]
+        : [];
+    return {
+      kind,
+      readout: readoutValue ? [{ id: readoutId, label: readoutLabel, value: readoutValue }] : [],
+      controls,
+    };
   }
 
   function artifactSelectionPlan({ requestedIndex = 0, artifactCount = 0 } = {}) {
@@ -318,6 +338,7 @@
     artifactErrorHtml,
     artifactReadoutPlan,
     artifactReadout,
+    artifactToolbarPlan,
     artifactSelectionPlan,
     artifactStagePlan,
     artifactRenderKind,
