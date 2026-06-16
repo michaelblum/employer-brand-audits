@@ -147,7 +147,7 @@
 
   function artifactIconHref(context, name) {
     if (typeof context.iconHref === "function") return context.iconHref(name);
-    return `/assets/workflow-artifact-workbench-icons.svg#icon-artifact-${name}`;
+    return `/assets/artifact-workbench-icons.svg#icon-artifact-${name}`;
   }
 
   function artifactTypeIcon(context, item) {
@@ -323,7 +323,7 @@
     const composites = filterComposites(context);
     const visible = visibleArtifactIndexes(context).length;
     return `
-        <div class="workflow-summary">
+        <div class="artifact-summary">
           <div class="summary-kicker">${escapeHtml(workflow.status || "unknown")}</div>
           <div class="summary-title">${escapeHtml(workflow.name || "Workflow")}</div>
           <div class="summary-grid">

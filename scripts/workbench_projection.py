@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Project source manifests into a normalized workflow artifact workbench payload."""
+"""Project source manifests into a normalized artifact workbench payload."""
 
 from __future__ import annotations
 

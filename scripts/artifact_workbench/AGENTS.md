@@ -1,8 +1,8 @@
-# Workflow Artifact Workbench DOX
+# Artifact Workbench DOX
 
 ## Purpose
 
-Browser-loaded workflow artifact workbench app assets: HTML, CSS, icon sprite,
+Browser-loaded artifact workbench app assets: HTML, CSS, icon sprite,
 and app shell JavaScript.
 
 ## Ownership
@@ -34,8 +34,8 @@ and app shell JavaScript.
 
 ## Verification
 
-- Run `node --check scripts/workflow_artifact_workbench/app.js` for app changes.
-- Run `node --check scripts/workflow_artifact_workbench/artifact_toolbar.js`
+- Run `node --check scripts/artifact_workbench/app.js` for app changes.
+- Run `node --check scripts/artifact_workbench/artifact_toolbar.js`
   and `node tests/artifact_toolbar_check.js` for toolbar changes.
 - Run `node tests/artifact_registry_check.js` when toolbar ownership or
   artifact component behavior changes.

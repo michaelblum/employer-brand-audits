@@ -8,7 +8,7 @@ images, documents, and interaction overlays.
 ## Ownership
 
 - Owns files under `scripts/artifact_primitives/`.
-- Does not own the workbench app shell in `scripts/workflow_artifact_workbench/`
+- Does not own the workbench app shell in `scripts/artifact_workbench/`
   artifact-level modules in `scripts/artifacts/`, or Playwright smoke snippets.
 
 ## Local Contracts

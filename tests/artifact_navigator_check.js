@@ -33,7 +33,7 @@ const projectedArtifactsById = {
   summary: {
     id: "summary",
     produced_by_step_id: "analyze",
-    slot: "workflow-summary",
+    slot: "artifact-summary",
     source_page: { slug: "home" },
     status: "ok",
     facets: { artifact_type: "markdown" },
@@ -67,7 +67,7 @@ const projectedStepsById = {
 };
 const projectedSlotsByValue = {
   "landing-page": { value: "landing-page", label: "Landing page" },
-  "workflow-summary": { value: "workflow-summary", label: "Workflow summary" },
+  "artifact-summary": { value: "artifact-summary", label: "Artifact summary" },
 };
 const projectedGroupsById = {
   visible: { id: "visible", label: "Visible bundle", artifact_ids: ["hero", "summary"] },
@@ -111,7 +111,7 @@ const projectionPayload = {
   facets: {
     slots: [
       projectedSlotsByValue["landing-page"],
-      projectedSlotsByValue["workflow-summary"],
+      projectedSlotsByValue["artifact-summary"],
       { label: "Ignored missing value" },
     ],
   },
@@ -124,7 +124,7 @@ const projectionPayload = {
 const projectionModel = navigator.artifactProjectionModel(projectionPayload);
 assert.deepEqual(Object.keys(projectionModel.projectedArtifactsById).sort(), ["hero", "summary"]);
 assert.deepEqual(Object.keys(projectionModel.projectedStepsById).sort(), ["analyze", "capture"]);
-assert.deepEqual(Object.keys(projectionModel.projectedSlotsByValue).sort(), ["landing-page", "workflow-summary"]);
+assert.deepEqual(Object.keys(projectionModel.projectedSlotsByValue).sort(), ["artifact-summary", "landing-page"]);
 assert.deepEqual(Object.keys(projectionModel.projectedGroupsById).sort(), ["visible"]);
 assert.equal(projectionModel.workbenchProjection, projectionPayload);
 assert.deepEqual(navigator.artifactProjectionModel(null), {
@@ -198,7 +198,7 @@ const unfilteredHtml = navigator.renderSidebarHtml({
   activeIndex: 1,
   filters: { stepId: null, slot: null, compositeId: null },
 });
-assert.match(unfilteredHtml, /Workflow summary/);
+assert.match(unfilteredHtml, /Artifact summary/);
 assert.match(unfilteredHtml, /lines 2-4/);
 assert.match(unfilteredHtml, /artifact-row active/);
 
@@ -299,7 +299,7 @@ const titleHtml = navigator.renderArtifactTitleHtml({
 });
 assert.match(titleHtml, /Easy Audit -&gt; Visible bundle/);
 assert.match(titleHtml, /Summary/);
-assert.match(titleHtml, /Workflow summary/);
+assert.match(titleHtml, /Artifact summary/);
 assert.match(titleHtml, /\(now\)/);
 
 const overviewHtml = navigator.renderOverviewHtml({

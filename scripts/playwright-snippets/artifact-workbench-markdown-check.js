@@ -28,7 +28,7 @@ async (page) => {
       && document.querySelector("#markdown-controls") !== null
       && /lines/.test(readout)
       && /Acme Robotics Employer Brand Audit/.test(preview?.textContent || "")
-      && document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href")?.includes("workflow-artifact-workbench-icons.svg");
+      && document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href")?.includes("artifact-workbench-icons.svg");
   }, null, { timeout: 3000 });
 
   return await page.evaluate(() => {

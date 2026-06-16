@@ -16,12 +16,12 @@ sys.path.insert(0, str(REPO_ROOT))
 from scripts import playwright_cli_workbench_gate as gate
 
 
-class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
+class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
     def test_browser_control_tests_are_part_of_validation_surface(self) -> None:
         from scripts.eba_cli import validation_commands
 
         self.assertIn(
-            [sys.executable, "tests/test_workflow_artifact_workbench_browser_control.py"],
+            [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
             validation_commands(),
         )
 
@@ -110,7 +110,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/workflow_artifact_workbench/artifact_toolbar.js"],
+            ["node", "--check", "scripts/artifact_workbench/artifact_toolbar.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -142,7 +142,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertIn("/assets/artifacts/navigation/artifact_navigator.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay_controller.js", WORKBENCH_ASSETS)
-        self.assertIn("/assets/workflow-artifact-toolbar.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-toolbar.js", WORKBENCH_ASSETS)
 
     def test_browser_open_plan_uses_named_repo_wrapper_session(self) -> None:
         plan = gate.build_workbench_browser_plan(
@@ -809,7 +809,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertTrue(asset_health["healthy"])
         self.assertEqual(asset_health["status"], "ok")
         self.assertIn("http://127.0.0.1:8765/api/workbench-assets", requested_urls)
-        self.assertIn("http://127.0.0.1:8765/assets/workflow-artifact-workbench.js", requested_urls)
+        self.assertIn("http://127.0.0.1:8765/assets/artifact-workbench.js", requested_urls)
 
     def test_workbench_asset_health_rejects_missing_manifest_endpoint(self) -> None:
         def fake_urlopen(request: object, timeout: float = 1.0) -> object:

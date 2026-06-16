@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serve a local workflow artifact workbench with session interaction overlays."""
+"""Serve a local artifact workbench with session interaction overlays."""
 
 import argparse
 import hashlib
@@ -28,7 +28,7 @@ DEFAULT_MANIFEST = (
     REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
 )
 
-WORKBENCH_DIR = Path(__file__).resolve().parent / "workflow_artifact_workbench"
+WORKBENCH_DIR = Path(__file__).resolve().parent / "artifact_workbench"
 ARTIFACT_PRIMITIVES_DIR = Path(__file__).resolve().parent / "artifact_primitives"
 ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
 WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
@@ -36,10 +36,10 @@ WORKBENCH_ASSET_MANIFEST_PATH = "/api/workbench-assets"
 WORKBENCH_STATE_PATH = "/api/workbench-state"
 WORKBENCH_CONTEXT_PATH = "/api/workbench-context"
 WORKBENCH_ASSETS = {
-    "/assets/workflow-artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
-    "/assets/workflow-artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
-    "/assets/workflow-artifact-toolbar.js": (WORKBENCH_DIR / "artifact_toolbar.js", "text/javascript"),
-    "/assets/workflow-artifact-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
+    "/assets/artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
+    "/assets/artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
+    "/assets/artifact-toolbar.js": (WORKBENCH_DIR / "artifact_toolbar.js", "text/javascript"),
+    "/assets/artifact-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
     "/assets/artifact-primitives/mermaid_renderer.js": (
         ARTIFACT_PRIMITIVES_DIR / "mermaid_renderer.js",
         "text/javascript",

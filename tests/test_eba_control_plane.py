@@ -125,7 +125,7 @@ def test_easy_audit_fixture_route_generates_manifest(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     payload = parse_json(result)
-    assert payload["workflow_artifact_workbench"]["manifest"] == "artifacts/easy-audit/latest/manifest.json"
+    assert payload["artifact_workbench"]["manifest"] == "artifacts/easy-audit/latest/manifest.json"
     assert (repo / "artifacts" / "easy-audit" / "latest" / "manifest.json").exists()
 
 
@@ -355,7 +355,7 @@ def test_instruction_bearing_detects_child_agents_files() -> None:
     assert instruction_bearing("AGENTS.md")
     assert instruction_bearing("scripts/AGENTS.md")
     assert instruction_bearing("mcp-server/imaging/AGENTS.md")
-    assert not instruction_bearing("scripts/workflow_artifact_workbench/app.js")
+    assert not instruction_bearing("scripts/artifact_workbench/app.js")
 
 
 def test_signature_footer_appends_and_skips_consecutive_duplicate() -> None:

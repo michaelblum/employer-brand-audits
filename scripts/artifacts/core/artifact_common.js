@@ -1,6 +1,6 @@
 (function () {
   const ROOT = window.Artifacts = window.Artifacts || {};
-  const ICON_SPRITE = "/assets/workflow-artifact-workbench-icons.svg";
+  const ICON_SPRITE = "/assets/artifact-workbench-icons.svg";
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (char) => ({

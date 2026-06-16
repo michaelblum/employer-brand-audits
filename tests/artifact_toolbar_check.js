@@ -3,7 +3,7 @@ const path = require("node:path");
 
 global.window = {};
 
-require(path.join(__dirname, "../scripts/workflow_artifact_workbench/artifact_toolbar.js"));
+require(path.join(__dirname, "../scripts/artifact_workbench/artifact_toolbar.js"));
 
 const toolbar = window.WorkbenchArtifactToolbar;
 
@@ -11,7 +11,7 @@ assert.equal(typeof toolbar.renderToolbarHtml, "function");
 assert.equal(typeof toolbar.mountToolbar, "function");
 
 const source = require("node:fs").readFileSync(
-  path.join(__dirname, "../scripts/workflow_artifact_workbench/artifact_toolbar.js"),
+  path.join(__dirname, "../scripts/artifact_workbench/artifact_toolbar.js"),
   "utf-8",
 );
 assert.doesNotMatch(source, /renderImageZoomControls|renderMarkdownControls/);

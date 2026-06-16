@@ -1,13 +1,16 @@
 (function () {
   const ROOT = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
 
-  const THEME_STORAGE_KEY = "eba.workflowArtifactWorkbench.artifactDocumentTheme";
-  const LEGACY_THEME_STORAGE_KEY = "eba.workflowArtifactWorkbench.markdownTheme";
+  const THEME_STORAGE_KEY = "eba.artifactWorkbench.artifactDocumentTheme";
+  const LEGACY_THEME_STORAGE_KEYS = [
+    "eba.workflowArtifactWorkbench.artifactDocumentTheme",
+    "eba.workflowArtifactWorkbench.markdownTheme",
+  ];
 
   function storedTheme() {
     try {
       const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
-        || window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY);
+        || LEGACY_THEME_STORAGE_KEYS.map((key) => window.localStorage.getItem(key)).find(Boolean);
       return stored === "light" ? "light" : "dark";
     } catch (_error) {
       return "dark";
@@ -28,7 +31,7 @@
     document.body.dataset.artifactDocumentTheme = nextTheme;
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-      window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
+      LEGACY_THEME_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
     } catch (_error) {
       // Local storage can be unavailable in constrained browser profiles.
     }

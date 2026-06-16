@@ -59,7 +59,7 @@
       if (!epoch) return "";
       return new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     };
-    const iconHref = (name) => `/assets/workflow-artifact-workbench-icons.svg#icon-artifact-${name}`;
+    const iconHref = (name) => `/assets/artifact-workbench-icons.svg#icon-artifact-${name}`;
     const interactionOverlay = () => window.ArtifactPrimitives.interactionOverlay;
     let overlayControllerInstance = null;
     function overlayController() {
