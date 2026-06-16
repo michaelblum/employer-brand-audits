@@ -62,6 +62,9 @@ def open_browser(args: argparse.Namespace) -> int:
     if args.persistent:
         cmd.append("--persistent")
         cmd.extend(["--profile", str(args.profile)])
+    config = getattr(args, "config", None)
+    if config:
+        cmd.extend(["--config", str(config)])
     if args.url:
         cmd.append(args.url)
     return _run(cmd)
@@ -116,6 +119,13 @@ def tab_list(args: argparse.Namespace) -> int:
 
 def tab_select(args: argparse.Namespace) -> int:
     return _run(_session_prefix(args.session) + ["tab-select", str(args.index)])
+
+
+def tab_close(args: argparse.Namespace) -> int:
+    cmd = _session_prefix(args.session) + ["tab-close"]
+    if args.index is not None:
+        cmd.append(str(args.index))
+    return _run(cmd)
 
 
 def click(args: argparse.Namespace) -> int:
@@ -190,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--headed", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--persistent", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
+    p.add_argument("--config", type=Path)
     p.set_defaults(func=open_browser)
 
     p = with_session(sub.add_parser("goto", help="Navigate current session"))
@@ -216,6 +227,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = with_session(sub.add_parser("tab-select", help="Select browser tab by index"))
     p.add_argument("index", type=int)
     p.set_defaults(func=tab_select)
+
+    p = with_session(sub.add_parser("tab-close", help="Close browser tab by index"))
+    p.add_argument("index", nargs="?", type=int)
+    p.set_defaults(func=tab_close)
 
     p = with_session(sub.add_parser("click", help="Click an element target"))
     p.add_argument("target")

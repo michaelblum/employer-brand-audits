@@ -31,8 +31,8 @@ workbench implementation, and checked-in Playwright snippets.
   repo-private provenance signature surface; keep GitHub prose and commit
   message signing automatic where possible.
 - Route routine workbench browser behavior through named management helpers in
-  `playwright_cli_workbench_gate.py`; keep focus, maximize, and viewport sync as
-  separate operations so tests can guard their side effects.
+  `playwright_cli_workbench_gate.py`; keep tab cleanup, focus, maximize, and
+  viewport sync as separate operations so tests can guard their side effects.
 - Keep fixture generation separate from generated runtime output.
 
 ## Verification

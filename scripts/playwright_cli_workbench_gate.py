@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import re
 import shlex
 import signal
 import shutil
@@ -12,6 +13,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -45,6 +47,10 @@ BROWSER_STATE_NAME = "workbench-browser-state.json"
 BROWSER_LOG_NAME = "workbench-browser.log"
 DEFAULT_BROWSER_SESSION = "eba-workbench"
 DEFAULT_BROWSER_PROFILE = REPO_ROOT / "chrome-profile" / "workbench"
+DEFAULT_BROWSER_CONFIG = REPO_ROOT / "scripts" / "playwright_cli_workbench_config.json"
+TAB_LIST_LINE_RE = re.compile(
+    r"^- (?P<index>\d+): (?P<current>\(current\) )?\[(?P<title>.*)\]\((?P<url>.*)\)$"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -140,6 +146,53 @@ def write_json_atomic(path: Path, value: Any) -> None:
     tmp_path.replace(path)
 
 
+def update_json_file(path: Path, mutator: Any) -> bool:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return False
+    before = json.dumps(value, sort_keys=True)
+    mutator(value)
+    after = json.dumps(value, sort_keys=True)
+    if before == after:
+        return False
+    write_json_atomic(path, value)
+    return True
+
+
+def sanitize_workbench_browser_profile(profile: Path) -> list[str]:
+    """Clear Chrome restore/first-run state before relaunching the workbench."""
+    changed: list[str] = []
+
+    def clean_preferences(value: dict[str, Any]) -> None:
+        profile_state = value.setdefault("profile", {})
+        if isinstance(profile_state, dict):
+            profile_state["exit_type"] = "Normal"
+            profile_state["exited_cleanly"] = True
+        sessions = value.setdefault("sessions", {})
+        if isinstance(sessions, dict):
+            sessions["event_log"] = []
+        browser = value.setdefault("browser", {})
+        if isinstance(browser, dict):
+            browser["has_seen_welcome_page"] = True
+
+    def clean_local_state(value: dict[str, Any]) -> None:
+        metrics = value.setdefault("user_experience_metrics", {})
+        if not isinstance(metrics, dict):
+            return
+        stability = metrics.setdefault("stability", {})
+        if isinstance(stability, dict):
+            stability["exited_cleanly"] = True
+
+    preference_path = profile / "Default" / "Preferences"
+    local_state_path = profile / "Local State"
+    if update_json_file(preference_path, clean_preferences):
+        changed.append(relative_path(preference_path))
+    if update_json_file(local_state_path, clean_local_state):
+        changed.append(relative_path(local_state_path))
+    return changed
+
+
 def read_pid(path: Path) -> int | None:
     try:
         return int(path.read_text(encoding="utf-8").strip())
@@ -168,6 +221,70 @@ def process_command(pid: int) -> str:
     if completed.returncode != 0:
         return ""
     return completed.stdout.strip()
+
+
+def process_table() -> list[tuple[int, str]]:
+    completed = subprocess.run(
+        ["ps", "-axo", "pid=,command="],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return []
+    rows: list[tuple[int, str]] = []
+    for line in completed.stdout.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) != 2:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        rows.append((pid, parts[1]))
+    return rows
+
+
+def workbench_profile_owner_pids(profile: Path, session: str) -> list[int]:
+    absolute_profile = str(profile.resolve())
+    relative_profile = relative_path(profile)
+    current_pid = os.getpid()
+    pids: list[int] = []
+    for pid, command in process_table():
+        if pid == current_pid:
+            continue
+        owns_profile = (
+            f"--user-data-dir={absolute_profile}" in command
+            or f"--profile={absolute_profile}" in command
+            or f"--profile={relative_profile}" in command
+            or f"--profile {absolute_profile}" in command
+            or f"--profile {relative_profile}" in command
+        )
+        owns_daemon_session = "cliDaemon.js" in command and session in command
+        if owns_profile or (owns_daemon_session and relative_profile in command):
+            pids.append(pid)
+    return sorted(set(pids))
+
+
+def stop_stale_workbench_profile_owners(pids: list[int], log_handle: Any) -> None:
+    if not pids:
+        return
+    log_handle.write("\n## stop stale workbench profile owners " + ", ".join(map(str, pids)) + "\n")
+    log_handle.flush()
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        for pid in pids:
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                log_handle.write(f"permission denied killing stale profile owner {pid}\n")
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not any(pid_alive(pid) for pid in pids):
+                return
+            time.sleep(0.1)
 
 
 def workbench_server_manifest_from_command(command: str) -> Path | None:
@@ -440,9 +557,11 @@ def build_workbench_browser_plan(
     browser: str,
     viewport_size: str | None,
     profile: Path = DEFAULT_BROWSER_PROFILE,
+    config: Path = DEFAULT_BROWSER_CONFIG,
 ) -> dict[str, Any]:
     wrapper = relative_path(BROWSER_WRAPPER)
     profile_path = relative_path(profile)
+    config_path = relative_path(config)
     common = ["--session", session]
     initial_resize_command = None
     if viewport_size:
@@ -458,6 +577,7 @@ def build_workbench_browser_plan(
     return {
         "session": session,
         "profile": profile_path,
+        "config": config_path,
         "browser": browser,
         "url": url,
         "viewport_size": viewport_size,
@@ -472,6 +592,8 @@ def build_workbench_browser_plan(
             "--persistent",
             "--profile",
             profile_path,
+            "--config",
+            config_path,
         ],
         "window_maximize_command": [
             sys.executable,
@@ -499,6 +621,132 @@ def build_workbench_browser_plan(
             *common,
         ],
         "initial_resize_command": initial_resize_command,
+    }
+
+
+def tab_list_command(session: str) -> list[str]:
+    return [
+        sys.executable,
+        relative_path(BROWSER_WRAPPER),
+        "tab-list",
+        "--session",
+        session,
+    ]
+
+
+def tab_select_command(session: str, index: int) -> list[str]:
+    return [
+        sys.executable,
+        relative_path(BROWSER_WRAPPER),
+        "tab-select",
+        str(index),
+        "--session",
+        session,
+    ]
+
+
+def tab_close_command(session: str, index: int) -> list[str]:
+    return [
+        sys.executable,
+        relative_path(BROWSER_WRAPPER),
+        "tab-close",
+        str(index),
+        "--session",
+        session,
+    ]
+
+
+def parse_browser_tabs(stdout: str) -> list[dict[str, Any]]:
+    tabs: list[dict[str, Any]] = []
+    for line in stdout.splitlines():
+        match = TAB_LIST_LINE_RE.match(line.strip())
+        if not match:
+            continue
+        tabs.append(
+            {
+                "index": int(match.group("index")),
+                "current": bool(match.group("current")),
+                "title": match.group("title"),
+                "url": match.group("url"),
+            }
+        )
+    return tabs
+
+
+def normalized_tab_url(url: str) -> tuple[str, str, str, str] | None:
+    parsed = urllib.parse.urlsplit(url)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    path = parsed.path.rstrip("/") or "/"
+    return (parsed.scheme, parsed.netloc, path, parsed.query)
+
+
+def tab_matches_url(tab_url: str, target_url: str) -> bool:
+    return normalized_tab_url(tab_url) == normalized_tab_url(target_url)
+
+
+def is_blank_tab(tab_url: str) -> bool:
+    return tab_url in {"about:blank", "chrome://newtab/"}
+
+
+def clean_workbench_tabs(url: str, *, session: str, log_handle: Any) -> dict[str, Any]:
+    list_result = run_browser_command(tab_list_command(session), log_handle)
+    if list_result.returncode != 0:
+        return {
+            "status": "tab_list_failed",
+            "closed_indexes": [],
+            "kept_index": None,
+            "tab_count": None,
+        }
+    tabs = parse_browser_tabs(list_result.stdout)
+    matching_tabs = [tab for tab in tabs if tab_matches_url(str(tab.get("url") or ""), url)]
+    if not matching_tabs:
+        return {
+            "status": "no_matching_workbench_tab",
+            "closed_indexes": [],
+            "kept_index": None,
+            "tab_count": len(tabs),
+        }
+    keep_tab = next((tab for tab in matching_tabs if tab.get("current")), matching_tabs[0])
+    keep_index = int(keep_tab["index"])
+    if not keep_tab.get("current"):
+        select_result = run_browser_command(tab_select_command(session, keep_index), log_handle)
+        if select_result.returncode != 0:
+            return {
+                "status": "tab_select_failed",
+                "closed_indexes": [],
+                "kept_index": keep_index,
+                "tab_count": len(tabs),
+            }
+    close_indexes = sorted(
+        [
+            int(tab["index"])
+            for tab in tabs
+            if int(tab["index"]) != keep_index
+            and (
+                is_blank_tab(str(tab.get("url") or ""))
+                or tab_matches_url(str(tab.get("url") or ""), url)
+            )
+        ],
+        reverse=True,
+    )
+    closed_indexes = []
+    for index in close_indexes:
+        close_result = run_browser_command(tab_close_command(session, index), log_handle)
+        if close_result.returncode != 0:
+            return {
+                "status": "tab_close_failed",
+                "closed_indexes": closed_indexes,
+                "failed_index": index,
+                "kept_index": keep_index,
+                "tab_count": len(tabs),
+            }
+        closed_indexes.append(index)
+    return {
+        "status": "cleaned",
+        "closed_indexes": closed_indexes,
+        "kept_index": keep_index,
+        "tab_count": len(tabs),
     }
 
 
@@ -835,6 +1083,9 @@ def open_with_playwright(
     viewport_metrics = None
     display_signature = None
     viewport_target = None
+    profile_sanitized: list[str] = []
+    stale_profile_owners: list[int] = []
+    tab_cleanup_result = None
     with paths["browser_log"].open("a", encoding="utf-8") as log_handle:
         effective_before = before
         if replace_existing_session:
@@ -845,10 +1096,27 @@ def open_with_playwright(
             action = "close"
             action_result = close_result
         else:
+            if not effective_before.get("alive"):
+                stale_profile_owners = workbench_profile_owner_pids(profile, session)
+                stop_stale_workbench_profile_owners(stale_profile_owners, log_handle)
+                profile_sanitized = sanitize_workbench_browser_profile(profile)
+                if profile_sanitized:
+                    log_handle.write(
+                        "\n## sanitized browser profile "
+                        + ", ".join(profile_sanitized)
+                        + "\n"
+                    )
+                    log_handle.flush()
             action, action_result = open_or_reuse_managed_workbench(
                 plan,
                 effective_before,
                 log_handle,
+            )
+        if action_result.returncode == 0:
+            tab_cleanup_result = clean_workbench_tabs(
+                plan["url"],
+                session=session,
+                log_handle=log_handle,
             )
         resize_result = apply_explicit_initial_viewport_resize(plan, action, log_handle)
         if viewport_size is None and action_result.returncode == 0:
@@ -912,6 +1180,9 @@ def open_with_playwright(
         "viewport_metrics": viewport_metrics,
         "display_signature": display_signature,
         "viewport_target": viewport_target,
+        "profile_sanitized": profile_sanitized,
+        "stale_profile_owners_stopped": stale_profile_owners,
+        "tab_cleanup": tab_cleanup_result,
         "status": after,
         "log": str(paths["browser_log"].relative_to(REPO_ROOT)),
         "channel": channel,

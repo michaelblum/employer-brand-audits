@@ -245,8 +245,18 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 "--persistent",
                 "--profile",
                 "chrome-profile/workbench",
+                "--config",
+                "scripts/playwright_cli_workbench_config.json",
             ],
         )
+        config_path = REPO_ROOT / plan["config"]
+        self.assertTrue(config_path.exists())
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        args = config["browser"]["launchOptions"]["args"]
+        self.assertIn("--disable-infobars", args)
+        self.assertIn("--no-first-run", args)
+        self.assertIn("--no-default-browser-check", args)
+        self.assertIn("--test-type", args)
         self.assertEqual(
             plan["window_maximize_command"],
             [
@@ -279,6 +289,195 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIsNone(plan["initial_resize_command"])
 
+    def test_browser_wrapper_exposes_tab_close_for_workbench_cleanup(self) -> None:
+        parser = __import__("scripts.playwright_cli_browser", fromlist=["build_parser"]).build_parser()
+
+        args = parser.parse_args(["tab-close", "3", "--session", "eba-workbench"])
+
+        self.assertEqual(args.command, "tab-close")
+        self.assertEqual(args.index, 3)
+        self.assertEqual(args.session, "eba-workbench")
+
+    def test_workbench_tab_cleanup_closes_blank_and_duplicate_workbench_tabs(self) -> None:
+        commands: list[list[str]] = []
+
+        class Result:
+            returncode = 0
+            stderr = ""
+
+            def __init__(self, stdout: str = "") -> None:
+                self.stdout = stdout
+
+        tab_list = """+ wrapper echo
+### Result
+- 0: (current) [EBA Workbench](http://127.0.0.1:8765/)
+- 1: [](about:blank)
+- 2: [EBA Workbench](http://127.0.0.1:8765/)
+- 3: [](about:blank)
+- 4: [Docs](http://127.0.0.1:8765/docs)
+- 5: [](about:blank)
+- 6: [EBA Workbench](http://127.0.0.1:8765/)
+"""
+
+        def fake_run(command: list[str], log_handle: object) -> Result:
+            commands.append(command)
+            if command[2] == "tab-list":
+                return Result(tab_list)
+            return Result()
+
+        original_run = gate.run_browser_command
+        try:
+            gate.run_browser_command = fake_run  # type: ignore[assignment]
+            with io.StringIO() as log:
+                result = gate.clean_workbench_tabs(
+                    "http://127.0.0.1:8765/",
+                    session="eba-workbench",
+                    log_handle=log,
+                )
+        finally:
+            gate.run_browser_command = original_run  # type: ignore[assignment]
+
+        self.assertEqual(result["kept_index"], 0)
+        self.assertEqual(result["closed_indexes"], [6, 5, 3, 2, 1])
+        self.assertEqual(
+            commands,
+            [
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "tab-list",
+                    "--session",
+                    "eba-workbench",
+                ],
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "tab-close",
+                    "6",
+                    "--session",
+                    "eba-workbench",
+                ],
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "tab-close",
+                    "5",
+                    "--session",
+                    "eba-workbench",
+                ],
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "tab-close",
+                    "3",
+                    "--session",
+                    "eba-workbench",
+                ],
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "tab-close",
+                    "2",
+                    "--session",
+                    "eba-workbench",
+                ],
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "tab-close",
+                    "1",
+                    "--session",
+                    "eba-workbench",
+                ],
+            ],
+        )
+
+    def test_workbench_tab_cleanup_selects_existing_workbench_tab_before_closing_current_blank(
+        self,
+    ) -> None:
+        commands: list[list[str]] = []
+
+        class Result:
+            returncode = 0
+            stderr = ""
+
+            def __init__(self, stdout: str = "") -> None:
+                self.stdout = stdout
+
+        tab_list = """### Result
+- 0: (current) [](about:blank)
+- 1: [EBA Workbench](http://127.0.0.1:8765/)
+- 2: [](about:blank)
+"""
+
+        def fake_run(command: list[str], log_handle: object) -> Result:
+            commands.append(command)
+            if command[2] == "tab-list":
+                return Result(tab_list)
+            return Result()
+
+        original_run = gate.run_browser_command
+        try:
+            gate.run_browser_command = fake_run  # type: ignore[assignment]
+            with io.StringIO() as log:
+                result = gate.clean_workbench_tabs(
+                    "http://127.0.0.1:8765/",
+                    session="eba-workbench",
+                    log_handle=log,
+                )
+        finally:
+            gate.run_browser_command = original_run  # type: ignore[assignment]
+
+        self.assertEqual(result["kept_index"], 1)
+        self.assertEqual(result["closed_indexes"], [2, 0])
+        self.assertEqual(commands[1], [
+            sys.executable,
+            "scripts/playwright_cli_browser.py",
+            "tab-select",
+            "1",
+            "--session",
+            "eba-workbench",
+        ])
+
+    def test_workbench_profile_cleanup_suppresses_chrome_restore_prompt_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            profile = Path(tmp) / "profile"
+            default = profile / "Default"
+            default.mkdir(parents=True)
+            preferences = {
+                "profile": {
+                    "exit_type": "Crashed",
+                    "exited_cleanly": False,
+                },
+                "sessions": {
+                    "event_log": [
+                        {"type": 0, "crashed": True},
+                        {"type": 5, "restore_browser": True},
+                    ],
+                    "session_data_status": 1,
+                },
+            }
+            local_state = {
+                "user_experience_metrics": {
+                    "stability": {
+                        "exited_cleanly": False,
+                    }
+                }
+            }
+            (default / "Preferences").write_text(json.dumps(preferences), encoding="utf-8")
+            (profile / "Local State").write_text(json.dumps(local_state), encoding="utf-8")
+
+            gate.sanitize_workbench_browser_profile(profile)
+
+            cleaned_preferences = json.loads((default / "Preferences").read_text(encoding="utf-8"))
+            cleaned_local_state = json.loads((profile / "Local State").read_text(encoding="utf-8"))
+            self.assertEqual("Normal", cleaned_preferences["profile"]["exit_type"])
+            self.assertTrue(cleaned_preferences["profile"]["exited_cleanly"])
+            self.assertEqual([], cleaned_preferences["sessions"]["event_log"])
+            self.assertTrue(
+                cleaned_local_state["user_experience_metrics"]["stability"]["exited_cleanly"]
+            )
+
     def test_browser_open_plan_keeps_explicit_viewport_resize_available(self) -> None:
         plan = gate.build_workbench_browser_plan(
             "http://127.0.0.1:8765/",
@@ -299,7 +498,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 "eba-workbench",
             ],
         )
-        self.assertNotIn("--config", plan["open_command"])
+        self.assertIn("--config", plan["open_command"])
 
     def test_reused_browser_session_syncs_when_display_state_changes(self) -> None:
         commands: list[list[str]] = []
@@ -408,6 +607,13 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                     "scripts/playwright_cli_browser.py",
                     "goto",
                     "http://127.0.0.1:8765/",
+                    "--session",
+                    "eba-workbench",
+                ],
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "tab-list",
                     "--session",
                     "eba-workbench",
                 ],
@@ -538,6 +744,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             commands,
             [
                 [sys.executable, "scripts/playwright_cli_browser.py", "goto", "http://127.0.0.1:8765/", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "tab-list", "--session", "eba-workbench"],
                 [sys.executable, "scripts/playwright_cli_browser.py", "window-focus", "--session", "eba-workbench"],
             ],
         )
@@ -645,10 +852,138 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             commands,
             [
                 [sys.executable, "scripts/playwright_cli_browser.py", "close", "--session", "eba-workbench"],
-                [sys.executable, "scripts/playwright_cli_browser.py", "open", "http://127.0.0.1:8765/", "--session", "eba-workbench", "--browser", "chrome", "--persistent", "--profile", "chrome-profile/workbench"],
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "open",
+                    "http://127.0.0.1:8765/",
+                    "--session",
+                    "eba-workbench",
+                    "--browser",
+                    "chrome",
+                    "--persistent",
+                    "--profile",
+                    "chrome-profile/workbench",
+                    "--config",
+                    "scripts/playwright_cli_workbench_config.json",
+                ],
+                [sys.executable, "scripts/playwright_cli_browser.py", "tab-list", "--session", "eba-workbench"],
                 [sys.executable, "scripts/playwright_cli_browser.py", "window-maximize", "--session", "eba-workbench"],
                 [sys.executable, "scripts/playwright_cli_browser.py", "resize", "1484", "949", "--session", "eba-workbench"],
                 [sys.executable, "scripts/playwright_cli_browser.py", "window-focus", "--session", "eba-workbench"],
+            ],
+        )
+
+    def test_unregistered_workbench_profile_owner_is_stopped_before_open(self) -> None:
+        commands: list[list[str]] = []
+        stopped: list[list[int]] = []
+        statuses = [
+            {
+                "session": "eba-workbench",
+                "alive": False,
+                "status": "not_found",
+            },
+            {
+                "session": "eba-workbench",
+                "alive": True,
+                "status": "open",
+            },
+        ]
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def fake_status(session: str) -> dict[str, object]:
+            self.assertEqual(session, "eba-workbench")
+            return statuses.pop(0)
+
+        def fake_run(command: list[str], log_handle: object) -> Result:
+            commands.append(command)
+            return Result()
+
+        def fake_metrics(session: str) -> dict[str, object]:
+            self.assertEqual(session, "eba-workbench")
+            return {
+                "innerWidth": 1484,
+                "innerHeight": 916,
+                "outerWidth": 1512,
+                "outerHeight": 949,
+                "screenX": 0,
+                "screenY": 33,
+                "devicePixelRatio": 1,
+                "screenAvailLeft": 0,
+                "screenAvailTop": 0,
+                "screenAvailWidth": 1484,
+                "screenAvailHeight": 949,
+            }
+
+        def fake_owner_pids(profile: Path, session: str) -> list[int]:
+            self.assertEqual(profile, REPO_ROOT / "chrome-profile" / "workbench")
+            self.assertEqual(session, "eba-workbench")
+            return [88160, 88162]
+
+        def fake_stop(pids: list[int], log_handle: object) -> None:
+            stopped.append(pids)
+
+        original_require_cli = gate.require_session_aware_cli
+        original_require_wrapper = gate.require_workbench_browser_wrapper
+        original_status = gate.browser_session_status
+        original_run = gate.run_browser_command
+        original_metrics = gate.browser_page_metrics
+        original_owner_pids = gate.workbench_profile_owner_pids
+        original_stop = gate.stop_stale_workbench_profile_owners
+        try:
+            gate.require_session_aware_cli = lambda: "playwright-cli"  # type: ignore[assignment]
+            gate.require_workbench_browser_wrapper = lambda: gate.BROWSER_WRAPPER  # type: ignore[assignment]
+            gate.browser_session_status = fake_status  # type: ignore[assignment]
+            gate.run_browser_command = fake_run  # type: ignore[assignment]
+            gate.browser_page_metrics = fake_metrics  # type: ignore[assignment]
+            gate.workbench_profile_owner_pids = fake_owner_pids  # type: ignore[assignment]
+            gate.stop_stale_workbench_profile_owners = fake_stop  # type: ignore[assignment]
+
+            with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+                root = Path(tmp)
+                result = gate.open_with_playwright(
+                    "http://127.0.0.1:8765/",
+                    {
+                        "artifact_root": root,
+                        "browser_log": root / "workbench-browser.log",
+                        "browser_state": root / "workbench-browser-state.json",
+                    },
+                    "chrome",
+                    None,
+                    session="eba-workbench",
+                    profile=REPO_ROOT / "chrome-profile" / "workbench",
+                )
+        finally:
+            gate.require_session_aware_cli = original_require_cli  # type: ignore[assignment]
+            gate.require_workbench_browser_wrapper = original_require_wrapper  # type: ignore[assignment]
+            gate.browser_session_status = original_status  # type: ignore[assignment]
+            gate.run_browser_command = original_run  # type: ignore[assignment]
+            gate.browser_page_metrics = original_metrics  # type: ignore[assignment]
+            gate.workbench_profile_owner_pids = original_owner_pids  # type: ignore[assignment]
+            gate.stop_stale_workbench_profile_owners = original_stop  # type: ignore[assignment]
+
+        self.assertFalse(result["reused"])
+        self.assertEqual([[88160, 88162]], stopped)
+        self.assertEqual(
+            commands[0],
+            [
+                sys.executable,
+                "scripts/playwright_cli_browser.py",
+                "open",
+                "http://127.0.0.1:8765/",
+                "--session",
+                "eba-workbench",
+                "--browser",
+                "chrome",
+                "--persistent",
+                "--profile",
+                "chrome-profile/workbench",
+                "--config",
+                "scripts/playwright_cli_workbench_config.json",
             ],
         )
 
@@ -758,6 +1093,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             commands,
             [
                 [sys.executable, "scripts/playwright_cli_browser.py", "goto", "http://127.0.0.1:8765/", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "tab-list", "--session", "eba-workbench"],
             ],
         )
         self.assertEqual(
