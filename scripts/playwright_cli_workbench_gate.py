@@ -485,6 +485,12 @@ def build_workbench_browser_plan(
             "window-focus",
             *common,
         ],
+        "close_command": [
+            sys.executable,
+            wrapper,
+            "close",
+            *common,
+        ],
         "goto_command": [
             sys.executable,
             wrapper,
@@ -714,6 +720,17 @@ def open_or_reuse_managed_workbench(
     return action, run_browser_command(action_command, log_handle)
 
 
+def close_reused_managed_workbench(
+    plan: dict[str, Any],
+    before: dict[str, Any],
+    log_handle: Any,
+) -> subprocess.CompletedProcess[str] | None:
+    if not before.get("alive"):
+        return None
+    log_handle.write(f"\n## close {int(time.time())} {plan['session']}\n")
+    return run_browser_command(plan["close_command"], log_handle)
+
+
 def apply_explicit_initial_viewport_resize(
     plan: dict[str, Any],
     action: str,
@@ -795,6 +812,7 @@ def open_with_playwright(
     *,
     session: str = DEFAULT_BROWSER_SESSION,
     profile: Path = DEFAULT_BROWSER_PROFILE,
+    replace_existing_session: bool = False,
 ) -> dict[str, Any]:
     require_session_aware_cli()
     require_workbench_browser_wrapper()
@@ -813,11 +831,25 @@ def open_with_playwright(
     window_maximize_result = None
     window_focus_result = None
     viewport_sync_result = None
+    close_result = None
     viewport_metrics = None
     display_signature = None
     viewport_target = None
     with paths["browser_log"].open("a", encoding="utf-8") as log_handle:
-        action, action_result = open_or_reuse_managed_workbench(plan, before, log_handle)
+        effective_before = before
+        if replace_existing_session:
+            close_result = close_reused_managed_workbench(plan, before, log_handle)
+            if close_result is not None and close_result.returncode == 0:
+                effective_before = {**before, "alive": False}
+        if close_result is not None and close_result.returncode != 0:
+            action = "close"
+            action_result = close_result
+        else:
+            action, action_result = open_or_reuse_managed_workbench(
+                plan,
+                effective_before,
+                log_handle,
+            )
         resize_result = apply_explicit_initial_viewport_resize(plan, action, log_handle)
         if viewport_size is None and action_result.returncode == 0:
             sync_state = sync_managed_workbench_viewport_to_display(
@@ -871,7 +903,8 @@ def open_with_playwright(
         "opened": True,
         "method": "repo-playwright-cli",
         "session": session,
-        "reused": bool(before.get("alive")),
+        "reused": bool(before.get("alive")) and close_result is None,
+        "replaced": close_result is not None,
         "resized": resize_result is not None,
         "window_maximized": window_maximize_result is not None,
         "window_focused": window_focus_result is not None,
@@ -1030,6 +1063,7 @@ def command_start(args: argparse.Namespace) -> int:
                     args.viewport_size,
                     session=args.browser_session,
                     profile=args.profile,
+                    replace_existing_session=True,
                 )
             if not command_quiet(args):
                 print(f"Artifact viewer already running: {url}")
@@ -1123,6 +1157,7 @@ def command_start(args: argparse.Namespace) -> int:
             args.viewport_size,
             session=args.browser_session,
             profile=args.profile,
+            replace_existing_session=True,
         )
     if not command_quiet(args):
         print(f"Artifact viewer running: {url}")
@@ -1218,6 +1253,7 @@ def command_open(args: argparse.Namespace) -> int:
         args.viewport_size,
         session=args.browser_session,
         profile=args.profile,
+        replace_existing_session=True,
     )
     print(f"Opened {url} in session={browser['session']} method={browser['method']}")
     return 0
@@ -1336,6 +1372,7 @@ def command_surface(args: argparse.Namespace) -> int:
             args.viewport_size,
             session=args.browser_session,
             profile=args.profile,
+            replace_existing_session=True,
         )
 
     if args.json:

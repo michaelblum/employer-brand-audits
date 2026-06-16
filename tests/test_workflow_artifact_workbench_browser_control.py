@@ -152,6 +152,16 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 "eba-workbench",
             ],
         )
+        self.assertEqual(
+            plan["close_command"],
+            [
+                sys.executable,
+                "scripts/playwright_cli_browser.py",
+                "close",
+                "--session",
+                "eba-workbench",
+            ],
+        )
         self.assertIsNone(plan["initial_resize_command"])
 
     def test_browser_open_plan_keeps_explicit_viewport_resize_available(self) -> None:
@@ -413,6 +423,116 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             commands,
             [
                 [sys.executable, "scripts/playwright_cli_browser.py", "goto", "http://127.0.0.1:8765/", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "window-focus", "--session", "eba-workbench"],
+            ],
+        )
+
+    def test_explicit_summon_replaces_reused_browser_session(self) -> None:
+        commands: list[list[str]] = []
+        statuses = [
+            {
+                "session": "eba-workbench",
+                "alive": True,
+                "status": "open",
+            },
+            {
+                "session": "eba-workbench",
+                "alive": True,
+                "status": "open",
+            },
+        ]
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def fake_status(session: str) -> dict[str, object]:
+            self.assertEqual(session, "eba-workbench")
+            return statuses.pop(0)
+
+        def fake_run(command: list[str], log_handle: object) -> Result:
+            commands.append(command)
+            return Result()
+
+        def fake_metrics(session: str) -> dict[str, object]:
+            self.assertEqual(session, "eba-workbench")
+            return {
+                "innerWidth": 1484,
+                "innerHeight": 916,
+                "outerWidth": 1512,
+                "outerHeight": 949,
+                "screenX": 0,
+                "screenY": 33,
+                "devicePixelRatio": 1,
+                "screenAvailLeft": 0,
+                "screenAvailTop": 0,
+                "screenAvailWidth": 1484,
+                "screenAvailHeight": 949,
+            }
+
+        original_require_cli = gate.require_session_aware_cli
+        original_require_wrapper = gate.require_workbench_browser_wrapper
+        original_status = gate.browser_session_status
+        original_run = gate.run_browser_command
+        original_metrics = gate.browser_page_metrics
+        try:
+            gate.require_session_aware_cli = lambda: "playwright-cli"  # type: ignore[assignment]
+            gate.require_workbench_browser_wrapper = lambda: gate.BROWSER_WRAPPER  # type: ignore[assignment]
+            gate.browser_session_status = fake_status  # type: ignore[assignment]
+            gate.run_browser_command = fake_run  # type: ignore[assignment]
+            gate.browser_page_metrics = fake_metrics  # type: ignore[assignment]
+
+            with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+                root = Path(tmp)
+                (root / "workbench-browser-state.json").write_text(
+                    json.dumps(
+                        {
+                            "display_signature": {
+                                "screenX": 0,
+                                "screenY": 33,
+                                "screenAvailLeft": 0,
+                                "screenAvailTop": 0,
+                                "screenAvailWidth": 1484,
+                                "screenAvailHeight": 949,
+                                "devicePixelRatio": 1,
+                            }
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                result = gate.open_with_playwright(
+                    "http://127.0.0.1:8765/",
+                    {
+                        "artifact_root": root,
+                        "browser_log": root / "workbench-browser.log",
+                        "browser_state": root / "workbench-browser-state.json",
+                    },
+                    "chrome",
+                    None,
+                    session="eba-workbench",
+                    profile=REPO_ROOT / "chrome-profile" / "workbench",
+                    replace_existing_session=True,
+                )
+        finally:
+            gate.require_session_aware_cli = original_require_cli  # type: ignore[assignment]
+            gate.require_workbench_browser_wrapper = original_require_wrapper  # type: ignore[assignment]
+            gate.browser_session_status = original_status  # type: ignore[assignment]
+            gate.run_browser_command = original_run  # type: ignore[assignment]
+            gate.browser_page_metrics = original_metrics  # type: ignore[assignment]
+
+        self.assertFalse(result["reused"])
+        self.assertTrue(result["replaced"])
+        self.assertTrue(result["window_maximized"])
+        self.assertTrue(result["window_focused"])
+        self.assertTrue(result["viewport_synced"])
+        self.assertEqual(
+            commands,
+            [
+                [sys.executable, "scripts/playwright_cli_browser.py", "close", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "open", "http://127.0.0.1:8765/", "--session", "eba-workbench", "--browser", "chrome", "--persistent", "--profile", "chrome-profile/workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "window-maximize", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "resize", "1484", "949", "--session", "eba-workbench"],
                 [sys.executable, "scripts/playwright_cli_browser.py", "window-focus", "--session", "eba-workbench"],
             ],
         )
@@ -935,10 +1055,6 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertIn("workbench", ALLOWED_DEV_COMMANDS)
         self.assertNotIn("workbench", ACTIVE_TURN_REQUIRED_COMMANDS)
         self.assertEqual(
-            workbench_browser_command("refresh"),
-            [sys.executable, "scripts/playwright_cli_browser.py", "reload", "--session", "eba-workbench"],
-        )
-        self.assertEqual(
             workbench_browser_command("tabs"),
             [sys.executable, "scripts/playwright_cli_browser.py", "tab-list", "--session", "eba-workbench"],
         )
@@ -976,6 +1092,62 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertEqual(
             commands,
             [[sys.executable, "scripts/playwright_cli_browser.py", "tab-list", "--session", "eba-workbench"]],
+        )
+
+    def test_eba_workbench_refresh_summons_active_workbench_surface(self) -> None:
+        from argparse import Namespace
+        from scripts import eba_cli
+
+        commands: list[list[str]] = []
+
+        class Result:
+            returncode = 0
+            stdout = '{"active_manifest":"artifacts/easy-audit/latest/manifest.json"}\n'
+            stderr = ""
+
+        class SurfaceResult:
+            returncode = 0
+            stdout = '{"status":"surface"}\n'
+            stderr = ""
+
+        def fake_run(command: list[str], *, capture: bool = True, check: bool = False) -> object:
+            commands.append(command)
+            return Result() if len(commands) == 1 else SurfaceResult()
+
+        original_run = eba_cli.run
+        try:
+            eba_cli.run = fake_run  # type: ignore[assignment]
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = eba_cli.command_workbench(
+                    Namespace(workbench_action="refresh", session="eba-workbench", json=True)
+                )
+        finally:
+            eba_cli.run = original_run  # type: ignore[assignment]
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            commands,
+            [
+                [
+                    sys.executable,
+                    str(eba_cli.WORKBENCH_GATE),
+                    "status",
+                    str(eba_cli.DEFAULT_MANIFEST),
+                    "--port",
+                    "8765",
+                ],
+                [
+                    sys.executable,
+                    str(eba_cli.WORKBENCH_GATE),
+                    "surface",
+                    str(eba_cli.REPO_ROOT / "artifacts/easy-audit/latest/manifest.json"),
+                    "--port",
+                    "8765",
+                    "--timeout",
+                    "10",
+                    "--json",
+                ],
+            ],
         )
 
     def test_eba_workbench_context_dispatches_gate_state(self) -> None:

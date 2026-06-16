@@ -42,6 +42,7 @@ THREAD_WORKBENCH = (
     Path.home() / ".codex" / "skills" / "codex-thread-workbench" / "scripts" / "thread_workbench.py"
 )
 WORKBENCH_BROWSER_SESSION = "eba-workbench"
+WORKBENCH_PORT = "8765"
 COMPILE_TARGETS = [
     "scripts/easy_audit_fixture.py",
     "scripts/easy_audit_site_capture_smoke.py",
@@ -375,7 +376,6 @@ def workbench_browser_command(
     session: str = WORKBENCH_BROWSER_SESSION,
 ) -> list[str]:
     commands = {
-        "refresh": ["reload"],
         "tabs": ["tab-list"],
         "tab-select": ["tab-select", *values],
         "snapshot": ["snapshot", *values],
@@ -396,6 +396,48 @@ def workbench_browser_command(
     ]
 
 
+def current_workbench_manifest() -> Path:
+    command = [
+        sys.executable,
+        str(WORKBENCH_GATE),
+        "status",
+        str(DEFAULT_MANIFEST),
+        "--port",
+        WORKBENCH_PORT,
+    ]
+    completed = run(command, capture=True)
+    if completed.returncode == 0:
+        try:
+            payload = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            payload = {}
+        manifest = payload.get("active_manifest") or payload.get("manifest")
+        if isinstance(manifest, str) and manifest:
+            return REPO_ROOT / manifest
+    return DEFAULT_MANIFEST
+
+
+def command_workbench_refresh(args: argparse.Namespace) -> int:
+    command = [
+        sys.executable,
+        str(WORKBENCH_GATE),
+        "surface",
+        str(current_workbench_manifest()),
+        "--port",
+        WORKBENCH_PORT,
+        "--timeout",
+        "10",
+    ]
+    if getattr(args, "json", False):
+        command.append("--json")
+    completed = run(command, capture=True)
+    if completed.stdout:
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, file=sys.stderr, end="")
+    return completed.returncode
+
+
 def command_workbench(args: argparse.Namespace) -> int:
     action = args.workbench_action
     if action in {"click", "fill", "press"}:
@@ -409,6 +451,8 @@ def command_workbench(args: argparse.Namespace) -> int:
                 json=args.json,
             )
         )
+    if action == "refresh":
+        return command_workbench_refresh(args)
     if action in {"context", "glance"}:
         manifest = resolve_manifest(args)
         command = [
@@ -417,7 +461,7 @@ def command_workbench(args: argparse.Namespace) -> int:
             "state" if action == "context" else "glance",
             str(manifest),
             "--port",
-            "8765",
+            WORKBENCH_PORT,
         ]
         completed = run(command, capture=True)
         if completed.stdout:
@@ -635,7 +679,8 @@ def build_parser() -> argparse.ArgumentParser:
     glance.add_argument("--json", action="store_true")
     glance.set_defaults(func=command_workbench)
 
-    refresh = workbench_subparsers.add_parser("refresh", help="Reload the current workbench page")
+    refresh = workbench_subparsers.add_parser("refresh", help="Replace and raise the current workbench browser")
+    refresh.add_argument("--json", action="store_true")
     refresh.set_defaults(func=command_workbench, values=[])
 
     tabs = workbench_subparsers.add_parser("tabs", help="List workbench browser tabs")

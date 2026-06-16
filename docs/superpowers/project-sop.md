@@ -115,12 +115,15 @@ For routine browser control, use the managed workbench control surface:
 ./eba dev workbench tab-select <index>
 ```
 
-Agents should reuse the managed `eba-workbench` session when available. Reuse
-must not resize or reposition the browser window. View-only demo and workbench
-requests should bring the existing managed window to the front on its current
-display. Workbench `click`, `fill`, and `press` still require an active turn.
-For "what is on the workbench now?" questions, use `glance` first; it returns
-the compact live context, current artifact, and annotation summary.
+Passive workbench reads should reuse the managed `eba-workbench` session without
+resizing or repositioning the browser window. Explicit human-visible summon
+paths such as `demo`, `reset`, and `refresh` may close and relaunch the managed
+browser session so a fresh headed Chrome window is raised without accumulating
+duplicates; those paths may then maximize and sync the fixed viewport to the
+current display's visible bounds. Workbench `click`, `fill`, and `press` still
+require an active turn. For "what is on the workbench now?" questions, use
+`glance` first; it returns the compact live context, current artifact, and
+annotation summary.
 
 ## Command Surface
 
