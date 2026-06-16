@@ -40,7 +40,9 @@ workbench implementation, and checked-in Playwright snippets.
 - Run focused syntax checks for changed Python or JavaScript files.
 - Run `./eba dev validate` before checkpointing substantive script changes.
 - Run `./eba dev demo` and relevant Playwright smoke snippets when workbench
-  behavior is tangible.
+  behavior is tangible. For browser-loaded workbench asset or app-shell changes,
+  prefer `./eba dev workbench live-smoke --fixture easy-audit --json` as the
+  bounded live runtime check.
 
 ## Child DOX Index
 
