@@ -4,11 +4,13 @@ const path = require("node:path");
 global.window = { ArtifactPrimitives: {} };
 
 require(path.join(__dirname, "../scripts/artifact_primitives/document_renderer.js"));
+require(path.join(__dirname, "../scripts/artifact_primitives/html_renderer.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_renderer.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_interactions.js"));
 require(path.join(__dirname, "../scripts/artifacts/core/artifact_common.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/image_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/markdown_artifact.js"));
+require(path.join(__dirname, "../scripts/artifacts/types/html_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/document_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/artifact_registry.js"));
 
@@ -22,6 +24,7 @@ assert.equal(typeof registry.artifactToolbarPlan, "function");
 
 assert.equal(registry.resolveArtifactComponent({ type: "image" }).kind, "image");
 assert.equal(registry.resolveArtifactComponent({ type: "markdown" }).kind, "markdown");
+assert.equal(registry.resolveArtifactComponent({ type: "html" }).kind, "html");
 assert.equal(registry.resolveArtifactComponent({ type: "json" }).kind, "document");
 assert.equal(registry.resolveArtifactComponent({ type: "unknown" }).kind, "image");
 assert.deepEqual(registry.resolveArtifactComponent({ type: "image" }).capabilities, {
@@ -32,9 +35,13 @@ assert.deepEqual(registry.resolveArtifactComponent({ type: "markdown" }).capabil
   markdownEditing: true,
   textRangeAnnotations: true,
 });
+assert.deepEqual(registry.resolveArtifactComponent({ type: "html" }).capabilities, {
+  htmlElementAnnotations: true,
+});
 assert.deepEqual(registry.resolveArtifactComponent({ type: "json" }).capabilities, {});
 
 assert.equal(registry.artifactRenderKind({ type: "markdown" }), "markdown");
+assert.equal(registry.artifactRenderKind({ type: "html" }), "html");
 assert.equal(registry.artifactRenderKind({ type: "json" }), "document");
 assert.equal(registry.artifactRenderKind({ type: "text" }), "document");
 assert.equal(registry.artifactRenderKind({ type: "log" }), "document");
@@ -79,6 +86,23 @@ assert.deepEqual(
   registry.artifactStagePlan({ type: "json" }),
   {
     renderKind: "document",
+    stage: { markdownStage: true, resetScroll: true },
+    surfaces: {
+      imageWrapHidden: true,
+      markdownWrapHidden: false,
+      selectionHidden: true,
+      markdownMarkerHidden: true,
+      resetHoverMarker: true,
+      commentPopoverHidden: true,
+      markdownPreviewHidden: false,
+      markdownSourceHidden: true,
+    },
+  },
+);
+assert.deepEqual(
+  registry.artifactStagePlan({ type: "html" }),
+  {
+    renderKind: "html",
     stage: { markdownStage: true, resetScroll: true },
     surfaces: {
       imageWrapHidden: true,
@@ -141,6 +165,18 @@ assert.doesNotMatch(markdownToolbar.controls[0].html, /image-controls/);
 assert.equal(typeof registry.resolveArtifactComponent({ type: "markdown" }).bindControls, "function");
 assert.equal(typeof registry.resolveArtifactComponent({ type: "markdown" }).syncControls, "function");
 
+const htmlToolbar = registry.artifactToolbarPlan({
+  artifact: { id: "html", type: "html", size_bytes: 2048 },
+  documentContentById: { html: "<main><section><a>Apply now</a></section></main>" },
+  html: window.ArtifactPrimitives.html,
+});
+assert.equal(htmlToolbar.kind, "html");
+assert.deepEqual(htmlToolbar.readout, [
+  { id: "html-summary", label: "HTML", value: "html · 3 elements · 2048 bytes" },
+]);
+assert.deepEqual(htmlToolbar.controls, []);
+assert.equal(typeof registry.resolveArtifactComponent({ type: "html" }).bindInspector, "function");
+
 assert.equal(
   registry.artifactReadout({
     artifact: { type: "image", dimensions: { width: 640, height: 480 } },
@@ -164,6 +200,14 @@ assert.equal(
     markdown: window.ArtifactPrimitives.markdown,
   }),
   "3 lines · 4 words · 1 headings",
+);
+assert.equal(
+  registry.artifactReadout({
+    artifact: { type: "html", size_bytes: 2048 },
+    documentContent: "<main><section><a>Apply now</a></section></main>",
+    html: window.ArtifactPrimitives.html,
+  }),
+  "html · 3 elements · 2048 bytes",
 );
 assert.equal(
   registry.artifactReadout({

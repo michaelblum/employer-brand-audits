@@ -142,6 +142,7 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     groups = payload.get("artifact_groups")
     facets = payload.get("facets") or {}
     report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-final-report"), None)
+    html_report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-final-report-html"), None)
     screenshot = next(
         (artifact for artifact in artifacts if artifact.get("id") == "l1-careers-screenshot"),
         None,
@@ -186,6 +187,9 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
         report.get("facets", {}).get("diagram_kind") == "mermaid",
         "ADR-002 Mermaid report should expose facets.diagram_kind=mermaid",
     )
+    require(isinstance(html_report, dict), "Missing ADR-002 HTML report artifact")
+    require(html_report.get("type") == "html", "ADR-002 HTML report should project as html")
+    require("annotate" in (html_report.get("capabilities") or []), "ADR-002 HTML report should expose annotate")
     require(isinstance(screenshot, dict), "Missing ADR-002 screenshot artifact")
     require(screenshot.get("type") == "image", "ADR-002 screenshot should project as image")
     require(screenshot.get("parent_ids") == ["l0-source-urls"], "ADR-002 artifact parent_ids drifted")
@@ -257,10 +261,12 @@ def assert_audit_server_collection(manifest_path: Path, payload: dict[str, Any])
             "l2-kilos-analysis",
             "l3-synthesis-notes",
             "l4-final-report",
+            "l4-final-report-html",
         },
-        "Server collection must expose projected ADR-002 image, markdown, JSON, and text artifacts",
+        "Server collection must expose projected ADR-002 image, markdown, HTML, JSON, and text artifacts",
     )
     report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-final-report"), None)
+    html_report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-final-report-html"), None)
     screenshot = next((artifact for artifact in artifacts if artifact.get("id") == "l1-careers-screenshot"), None)
     source_urls = next((artifact for artifact in artifacts if artifact.get("id") == "l0-source-urls"), None)
     careers_text = next((artifact for artifact in artifacts if artifact.get("id") == "l1-careers-text"), None)
@@ -269,6 +275,9 @@ def assert_audit_server_collection(manifest_path: Path, payload: dict[str, Any])
     require(isinstance(report, dict), "ADR-002 report missing from server collection")
     require(report.get("type") == "markdown", "ADR-002 report collection type drifted")
     require("render" in (report.get("capabilities") or []), "ADR-002 report render capability missing in collection")
+    require(isinstance(html_report, dict), "ADR-002 HTML report missing from server collection")
+    require(html_report.get("type") == "html", "ADR-002 HTML report collection type drifted")
+    require("annotate" in (html_report.get("capabilities") or []), "ADR-002 HTML report annotate capability missing in collection")
     require(isinstance(screenshot, dict), "ADR-002 screenshot missing from server collection")
     require(screenshot.get("type") == "image", "ADR-002 screenshot collection type drifted")
     require(isinstance(source_urls, dict), "ADR-002 source URLs JSON missing from server collection")

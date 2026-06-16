@@ -5,7 +5,7 @@
     [ANNOTATION_OVERLAY_SUBTYPE]: {
       subtype: ANNOTATION_OVERLAY_SUBTYPE,
       editorModes: ["create", "edit"],
-      anchorTypes: ["image_region", "text_range"],
+      anchorTypes: ["image_region", "text_range", "html_element"],
       draftTypes: ["image", "markdown"],
       intentActions: ["append", "update", "delete", "cancel"],
     },
@@ -148,11 +148,15 @@
 
   function displayRectForAnchor({
     anchor,
+    htmlElementRect,
     imageRegionRect,
     textRangeRect,
   } = {}) {
     if (anchor?.type === "image_region" && anchor.rect && typeof imageRegionRect === "function") {
       return imageRegionRect(anchor.rect);
+    }
+    if (anchor?.type === "html_element" && typeof htmlElementRect === "function") {
+      return htmlElementRect(anchor);
     }
     if (anchor?.type === "text_range" && typeof textRangeRect === "function") {
       return textRangeRect(anchor);
@@ -229,6 +233,8 @@
     let placement = null;
     if (anchor?.type === "image_region" && anchor.rect) {
       placement = { type: "image_region", rect: anchor.rect };
+    } else if (anchor?.type === "html_element") {
+      placement = { type: "html_element" };
     } else if (anchor?.type === "text_range") {
       placement = { type: "text_range", ensurePreview: markdownMode !== "preview" };
     }

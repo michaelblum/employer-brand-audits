@@ -10,6 +10,7 @@
     const registry = () => valueOf(dependencies.registry);
     const toolbar = () => valueOf(dependencies.toolbar);
     const documentRenderer = () => valueOf(dependencies.documentRenderer);
+    const html = () => valueOf(dependencies.html);
     const markdown = () => valueOf(dependencies.markdown);
     const context = () => valueOf(dependencies.getContext) || {};
     const actions = () => valueOf(dependencies.actions) || {};
@@ -19,6 +20,7 @@
     function selectedComponent(artifact) {
       return registry().resolveArtifactComponent(artifactOrDefault(artifact), {
         document: documentRenderer(),
+        html: html(),
       });
     }
 
@@ -42,12 +44,14 @@
         documentContentById: currentContext.documentContentById,
         markdown: markdown(),
         document: documentRenderer(),
+        html: html(),
       });
     }
 
     function stagePlan(artifact) {
       return registry().artifactStagePlan(artifactOrDefault(artifact), {
         document: documentRenderer(),
+        html: html(),
       });
     }
 

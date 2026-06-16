@@ -3,7 +3,7 @@
 ## Purpose
 
 Reusable browser-loaded JavaScript primitives for rendering markdown, Mermaid,
-images, documents, and interaction overlays.
+images, documents, HTML, and interaction overlays.
 
 ## Ownership
 
@@ -25,6 +25,9 @@ images, documents, and interaction overlays.
 - Markdown/document surface planners may own mode normalization, dirty-state,
   save/revert outcome, and fallback display plans; the workbench app shell must
   still execute DOM updates, focus, network writes, rendering, and toasts.
+- HTML primitives own iframe rendering, element-anchor extraction, and
+  iframe-to-workbench rect mapping; the workbench app shell still owns editor
+  state, overlay placement, and persistence.
 - Interaction overlay primitives expose subtype models and state helpers;
   controller code owns effect execution and annotation routing.
 - Vendor code under `vendor/` should stay isolated from project-authored
@@ -44,6 +47,7 @@ images, documents, and interaction overlays.
 
 - Run `node --check` on changed primitive files.
 - Run relevant checks such as `node tests/interaction_overlay_primitive_check.js`,
+  `node tests/html_renderer_primitive_check.js`,
   `node tests/document_renderer_primitive_check.js`,
   `node tests/artifact_renderer_primitive_check.js`,
   or `node tests/interaction_overlay_controller_check.js`.

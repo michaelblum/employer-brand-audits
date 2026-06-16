@@ -4,10 +4,12 @@ const path = require("node:path");
 global.window = { ArtifactPrimitives: {} };
 
 require(path.join(__dirname, "../scripts/artifact_primitives/document_renderer.js"));
+require(path.join(__dirname, "../scripts/artifact_primitives/html_renderer.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_renderer.js"));
 require(path.join(__dirname, "../scripts/artifacts/core/artifact_common.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/image_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/markdown_artifact.js"));
+require(path.join(__dirname, "../scripts/artifacts/types/html_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/document_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/artifact_registry.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/artifact_renderer.js"));
@@ -25,6 +27,7 @@ assert.equal(typeof renderer.artifactSelectionPlan, "function");
 assert.equal(typeof renderer.documentLoadPlan, "function");
 assert.equal(typeof renderer.documentLoadResultPlan, "function");
 assert.equal(typeof renderer.documentRenderPayload, "function");
+assert.equal(typeof renderer.htmlRenderPayload, "function");
 assert.equal(typeof renderer.markdownLoadPlan, "function");
 assert.equal(typeof renderer.markdownLoadResultPlan, "function");
 assert.equal(typeof renderer.renderArtifact, "function");
@@ -133,6 +136,31 @@ assert.deepEqual(
     url: "/artifact/raw.json",
     mimeType: "application/json",
     sizeBytes: 1536,
+  },
+);
+assert.deepEqual(
+  renderer.htmlRenderPayload(
+    {
+      id: "report",
+      name: "Report",
+      type: "html",
+      path: "report.html",
+      mime_type: "text/html",
+      size_bytes: 2048,
+    },
+    { content: "<main>Report</main>", url: "/artifact/report.html" },
+  ),
+  {
+    id: "report",
+    name: "Report",
+    type: "html",
+    path: "report.html",
+    mime_type: "text/html",
+    size_bytes: 2048,
+    content: "<main>Report</main>",
+    url: "/artifact/report.html",
+    mimeType: "text/html",
+    sizeBytes: 2048,
   },
 );
 assert.deepEqual(
@@ -307,6 +335,9 @@ assert.deepEqual(
         renderDocument(payload) {
           calls.push(["renderDocument", payload.artifact.id, payload.content]);
         },
+        renderHtml(payload) {
+          calls.push(["renderHtml", payload.artifact.id, payload.renderKind]);
+        },
         renderArtifactError(payload) {
           calls.push(["renderArtifactError", payload.artifact.id, payload.renderKind, payload.error.message]);
         },
@@ -347,6 +378,18 @@ assert.deepEqual(
         ["renderDocument", "doc", "{\"ok\":true}"],
       ],
       result: { renderKind: "document", status: "rendered" },
+    },
+  );
+
+  assert.deepEqual(
+    await recordControllerRun({ id: "html", type: "html" }),
+    {
+      calls: [
+        ["applyStagePlan", "html"],
+        ["loadDocument", "html"],
+        ["renderHtml", "html", "html"],
+      ],
+      result: { renderKind: "html", status: "rendered" },
     },
   );
 

@@ -15,8 +15,8 @@ artifact type components, artifact navigation, and the artifact registry.
 
 - `core/` owns shared artifact helpers that are not specific to one artifact
   type.
-- `types/` owns artifact type components such as image, markdown, document, and
-  future variants.
+- `types/` owns artifact type components such as image, markdown, HTML,
+  document, and future variants.
 - `navigation/` owns artifact list/tree/filter/navigation planning for the
   workbench.
 - `artifact_registry.js` composes registered artifact types; keep it small.

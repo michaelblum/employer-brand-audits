@@ -46,6 +46,7 @@
     const artifactToolbar = () => window.WorkbenchArtifactToolbar;
     const artifactBinding = () => window.WorkbenchArtifactBinding;
     const documentRenderer = () => window.ArtifactPrimitives.document;
+    const htmlRenderer = () => window.ArtifactPrimitives.html;
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
     const textRangeAnchor = (note) => {
@@ -59,6 +60,7 @@
     const iconHref = (name) => `/assets/artifact-workbench-icons.svg#icon-artifact-${name}`;
     const interactionOverlay = () => window.ArtifactPrimitives.interactionOverlay;
     let overlayControllerInstance = null;
+    let unbindHtmlInspector = null;
     function overlayController() {
       if (!overlayControllerInstance) {
         overlayControllerInstance = window.ArtifactPrimitives.interactionOverlayController
@@ -102,6 +104,7 @@
                     sourceEl: $("markdown-source"),
                   });
                 },
+                scrollHtmlElementIntoView,
                 renderMarkdownHighlights,
               },
               annotationTarget: {
@@ -320,6 +323,10 @@
       return workbenchArtifactBinding().supports("textRangeAnnotations", item);
     }
 
+    function supportsHtmlElementAnnotations(item = artifact()) {
+      return workbenchArtifactBinding().supports("htmlElementAnnotations", item);
+    }
+
     function artifactControlActions() {
       return {
         applyZoom: (value, options = {}) => applyZoom(options.relative ? app.zoomPercent + value : value),
@@ -342,6 +349,7 @@
             image: () => $("artifact-image"),
           },
           documentRenderer,
+          html: htmlRenderer,
           markdown: () => window.ArtifactPrimitives.markdown,
           getContext: () => ({
             artifactDocumentTheme: app.artifactDocumentTheme,
@@ -426,6 +434,7 @@
     }
 
     function renderImage({ artifact: item = artifact() } = {}) {
+      clearHtmlInspector();
       const image = $("artifact-image");
       updateArtifactToolbar();
       image.onload = () => {
@@ -446,6 +455,7 @@
     }
 
     function renderDocument({ artifact: item = artifact(), content = "" } = {}) {
+      clearHtmlInspector();
       if (!window.ArtifactPrimitives?.document) {
         throw new Error("Document renderer primitive is not loaded");
       }
@@ -457,6 +467,84 @@
         markdownPreviewBody(),
       );
       updateArtifactToolbar();
+    }
+
+    function sourceUrlForHtmlArtifact(item = artifact()) {
+      const projected = app.artifactProjectionModel?.projectedArtifactsById?.[item.id] || {};
+      return projected.source_page?.url || item.source_url || item.url || item.path || "";
+    }
+
+    function clearHtmlInspector() {
+      if (typeof unbindHtmlInspector === "function") unbindHtmlInspector();
+      unbindHtmlInspector = null;
+    }
+
+    function htmlFrameElement() {
+      return markdownPreviewBody().querySelector("[data-html-frame]");
+    }
+
+    function displayRectForHtmlElementAnchor(anchor) {
+      return htmlRenderer()?.displayRectForHtmlElementAnchor?.({
+        anchor,
+        frameEl: htmlFrameElement(),
+        wrapEl: $("markdown-wrap"),
+      }) || null;
+    }
+
+    function bindHtmlInspector(item = artifact()) {
+      clearHtmlInspector();
+      if (!supportsHtmlElementAnnotations(item)) return;
+      const component = workbenchArtifactBinding().selectedComponent(item);
+      if (typeof component?.bindInspector !== "function") return;
+      unbindHtmlInspector = component.bindInspector({
+        rootEl: markdownPreviewBody(),
+        artifact: item,
+        sourceUrl: sourceUrlForHtmlArtifact(item),
+        wrapEl: $("markdown-wrap"),
+        html: htmlRenderer(),
+        onHover: ({ displayRect }) => {
+          if (!displayRect) return;
+          hideHoverMarker();
+          interactionOverlay().placeOverlayBox({
+            overlayEl: $("markdown-marker"),
+            displayRect,
+          });
+        },
+        onLeave: () => {
+          if (!app.activeMarker && app.pendingAnchor?.type !== "html_element") {
+            $("markdown-marker").hidden = true;
+          }
+        },
+        onSelect: ({ anchor, displayRect }) => {
+          if (!anchor || !displayRect) return;
+          app.pendingAnchor = anchor;
+          hideHoverMarker();
+          interactionOverlay().placeOverlayBox({
+            overlayEl: $("markdown-marker"),
+            displayRect,
+          });
+          overlayController().openCreateEditor({
+            pendingAnchor: anchor,
+            displayRect,
+            relativeTo: "markdown",
+          });
+        },
+      });
+    }
+
+    function renderHtml({ artifact: item = artifact(), content = "" } = {}) {
+      if (!htmlRenderer()) {
+        throw new Error("HTML renderer primitive is not loaded");
+      }
+      htmlRenderer().renderHtmlArtifact(
+        artifactRenderer().htmlRenderPayload(item, {
+          content,
+          url: artifactUrl(item),
+        }),
+        markdownPreviewBody(),
+      );
+      updateArtifactToolbar();
+      bindHtmlInspector(item);
     }
 
     function renderArtifactFallback({ renderKind, error } = {}) {
@@ -510,6 +598,7 @@
     }
 
     function renderMarkdownBody(item) {
+      clearHtmlInspector();
       const content = app.markdownContent[item.id] || "";
       window.ArtifactPrimitives.markdownInteractions.renderMarkdownBody({
         content,
@@ -603,6 +692,7 @@
           renderMarkdown: ({ artifact: renderedArtifact }) => renderMarkdownBody(renderedArtifact),
           loadDocument,
           renderDocument,
+          renderHtml,
           renderArtifactError: renderArtifactFallback,
         },
       });
@@ -734,6 +824,7 @@
       return interactionOverlay().displayRectForAnchor({
         anchor,
         imageRegionRect: (rect) => displayRectFromNatural(rect),
+        htmlElementRect: (htmlAnchor) => displayRectForHtmlElementAnchor(htmlAnchor),
         textRangeRect: (textAnchor) => window.ArtifactPrimitives.markdownInteractions.displayRectFromAnchor({
           anchor: textAnchor,
           rootEl: markdownPreviewBody(),
@@ -761,6 +852,15 @@
           displayRect,
         });
       }
+      if (anchor?.type === "html_element") {
+        $("selection").hidden = true;
+        const displayRect = displayRectForAnchor(anchor);
+        if (!displayRect) return;
+        interactionOverlay().placeOverlayBox({
+          overlayEl: $("markdown-marker"),
+          displayRect,
+        });
+      }
     }
 
     function placePopoverForAnchor(anchor) {
@@ -769,6 +869,10 @@
         return;
       }
       if (anchor?.type === "text_range") {
+        const displayRect = displayRectForAnchor(anchor);
+        if (displayRect) openComment(displayRect, $("markdown-wrap"));
+      }
+      if (anchor?.type === "html_element") {
         const displayRect = displayRectForAnchor(anchor);
         if (displayRect) openComment(displayRect, $("markdown-wrap"));
       }
@@ -798,6 +902,15 @@
         return;
       }
       if (anchor?.type === "text_range") {
+        hideHoverMarker();
+        const displayRect = displayRectForAnchor(anchor);
+        if (!displayRect) return;
+        interactionOverlay().placeOverlayBox({
+          overlayEl: $("markdown-marker"),
+          displayRect,
+        });
+      }
+      if (anchor?.type === "html_element") {
         hideHoverMarker();
         const displayRect = displayRectForAnchor(anchor);
         if (!displayRect) return;
@@ -857,6 +970,21 @@
         wrapEl: $("image-wrap"),
         stageEl: $("stage"),
       });
+    }
+
+    function scrollHtmlElementIntoView(anchor) {
+      const documentRoot = htmlFrameElement()?.contentDocument;
+      for (const selector of anchor?.selector_candidates || []) {
+        try {
+          const match = documentRoot?.querySelector?.(selector);
+          if (match) {
+            match.scrollIntoView({ block: "center", inline: "center" });
+            return;
+          }
+        } catch (_error) {
+          // Invalid fallback selectors should not block saved rect placement.
+        }
+      }
     }
 
     function openExistingEditor(note) {

@@ -45,6 +45,11 @@
     <path d="M15 9v6"></path>
     <path d="m13.5 13.5 1.5 1.5 1.5-1.5"></path>
   </symbol>
+  <symbol id="icon-artifact-html" viewBox="0 0 24 24">
+    <path d="m9 8-4 4 4 4"></path>
+    <path d="m15 8 4 4-4 4"></path>
+    <path d="m13 6-2 12"></path>
+  </symbol>
   <symbol id="icon-artifact-text" viewBox="0 0 24 24">
     <path d="M4 6h16"></path>
     <path d="M4 10h16"></path>

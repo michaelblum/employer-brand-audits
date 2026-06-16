@@ -6,6 +6,7 @@
   const ARTIFACT_TYPE_META = {
     image: { icon: "image", className: "image" },
     markdown: { icon: "markdown", className: "markdown" },
+    html: { icon: "html", className: "html" },
     json: { icon: "text", className: "text" },
     text: { icon: "text", className: "text" },
     log: { icon: "log", className: "log" },
@@ -131,6 +132,13 @@
       return anchor.start.line === anchor.end.line
         ? `line ${anchor.start.line}`
         : `lines ${anchor.start.line}-${anchor.end.line}`;
+    }
+    if (anchor.type === "html_element") {
+      const selector = (anchor.selector_candidates || []).find(Boolean)
+        || (anchor.id ? `#${anchor.id}` : "")
+        || anchor.tag
+        || "element";
+      return `element ${selector}`;
     }
     return "unanchored";
   }
