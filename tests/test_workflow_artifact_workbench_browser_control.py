@@ -38,11 +38,27 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/artifact_primitives/artifact_components.js"],
+            ["node", "--check", "scripts/artifacts/core/artifact_common.js"],
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/artifact_primitives/workflow_sidebar.js"],
+            ["node", "--check", "scripts/artifacts/types/image_artifact.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/types/markdown_artifact.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/types/document_artifact.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/artifact_registry.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/navigation/artifact_navigator.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -54,7 +70,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
-            ["node", "tests/workflow_sidebar_primitive_check.js"],
+            ["node", "tests/artifact_navigator_check.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -70,7 +86,7 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
-            ["node", "tests/artifact_components_check.js"],
+            ["node", "tests/artifact_registry_check.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -98,28 +114,32 @@ class WorkflowArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-image-artifact-check.js"],
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-image-check.js"],
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-markdown-artifact-check.js"],
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-markdown-check.js"],
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-navigation-check.js"],
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-navigation-check.js"],
             validation_commands(),
         )
         self.assertIn(
-            ["node", "--check", "scripts/playwright-snippets/workflow-artifact-workbench-annotation-reorder-check.js"],
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-annotation-reorder-check.js"],
             validation_commands(),
         )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
-        self.assertIn("/assets/artifact-primitives/artifact_components.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/core/artifact_common.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/types/image_artifact.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/types/markdown_artifact.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/types/document_artifact.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/artifact_registry.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/artifact_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/markdown_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/markdown_interactions.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/image_viewer.js", WORKBENCH_ASSETS)
-        self.assertIn("/assets/artifact-primitives/workflow_sidebar.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/navigation/artifact_navigator.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay_controller.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/workflow-artifact-toolbar.js", WORKBENCH_ASSETS)

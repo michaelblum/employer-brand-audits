@@ -14,7 +14,7 @@ venv/
 .DS_Store
 
 # Generated local smoke/audit outputs
-artifacts/
+/artifacts/
 .playwright-cli/
 
 # Chrome profile for plugin automation (user data, not code)

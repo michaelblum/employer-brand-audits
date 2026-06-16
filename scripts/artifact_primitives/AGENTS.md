@@ -2,36 +2,29 @@
 
 ## Purpose
 
-Reusable browser-loaded JavaScript primitives for rendering workflow artifacts,
-markdown, Mermaid, images, sidebars, and interaction overlays.
+Reusable browser-loaded JavaScript primitives for rendering markdown, Mermaid,
+images, documents, and interaction overlays.
 
 ## Ownership
 
 - Owns files under `scripts/artifact_primitives/`.
 - Does not own the workbench app shell in `scripts/workflow_artifact_workbench/`
-  or Playwright smoke snippets.
+  artifact-level modules in `scripts/artifacts/`, or Playwright smoke snippets.
 
 ## Local Contracts
 
 - Keep primitive APIs narrow and explicit.
 - Primitives should not take over app-level routing, persistence, or generated
   artifact ownership unless that boundary is deliberately moved.
-- `artifact_components.js` owns the artifact-type component registry. Artifact
-  components own type-specific workspace/stage plans, readout plans, toolbar
-  control HTML, and control binding. Keep new artifact-specific toolbar and
-  workspace behavior there instead of adding type branches to the app shell.
+- Artifact type registry, toolbar ownership, navigation planning, and shared
+  artifact-level helpers live in `scripts/artifacts/`.
 - Artifact render controller primitives may own render sequencing, fallback,
-  selection, content-cache, readout planning, and artifact toolbar slot planning
-  decisions; the workbench app shell must still execute fetch, persistence,
-  shared image-viewer, and shared markdown side effects through explicit
-  callbacks or local state application.
+  selection, and content-cache decisions; the workbench app shell must still
+  execute fetch, persistence, shared image-viewer, and shared markdown side
+  effects through explicit callbacks or local state application.
 - Markdown/document surface planners may own mode normalization, dirty-state,
   save/revert outcome, and fallback display plans; the workbench app shell must
   still execute DOM updates, focus, network writes, rendering, and toasts.
-- Workflow sidebar primitives may own projection indexing, sidebar context
-  shaping, artifact filtering, navigation, overview, and title view-model
-  decisions; the workbench app shell must still own state application, event
-  wiring, and side effects.
 - Interaction overlay primitives expose subtype models and state helpers;
   controller code owns effect execution and annotation routing.
 - Vendor code under `vendor/` should stay isolated from project-authored
@@ -50,12 +43,10 @@ markdown, Mermaid, images, sidebars, and interaction overlays.
 ## Verification
 
 - Run `node --check` on changed primitive files.
-- Run relevant checks such as `node tests/artifact_components_check.js`,
-  `node tests/interaction_overlay_primitive_check.js`,
+- Run relevant checks such as `node tests/interaction_overlay_primitive_check.js`,
   `node tests/document_renderer_primitive_check.js`,
   `node tests/artifact_renderer_primitive_check.js`,
-  `node tests/interaction_overlay_controller_check.js`, or
-  `node tests/workflow_sidebar_primitive_check.js`.
+  or `node tests/interaction_overlay_controller_check.js`.
 - Run `./eba dev validate` before checkpointing substantive primitive changes.
 
 ## Child DOX Index

@@ -23,7 +23,7 @@
       markdownDirty: {},
       documentContent: {},
       artifactDocumentTheme: "dark",
-      workflowProjectionModel: null,
+      artifactProjectionModel: null,
       filters: {
         stepId: null,
         slot: null,
@@ -45,7 +45,7 @@
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const isImageArtifact = (item = artifact()) => item.type === "image";
     const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
-    const artifactComponents = () => window.ArtifactPrimitives.artifactComponents;
+    const artifactRegistry = () => window.Artifacts.registry;
     const artifactRenderer = () => window.ArtifactPrimitives.artifactRenderer;
     const artifactToolbar = () => window.WorkbenchArtifactToolbar;
     const documentRenderer = () => window.ArtifactPrimitives.document;
@@ -140,9 +140,9 @@
       }
       return overlayControllerInstance;
     }
-    const workflowSidebar = () => window.ArtifactPrimitives.workflowSidebar;
+    const artifactNavigation = () => window.Artifacts.navigation;
     let unbindArtifactControls = null;
-    const workflowSidebarContext = () => workflowSidebar().workflowSidebarContext({
+    const artifactNavigationContext = () => artifactNavigation().artifactNavigationContext({
       artifacts: app.collection.artifacts,
       interactionOverlays: app.interactionOverlays,
       contexts: app.contexts,
@@ -150,7 +150,7 @@
       activeIndex: app.index,
       filters: app.filters,
       iconHref,
-      projectionModel: app.workflowProjectionModel,
+      projectionModel: app.artifactProjectionModel,
     });
 
     async function fetchWorkbenchProjection() {
@@ -185,7 +185,7 @@
       app.interactionOverlays = payload.interaction_overlays || [];
       app.contexts = payload.contexts || [];
       app.context = payload.context || null;
-      app.workflowProjectionModel = workflowSidebar().workflowProjectionModel(payload.workbench_projection || null);
+      app.artifactProjectionModel = artifactNavigation().artifactProjectionModel(payload.workbench_projection || null);
     }
 
     async function switchWorkbenchContext(manifest) {
@@ -308,7 +308,7 @@
     }
 
     function artifactToolbarPlan(item = artifact()) {
-      return artifactComponents().artifactToolbarPlan({
+      return artifactRegistry().artifactToolbarPlan({
         artifact: item,
         imageNaturalWidth: $("artifact-image").naturalWidth,
         imageNaturalHeight: $("artifact-image").naturalHeight,
@@ -320,7 +320,7 @@
     }
 
     function selectedArtifactComponent(item = artifact()) {
-      return artifactComponents().resolveArtifactComponent(item, { document: documentRenderer() });
+      return artifactRegistry().resolveArtifactComponent(item, { document: documentRenderer() });
     }
 
     function artifactControlState(item = artifact()) {
@@ -422,8 +422,8 @@
     }
 
     function move(delta) {
-      const plan = workflowSidebar().workflowMovePlan({
-        ...workflowSidebarContext(),
+      const plan = artifactNavigation().artifactMovePlan({
+        ...artifactNavigationContext(),
         delta,
       });
       if (plan.activeIndex === app.index) return;
@@ -431,8 +431,8 @@
     }
 
     function renderTitle() {
-      $("artifact-title").innerHTML = workflowSidebar().renderArtifactTitleHtml({
-        ...workflowSidebarContext(),
+      $("artifact-title").innerHTML = artifactNavigation().renderArtifactTitleHtml({
+        ...artifactNavigationContext(),
         formatTime,
       });
     }
@@ -621,7 +621,7 @@
     }
 
     function renderOverview() {
-      $("overview-popover").innerHTML = workflowSidebar().renderOverviewHtml(workflowSidebarContext());
+      $("overview-popover").innerHTML = artifactNavigation().renderOverviewHtml(artifactNavigationContext());
       const select = $("overview-popover").querySelector("[data-context-select]");
       if (select) {
         select.addEventListener("change", () => {
@@ -636,7 +636,7 @@
       });
     }
 
-    function applyWorkflowFilterPlan(plan = {}) {
+    function applyArtifactFilterPlan(plan = {}) {
       if (plan.filters) app.filters = plan.filters;
       if (Number.isInteger(plan.activeIndex)) app.index = plan.activeIndex;
       closeEditor();
@@ -645,12 +645,12 @@
     }
 
     function renderSidebar() {
-      $("sidebar").innerHTML = workflowSidebar().renderSidebarHtml(workflowSidebarContext());
+      $("sidebar").innerHTML = artifactNavigation().renderSidebarHtml(artifactNavigationContext());
       $("sidebar").querySelectorAll("[data-filter-kind]").forEach((button) => {
         button.addEventListener("click", (event) => {
           event.stopPropagation();
-          applyWorkflowFilterPlan(workflowSidebar().workflowFilterPlan({
-            ...workflowSidebarContext(),
+          applyArtifactFilterPlan(artifactNavigation().artifactFilterPlan({
+            ...artifactNavigationContext(),
             filterKind: button.dataset.filterKind,
             filterValue: button.dataset.filterValue,
           }));

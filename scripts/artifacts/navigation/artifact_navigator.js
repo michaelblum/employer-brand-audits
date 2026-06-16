@@ -1,5 +1,6 @@
 (function () {
-  const ROOT = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
+  const ROOT = window.Artifacts = window.Artifacts || {};
+  const PRIMITIVES = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
 
   const ARTIFACT_TYPE_META = {
     image: { icon: "image", className: "image" },
@@ -48,7 +49,7 @@
     return context.filters?.compositeId ? context.projectedGroupsById?.[context.filters.compositeId] || null : null;
   }
 
-  function workflowProjectionModel(payload = null) {
+  function artifactProjectionModel(payload = null) {
     const workbenchProjection = payload && typeof payload === "object" ? payload : null;
     const model = {
       workbenchProjection,
@@ -72,7 +73,7 @@
     return model;
   }
 
-  function workflowSidebarContext({
+  function artifactNavigationContext({
     artifacts = [],
     interactionOverlays = [],
     contexts = [],
@@ -82,7 +83,7 @@
     iconHref = null,
     projectionModel = null,
   } = {}) {
-    const model = projectionModel || workflowProjectionModel(null);
+    const model = projectionModel || artifactProjectionModel(null);
     return {
       artifacts,
       interactionOverlays,
@@ -104,7 +105,7 @@
   }
 
   function artifactAnnotations(context, artifactId) {
-    const overlay = ROOT.interactionOverlay;
+    const overlay = PRIMITIVES.interactionOverlay;
     if (overlay && typeof overlay.annotationOverlays === "function") {
       return overlay.annotationOverlays(context.interactionOverlays || [], artifactId);
     }
@@ -120,7 +121,7 @@
   }
 
   function annotationText(note) {
-    const overlay = ROOT.interactionOverlay;
+    const overlay = PRIMITIVES.interactionOverlay;
     if (overlay && typeof overlay.annotationText === "function") {
       return overlay.annotationText(note);
     }
@@ -187,7 +188,7 @@
     };
   }
 
-  function workflowFilterPlan(context = {}) {
+  function artifactFilterPlan(context = {}) {
     const filters = normalizedFilters(context.filters);
     const kind = context.filterKind;
     const value = context.filterValue || null;
@@ -209,7 +210,7 @@
     };
   }
 
-  function workflowMovePlan(context = {}) {
+  function artifactMovePlan(context = {}) {
     const visibleIndexes = visibleArtifactIndexes(context);
     const activeIndex = context.activeIndex || 0;
     if (!visibleIndexes.length) return { activeIndex };
@@ -310,7 +311,7 @@
     return visible === total ? `${total} artifacts` : `${visible} of ${total} artifacts`;
   }
 
-  function renderWorkflowHeader(context = {}) {
+  function renderArtifactNavigationHeader(context = {}) {
     const workflow = context.workbenchProjection?.workflow;
     if (!workflow) return "";
     const artifacts = context.artifacts || [];
@@ -401,11 +402,11 @@
     const artifactRows = visibleArtifactIndexes(context)
       .map((index) => renderArtifactRow(context, index))
       .join("");
-    return renderWorkflowHeader(context)
+    return renderArtifactNavigationHeader(context)
       + (artifactRows || '<div class="empty-filter">No artifacts match the active filters.</div>');
   }
 
-  ROOT.workflowSidebar = {
+  ROOT.navigation = {
     activeComposite,
     anchorSummary,
     artifactMatchesFilters,
@@ -419,12 +420,12 @@
     renderSidebarHtml,
     renderArtifactTitleHtml,
     renderOverviewHtml,
-    renderWorkflowHeader,
+    renderArtifactNavigationHeader,
     visibleArtifactIndexes,
     ensureVisibleArtifactIndex,
-    workflowProjectionModel,
-    workflowSidebarContext,
-    workflowFilterPlan,
-    workflowMovePlan,
+    artifactProjectionModel,
+    artifactNavigationContext,
+    artifactFilterPlan,
+    artifactMovePlan,
   };
 }());

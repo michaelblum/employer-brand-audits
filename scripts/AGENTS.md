@@ -44,7 +44,10 @@ artifact workbench implementation, and checked-in Playwright snippets.
 
 ## Child DOX Index
 
-- `scripts/artifact_primitives/AGENTS.md` - reusable workbench primitives.
+- `scripts/artifacts/AGENTS.md` - artifact-level registry, type components,
+  shared artifact helpers, and navigation planning.
+- `scripts/artifact_primitives/AGENTS.md` - lower-level workbench renderer and
+  interaction primitives.
 - `scripts/playwright-snippets/AGENTS.md` - checked-in snippets for Playwright
   CLI `run-code`.
 - `scripts/workflow_artifact_workbench/AGENTS.md` - browser-loaded workbench app

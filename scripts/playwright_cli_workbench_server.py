@@ -30,6 +30,7 @@ DEFAULT_MANIFEST = (
 
 WORKBENCH_DIR = Path(__file__).resolve().parent / "workflow_artifact_workbench"
 ARTIFACT_PRIMITIVES_DIR = Path(__file__).resolve().parent / "artifact_primitives"
+ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
 WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
 WORKBENCH_ASSET_MANIFEST_PATH = "/api/workbench-assets"
 WORKBENCH_STATE_PATH = "/api/workbench-state"
@@ -59,16 +60,32 @@ WORKBENCH_ASSETS = {
         ARTIFACT_PRIMITIVES_DIR / "document_renderer.js",
         "text/javascript",
     ),
-    "/assets/artifact-primitives/artifact_components.js": (
-        ARTIFACT_PRIMITIVES_DIR / "artifact_components.js",
+    "/assets/artifacts/core/artifact_common.js": (
+        ARTIFACTS_DIR / "core" / "artifact_common.js",
+        "text/javascript",
+    ),
+    "/assets/artifacts/types/image_artifact.js": (
+        ARTIFACTS_DIR / "types" / "image_artifact.js",
+        "text/javascript",
+    ),
+    "/assets/artifacts/types/markdown_artifact.js": (
+        ARTIFACTS_DIR / "types" / "markdown_artifact.js",
+        "text/javascript",
+    ),
+    "/assets/artifacts/types/document_artifact.js": (
+        ARTIFACTS_DIR / "types" / "document_artifact.js",
+        "text/javascript",
+    ),
+    "/assets/artifacts/artifact_registry.js": (
+        ARTIFACTS_DIR / "artifact_registry.js",
         "text/javascript",
     ),
     "/assets/artifact-primitives/artifact_renderer.js": (
         ARTIFACT_PRIMITIVES_DIR / "artifact_renderer.js",
         "text/javascript",
     ),
-    "/assets/artifact-primitives/workflow_sidebar.js": (
-        ARTIFACT_PRIMITIVES_DIR / "workflow_sidebar.js",
+    "/assets/artifacts/navigation/artifact_navigator.js": (
+        ARTIFACTS_DIR / "navigation" / "artifact_navigator.js",
         "text/javascript",
     ),
     "/assets/artifact-primitives/interaction_overlay.js": (

@@ -1,19 +1,19 @@
 (function () {
   const ROOT = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
 
-  function artifactComponents() {
-    if (!ROOT.artifactComponents) {
-      throw new Error("Artifact component registry is not loaded");
+  function artifactRegistry() {
+    if (!window.Artifacts?.registry) {
+      throw new Error("Artifact registry is not loaded");
     }
-    return ROOT.artifactComponents;
+    return window.Artifacts.registry;
   }
 
   function artifactRenderKind(artifact = {}, { document } = {}) {
-    return artifactComponents().artifactRenderKind(artifact, { document });
+    return artifactRegistry().artifactRenderKind(artifact, { document });
   }
 
   function artifactStagePlan(artifact = {}, options = {}) {
-    return artifactComponents().artifactStagePlan(artifact, options);
+    return artifactRegistry().artifactStagePlan(artifact, options);
   }
 
   function documentLoadPlan(artifact = {}, {
@@ -111,7 +111,7 @@
     markdown = ROOT.markdown,
     document = ROOT.document,
   } = {}) {
-    return artifactComponents().artifactReadout({
+    return artifactRegistry().artifactReadout({
       artifact,
       imageNaturalWidth,
       imageNaturalHeight,
@@ -123,7 +123,7 @@
   }
 
   function artifactToolbarPlan(options = {}) {
-    return artifactComponents().artifactToolbarPlan(artifactReadoutPlan(options));
+    return artifactRegistry().artifactToolbarPlan(artifactReadoutPlan(options));
   }
 
   function artifactSelectionPlan({ requestedIndex = 0, artifactCount = 0 } = {}) {

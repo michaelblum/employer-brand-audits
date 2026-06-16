@@ -1,20 +1,20 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-global.window = { ArtifactPrimitives: {} };
+global.window = { ArtifactPrimitives: {}, Artifacts: {} };
 
-require(path.join(__dirname, "../scripts/artifact_primitives/workflow_sidebar.js"));
+require(path.join(__dirname, "../scripts/artifacts/navigation/artifact_navigator.js"));
 
-const sidebar = window.ArtifactPrimitives.workflowSidebar;
+const navigator = window.Artifacts.navigation;
 
-assert.equal(typeof sidebar.visibleArtifactIndexes, "function");
-assert.equal(typeof sidebar.renderSidebarHtml, "function");
-assert.equal(typeof sidebar.workflowFilterPlan, "function");
-assert.equal(typeof sidebar.workflowMovePlan, "function");
-assert.equal(typeof sidebar.renderArtifactTitleHtml, "function");
-assert.equal(typeof sidebar.renderOverviewHtml, "function");
-assert.equal(typeof sidebar.workflowProjectionModel, "function");
-assert.equal(typeof sidebar.workflowSidebarContext, "function");
+assert.equal(typeof navigator.visibleArtifactIndexes, "function");
+assert.equal(typeof navigator.renderSidebarHtml, "function");
+assert.equal(typeof navigator.artifactFilterPlan, "function");
+assert.equal(typeof navigator.artifactMovePlan, "function");
+assert.equal(typeof navigator.renderArtifactTitleHtml, "function");
+assert.equal(typeof navigator.renderOverviewHtml, "function");
+assert.equal(typeof navigator.artifactProjectionModel, "function");
+assert.equal(typeof navigator.artifactNavigationContext, "function");
 
 const artifacts = [
   { id: "hero", name: "Hero <Shot>", path: "hero.png", type: "image" },
@@ -121,13 +121,13 @@ const projectionPayload = {
   ],
 };
 
-const projectionModel = sidebar.workflowProjectionModel(projectionPayload);
+const projectionModel = navigator.artifactProjectionModel(projectionPayload);
 assert.deepEqual(Object.keys(projectionModel.projectedArtifactsById).sort(), ["hero", "summary"]);
 assert.deepEqual(Object.keys(projectionModel.projectedStepsById).sort(), ["analyze", "capture"]);
 assert.deepEqual(Object.keys(projectionModel.projectedSlotsByValue).sort(), ["landing-page", "workflow-summary"]);
 assert.deepEqual(Object.keys(projectionModel.projectedGroupsById).sort(), ["visible"]);
 assert.equal(projectionModel.workbenchProjection, projectionPayload);
-assert.deepEqual(sidebar.workflowProjectionModel(null), {
+assert.deepEqual(navigator.artifactProjectionModel(null), {
   workbenchProjection: null,
   projectedArtifactsById: {},
   projectedStepsById: {},
@@ -155,7 +155,7 @@ const context = {
   iconHref: (name) => `/icons.svg#${name}`,
 };
 assert.deepEqual(
-  sidebar.workflowSidebarContext({
+  navigator.artifactNavigationContext({
     artifacts,
     interactionOverlays,
     contexts: context.contexts,
@@ -181,10 +181,10 @@ assert.deepEqual(
   },
 );
 
-assert.deepEqual(sidebar.visibleArtifactIndexes(context), [0]);
-assert.equal(sidebar.filterSummaryText({ total: 3, visible: 1 }), "1 of 3 artifacts");
+assert.deepEqual(navigator.visibleArtifactIndexes(context), [0]);
+assert.equal(navigator.filterSummaryText({ total: 3, visible: 1 }), "1 of 3 artifacts");
 
-const html = sidebar.renderSidebarHtml(context);
+const html = navigator.renderSidebarHtml(context);
 assert.match(html, /Easy Audit/);
 assert.match(html, /1 of 3 artifacts/);
 assert.match(html, /data-filter-kind="clear"/);
@@ -193,7 +193,7 @@ assert.match(html, /Contrast &lt;needs&gt; work/);
 assert.match(html, /image 10,20 30x40/);
 assert.doesNotMatch(html, /Summary/);
 
-const unfilteredHtml = sidebar.renderSidebarHtml({
+const unfilteredHtml = navigator.renderSidebarHtml({
   ...context,
   activeIndex: 1,
   filters: { stepId: null, slot: null, compositeId: null },
@@ -202,7 +202,7 @@ assert.match(unfilteredHtml, /Workflow summary/);
 assert.match(unfilteredHtml, /lines 2-4/);
 assert.match(unfilteredHtml, /artifact-row active/);
 
-const noEmptyProjectionPillHtml = sidebar.renderSidebarHtml({
+const noEmptyProjectionPillHtml = navigator.renderSidebarHtml({
   ...context,
   artifacts: [{ id: "raw", name: "Raw", path: "raw.json", type: "json" }],
   projectedArtifactsById: { raw: projectedWithoutSourcePage },
@@ -213,7 +213,7 @@ assert.match(noEmptyProjectionPillHtml, /diagnostics/);
 assert.match(noEmptyProjectionPillHtml, /complete/);
 assert.doesNotMatch(noEmptyProjectionPillHtml, /<span><\/span>/);
 
-const noWhitespaceProjectionPillHtml = sidebar.renderSidebarHtml({
+const noWhitespaceProjectionPillHtml = navigator.renderSidebarHtml({
   ...context,
   artifacts: [{ id: "raw", name: "Raw", path: "raw.json", type: "json" }],
   projectedArtifactsById: { raw: projectedWithWhitespaceMeta },
@@ -224,7 +224,7 @@ assert.doesNotMatch(noWhitespaceProjectionPillHtml, /projection-meta/);
 assert.doesNotMatch(noWhitespaceProjectionPillHtml, /<span>\s*<\/span>/);
 
 assert.deepEqual(
-  sidebar.workflowFilterPlan({
+  navigator.artifactFilterPlan({
     ...context,
     activeIndex: 1,
     filters: { stepId: null, slot: null, compositeId: "visible" },
@@ -237,7 +237,7 @@ assert.deepEqual(
   },
 );
 assert.deepEqual(
-  sidebar.workflowFilterPlan({
+  navigator.artifactFilterPlan({
     ...context,
     activeIndex: 0,
     filters: { stepId: "capture", slot: "diagnostics", compositeId: "visible" },
@@ -249,7 +249,7 @@ assert.deepEqual(
   },
 );
 assert.deepEqual(
-  sidebar.workflowFilterPlan({
+  navigator.artifactFilterPlan({
     ...context,
     activeIndex: 0,
     filters: { stepId: "capture", slot: null, compositeId: null },
@@ -263,7 +263,7 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  sidebar.workflowMovePlan({
+  navigator.artifactMovePlan({
     ...context,
     activeIndex: 0,
     filters: { stepId: null, slot: null, compositeId: null },
@@ -272,7 +272,7 @@ assert.deepEqual(
   { activeIndex: 2 },
 );
 assert.deepEqual(
-  sidebar.workflowMovePlan({
+  navigator.artifactMovePlan({
     ...context,
     activeIndex: 99,
     filters: { stepId: "capture", slot: null, compositeId: null },
@@ -281,7 +281,7 @@ assert.deepEqual(
   { activeIndex: 2 },
 );
 assert.deepEqual(
-  sidebar.workflowMovePlan({
+  navigator.artifactMovePlan({
     ...context,
     artifacts: [],
     activeIndex: 0,
@@ -291,7 +291,7 @@ assert.deepEqual(
   { activeIndex: 0 },
 );
 
-const titleHtml = sidebar.renderArtifactTitleHtml({
+const titleHtml = navigator.renderArtifactTitleHtml({
   ...context,
   activeIndex: 1,
   filters: { stepId: null, slot: null, compositeId: "visible" },
@@ -302,7 +302,7 @@ assert.match(titleHtml, /Summary/);
 assert.match(titleHtml, /Workflow summary/);
 assert.match(titleHtml, /\(now\)/);
 
-const overviewHtml = sidebar.renderOverviewHtml({
+const overviewHtml = navigator.renderOverviewHtml({
   ...context,
   activeIndex: 2,
   filters: { stepId: null, slot: null, compositeId: null },

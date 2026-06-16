@@ -18,7 +18,7 @@ and app shell JavaScript.
 - Keep app shell responsibilities distinct from reusable artifact primitives.
 - The workspace and artifact toolbar are shell-owned mount points. The selected
   artifact component owns type-specific stage, readout, controls, and control
-  binding inside those mount points.
+  binding inside those mount points through `scripts/artifacts/`.
 - Keep shared slot rendering generic in this folder; do not hardcode image,
   markdown, or future artifact-type toolbar controls in the app shell.
 - Workbench assets must remain compatible with the server asset manifest and
@@ -37,7 +37,7 @@ and app shell JavaScript.
 - Run `node --check scripts/workflow_artifact_workbench/app.js` for app changes.
 - Run `node --check scripts/workflow_artifact_workbench/artifact_toolbar.js`
   and `node tests/artifact_toolbar_check.js` for toolbar changes.
-- Run `node tests/artifact_components_check.js` when toolbar ownership or
+- Run `node tests/artifact_registry_check.js` when toolbar ownership or
   artifact component behavior changes.
 - Run `./eba dev demo --fixture easy-audit --json` for tangible workbench changes.
 - Run relevant Playwright snippets from `scripts/playwright-snippets/` for live
