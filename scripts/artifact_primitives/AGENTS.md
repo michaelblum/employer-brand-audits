@@ -16,11 +16,15 @@ markdown, Mermaid, images, sidebars, and interaction overlays.
 - Keep primitive APIs narrow and explicit.
 - Primitives should not take over app-level routing, persistence, or generated
   artifact ownership unless that boundary is deliberately moved.
+- `artifact_components.js` owns the artifact-type component registry. Artifact
+  components own type-specific workspace/stage plans, readout plans, toolbar
+  control HTML, and control binding. Keep new artifact-specific toolbar and
+  workspace behavior there instead of adding type branches to the app shell.
 - Artifact render controller primitives may own render sequencing, fallback,
   selection, content-cache, readout planning, and artifact toolbar slot planning
-  decisions; the workbench app shell must still execute DOM, fetch, image,
-  interaction, and persistence side effects through explicit callbacks or local
-  state application.
+  decisions; the workbench app shell must still execute fetch, persistence,
+  shared image-viewer, and shared markdown side effects through explicit
+  callbacks or local state application.
 - Markdown/document surface planners may own mode normalization, dirty-state,
   save/revert outcome, and fallback display plans; the workbench app shell must
   still execute DOM updates, focus, network writes, rendering, and toasts.
@@ -46,7 +50,8 @@ markdown, Mermaid, images, sidebars, and interaction overlays.
 ## Verification
 
 - Run `node --check` on changed primitive files.
-- Run relevant checks such as `node tests/interaction_overlay_primitive_check.js`,
+- Run relevant checks such as `node tests/artifact_components_check.js`,
+  `node tests/interaction_overlay_primitive_check.js`,
   `node tests/document_renderer_primitive_check.js`,
   `node tests/artifact_renderer_primitive_check.js`,
   `node tests/interaction_overlay_controller_check.js`, or

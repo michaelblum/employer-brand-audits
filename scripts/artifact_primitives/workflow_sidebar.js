@@ -24,6 +24,12 @@
     return String(value || "").replace(/[._-]/g, " ");
   }
 
+  function projectionMetaValues(values = []) {
+    return values
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+  }
+
   function projectedArtifact(context, item) {
     return context.projectedArtifactsById?.[item?.id] || null;
   }
@@ -361,11 +367,11 @@
     const step = projectedStep(context, item);
     const slot = projectedSlot(context, item);
     const projectionMeta = projected
-      ? [
+      ? projectionMetaValues([
         slot?.label || formatSlot(projected.slot),
         projected.source_page?.slug,
         step?.status || projected.status,
-      ].filter(Boolean)
+      ])
       : [];
     const annotationHtml = notes.length
       ? notes.map((note) => `

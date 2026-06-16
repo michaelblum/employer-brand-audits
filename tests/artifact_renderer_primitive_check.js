@@ -5,6 +5,7 @@ global.window = { ArtifactPrimitives: {} };
 
 require(path.join(__dirname, "../scripts/artifact_primitives/document_renderer.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_renderer.js"));
+require(path.join(__dirname, "../scripts/artifact_primitives/artifact_components.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/artifact_renderer.js"));
 
 const renderer = window.ArtifactPrimitives.artifactRenderer;
@@ -279,38 +280,29 @@ assert.deepEqual(
     document: window.ArtifactPrimitives.document,
   },
 );
-assert.deepEqual(
-  renderer.artifactToolbarPlan({
-    artifact: { id: "image", type: "image", dimensions: { width: 1000, height: 720 } },
-    imageNaturalWidth: 1000,
-    imageNaturalHeight: 720,
-  }),
-  {
-    kind: "image",
-    readout: [
-      { id: "image-dimensions", label: "Dimensions", value: "1000 x 720 px" },
-    ],
-    controls: [
-      { id: "image-zoom", kind: "image-zoom" },
-    ],
-  },
-);
-assert.deepEqual(
-  renderer.artifactToolbarPlan({
-    artifact: { id: "md", type: "markdown" },
-    markdownContentById: { md: "# Heading\n\nBody words" },
-    markdown: window.ArtifactPrimitives.markdown,
-  }),
-  {
-    kind: "markdown",
-    readout: [
-      { id: "markdown-diagnostics", label: "Markdown", value: "3 lines · 4 words · 1 headings" },
-    ],
-    controls: [
-      { id: "markdown-controls", kind: "markdown-controls" },
-    ],
-  },
-);
+const imageToolbarPlan = renderer.artifactToolbarPlan({
+  artifact: { id: "image", type: "image", dimensions: { width: 1000, height: 720 } },
+  imageNaturalWidth: 1000,
+  imageNaturalHeight: 720,
+});
+assert.equal(imageToolbarPlan.kind, "image");
+assert.deepEqual(imageToolbarPlan.readout, [
+  { id: "image-dimensions", label: "Dimensions", value: "1000 x 720 px" },
+]);
+assert.equal(imageToolbarPlan.controls[0].id, "image-zoom");
+assert.match(imageToolbarPlan.controls[0].html, /id="image-controls"/);
+
+const markdownToolbarPlan = renderer.artifactToolbarPlan({
+  artifact: { id: "md", type: "markdown" },
+  markdownContentById: { md: "# Heading\n\nBody words" },
+  markdown: window.ArtifactPrimitives.markdown,
+});
+assert.equal(markdownToolbarPlan.kind, "markdown");
+assert.deepEqual(markdownToolbarPlan.readout, [
+  { id: "markdown-diagnostics", label: "Markdown", value: "3 lines · 4 words · 1 headings" },
+]);
+assert.equal(markdownToolbarPlan.controls[0].id, "markdown-controls");
+assert.match(markdownToolbarPlan.controls[0].html, /id="markdown-controls"/);
 assert.deepEqual(
   renderer.artifactToolbarPlan({
     artifact: { id: "doc", type: "json", size_bytes: 42 },

@@ -1,69 +1,19 @@
 (function () {
   const ROOT = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
 
-  const DOCUMENT_TYPES = ["json", "text", "log", "file"];
-
-  function fallbackIsDocumentArtifact(artifact = {}) {
-    return DOCUMENT_TYPES.includes(String(artifact.type || "").toLowerCase());
+  function artifactComponents() {
+    if (!ROOT.artifactComponents) {
+      throw new Error("Artifact component registry is not loaded");
+    }
+    return ROOT.artifactComponents;
   }
 
   function artifactRenderKind(artifact = {}, { document } = {}) {
-    const type = String(artifact.type || "").toLowerCase();
-    if (type === "markdown") return "markdown";
-    const documentPrimitive = document || ROOT.document;
-    const isDocument = typeof documentPrimitive?.isDocumentArtifact === "function"
-      ? documentPrimitive.isDocumentArtifact(artifact)
-      : fallbackIsDocumentArtifact(artifact);
-    return isDocument ? "document" : "image";
+    return artifactComponents().artifactRenderKind(artifact, { document });
   }
 
   function artifactStagePlan(artifact = {}, options = {}) {
-    const renderKind = artifactRenderKind(artifact, options);
-    const shared = {
-      selectionHidden: true,
-      resetHoverMarker: true,
-      commentPopoverHidden: true,
-    };
-    if (renderKind === "markdown") {
-      return {
-        renderKind,
-        stage: { markdownStage: true, resetScroll: false },
-        surfaces: {
-          imageWrapHidden: true,
-          markdownWrapHidden: false,
-          ...shared,
-          markdownMarkerHidden: null,
-          markdownPreviewHidden: null,
-          markdownSourceHidden: null,
-        },
-      };
-    }
-    if (renderKind === "document") {
-      return {
-        renderKind,
-        stage: { markdownStage: true, resetScroll: true },
-        surfaces: {
-          imageWrapHidden: true,
-          markdownWrapHidden: false,
-          ...shared,
-          markdownMarkerHidden: true,
-          markdownPreviewHidden: false,
-          markdownSourceHidden: true,
-        },
-      };
-    }
-    return {
-      renderKind,
-      stage: { markdownStage: false, resetScroll: true },
-      surfaces: {
-        imageWrapHidden: false,
-        markdownWrapHidden: true,
-        ...shared,
-        markdownMarkerHidden: true,
-        markdownPreviewHidden: null,
-        markdownSourceHidden: null,
-      },
-    };
+    return artifactComponents().artifactStagePlan(artifact, options);
   }
 
   function documentLoadPlan(artifact = {}, {
@@ -161,44 +111,19 @@
     markdown = ROOT.markdown,
     document = ROOT.document,
   } = {}) {
-    const renderKind = artifactRenderKind(artifact, { document });
-    if (renderKind === "document" && typeof document?.documentReadout === "function") {
-      return document.documentReadout(artifact, documentContent);
-    }
-    if (renderKind === "markdown" && typeof markdown?.markdownDiagnostics === "function") {
-      const diagnostics = markdown.markdownDiagnostics(markdownContent);
-      return `${diagnostics.line_count} lines · ${diagnostics.word_count} words · ${diagnostics.heading_count} headings`;
-    }
-    const dimensions = artifact.dimensions || {};
-    const width = dimensions.width || imageNaturalWidth || "unknown";
-    const height = dimensions.height || imageNaturalHeight || "unknown";
-    return `${width} x ${height} px`;
+    return artifactComponents().artifactReadout({
+      artifact,
+      imageNaturalWidth,
+      imageNaturalHeight,
+      markdownContent,
+      documentContent,
+      markdown,
+      document,
+    });
   }
 
   function artifactToolbarPlan(options = {}) {
-    const readoutPlan = artifactReadoutPlan(options);
-    const kind = artifactRenderKind(readoutPlan.artifact, { document: readoutPlan.document });
-    const readoutValue = artifactReadout(readoutPlan);
-    const readoutId = kind === "image"
-      ? "image-dimensions"
-      : kind === "markdown"
-        ? "markdown-diagnostics"
-        : "document-summary";
-    const readoutLabel = kind === "image"
-      ? "Dimensions"
-      : kind === "markdown"
-        ? "Markdown"
-        : "Document";
-    const controls = kind === "image"
-      ? [{ id: "image-zoom", kind: "image-zoom" }]
-      : kind === "markdown"
-        ? [{ id: "markdown-controls", kind: "markdown-controls" }]
-        : [];
-    return {
-      kind,
-      readout: readoutValue ? [{ id: readoutId, label: readoutLabel, value: readoutValue }] : [],
-      controls,
-    };
+    return artifactComponents().artifactToolbarPlan(artifactReadoutPlan(options));
   }
 
   function artifactSelectionPlan({ requestedIndex = 0, artifactCount = 0 } = {}) {

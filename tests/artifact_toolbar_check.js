@@ -10,13 +10,23 @@ const toolbar = window.WorkbenchArtifactToolbar;
 assert.equal(typeof toolbar.renderToolbarHtml, "function");
 assert.equal(typeof toolbar.mountToolbar, "function");
 
+const source = require("node:fs").readFileSync(
+  path.join(__dirname, "../scripts/workflow_artifact_workbench/artifact_toolbar.js"),
+  "utf-8",
+);
+assert.doesNotMatch(source, /renderImageZoomControls|renderMarkdownControls/);
+assert.doesNotMatch(source, /image-controls|markdown-controls|zoom-control/);
+
 const imageHtml = toolbar.renderToolbarHtml({
   kind: "image",
   readout: [
     { id: "image-dimensions", label: "Dimensions", value: "1000 x 720 px" },
   ],
   controls: [
-    { id: "image-zoom", kind: "image-zoom" },
+    {
+      id: "image-zoom",
+      html: '<div class="image-controls" id="image-controls"><div class="zoom-control" id="zoom-control"><div class="zoom-steps"><button id="zoom-in"></button><button id="zoom-out"></button></div></div></div>',
+    },
   ],
 });
 assert.match(imageHtml, /id="artifact-readout"/);
@@ -37,7 +47,10 @@ const markdownHtml = toolbar.renderToolbarHtml({
     { id: "markdown-diagnostics", label: "Markdown", value: "3 lines · 4 words · 1 headings" },
   ],
   controls: [
-    { id: "markdown-controls", kind: "markdown-controls" },
+    {
+      id: "markdown-controls",
+      html: '<div class="markdown-controls" id="markdown-controls"><button id="markdown-preview-mode"></button><button id="markdown-source-mode"></button><button id="markdown-save"></button></div>',
+    },
   ],
 });
 assert.match(markdownHtml, /id="markdown-controls"/);

@@ -63,7 +63,7 @@
     sourceEl.value = content;
     previewEl.hidden = mode !== "preview";
     sourceEl.hidden = mode !== "source";
-    saveButtonEl.disabled = !dirty;
+    if (saveButtonEl) saveButtonEl.disabled = !dirty;
     syncModeButtons({ mode, themeButtonEl, theme });
   }
 

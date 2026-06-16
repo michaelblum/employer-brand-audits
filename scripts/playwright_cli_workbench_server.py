@@ -59,6 +59,10 @@ WORKBENCH_ASSETS = {
         ARTIFACT_PRIMITIVES_DIR / "document_renderer.js",
         "text/javascript",
     ),
+    "/assets/artifact-primitives/artifact_components.js": (
+        ARTIFACT_PRIMITIVES_DIR / "artifact_components.js",
+        "text/javascript",
+    ),
     "/assets/artifact-primitives/artifact_renderer.js": (
         ARTIFACT_PRIMITIVES_DIR / "artifact_renderer.js",
         "text/javascript",

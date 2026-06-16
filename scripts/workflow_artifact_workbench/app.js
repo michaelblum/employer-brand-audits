@@ -45,6 +45,7 @@
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
     const isImageArtifact = (item = artifact()) => item.type === "image";
     const isMarkdownArtifact = (item = artifact()) => item.type === "markdown";
+    const artifactComponents = () => window.ArtifactPrimitives.artifactComponents;
     const artifactRenderer = () => window.ArtifactPrimitives.artifactRenderer;
     const artifactToolbar = () => window.WorkbenchArtifactToolbar;
     const documentRenderer = () => window.ArtifactPrimitives.document;
@@ -140,6 +141,7 @@
       return overlayControllerInstance;
     }
     const workflowSidebar = () => window.ArtifactPrimitives.workflowSidebar;
+    let unbindArtifactControls = null;
     const workflowSidebarContext = () => workflowSidebar().workflowSidebarContext({
       artifacts: app.collection.artifacts,
       interactionOverlays: app.interactionOverlays,
@@ -306,7 +308,7 @@
     }
 
     function artifactToolbarPlan(item = artifact()) {
-      return artifactRenderer().artifactToolbarPlan({
+      return artifactComponents().artifactToolbarPlan({
         artifact: item,
         imageNaturalWidth: $("artifact-image").naturalWidth,
         imageNaturalHeight: $("artifact-image").naturalHeight,
@@ -317,28 +319,59 @@
       });
     }
 
-    function syncMountedToolbarState(item = artifact()) {
-      const saveButton = $("markdown-save");
-      if (saveButton) saveButton.disabled = !app.markdownDirty[item.id];
-      const themeButton = $("markdown-theme-toggle");
-      if (themeButton) {
-        window.ArtifactPrimitives.markdownInteractions.syncThemeButton({
-          buttonEl: themeButton,
-          theme: app.artifactDocumentTheme,
-        });
-      }
-      if (isMarkdownArtifact(item)) {
-        window.ArtifactPrimitives.markdownInteractions.syncModeButtons({
-          mode: app.markdownMode,
-          themeButtonEl: themeButton,
-          theme: app.artifactDocumentTheme,
-        });
-      }
+    function selectedArtifactComponent(item = artifact()) {
+      return artifactComponents().resolveArtifactComponent(item, { document: documentRenderer() });
+    }
+
+    function artifactControlState(item = artifact()) {
+      return {
+        artifactDocumentTheme: app.artifactDocumentTheme,
+        markdownDirty: app.markdownDirty,
+        markdownMode: app.markdownMode,
+        zoomMode: app.zoomMode,
+        zoomPercent: app.zoomPercent,
+        artifact: item,
+      };
+    }
+
+    function artifactControlActions() {
+      return {
+        applyZoom: (value, options = {}) => applyZoom(options.relative ? app.zoomPercent + value : value),
+        revertMarkdownArtifact,
+        saveMarkdownArtifact,
+        setMarkdownMode,
+        smartFit,
+        toggleMarkdownTheme,
+      };
+    }
+
+    function bindArtifactControls(item = artifact()) {
+      if (unbindArtifactControls) unbindArtifactControls();
+      const component = selectedArtifactComponent(item);
+      unbindArtifactControls = typeof component.bindControls === "function"
+        ? component.bindControls({
+          rootEl: $("artifact-toolbar"),
+          actions: artifactControlActions(),
+          state: artifactControlState(item),
+          artifact: item,
+        })
+        : null;
+    }
+
+    function syncArtifactControls(item = artifact()) {
+      const component = selectedArtifactComponent(item);
+      if (typeof component.syncControls !== "function") return;
+      component.syncControls({
+        rootEl: $("artifact-toolbar"),
+        state: artifactControlState(item),
+        artifact: item,
+      });
     }
 
     function updateArtifactToolbar(item = artifact()) {
       artifactToolbar().mountToolbar($("artifact-toolbar"), artifactToolbarPlan(item));
-      syncMountedToolbarState(item);
+      bindArtifactControls(item);
+      syncArtifactControls(item);
     }
 
     function artifactStagePlan(item = artifact()) {
@@ -1059,41 +1092,6 @@
       setupDictationControl({ buttonId: "comment-dictation", inputId: "comment-text" });
     }
 
-    function handleArtifactToolbarClick(event) {
-      const button = event.target.closest("button");
-      const toolbar = $("artifact-toolbar");
-      if (!button || !toolbar.contains(button)) return;
-      if (button.id === "zoom-in") {
-        applyZoom(app.zoomPercent + 10);
-      } else if (button.id === "zoom-out") {
-        applyZoom(app.zoomPercent - 10);
-      } else if (button.id === "zoom-fit") {
-        smartFit();
-      } else if (button.id === "markdown-preview-mode") {
-        setMarkdownMode("preview");
-      } else if (button.id === "markdown-source-mode") {
-        setMarkdownMode("source");
-      } else if (button.id === "markdown-theme-toggle") {
-        toggleMarkdownTheme();
-      } else if (button.id === "markdown-save") {
-        void saveMarkdownArtifact();
-      } else if (button.id === "markdown-revert") {
-        revertMarkdownArtifact();
-      }
-    }
-
-    function handleArtifactToolbarChange(event) {
-      if (event.target?.id === "zoom-input") {
-        applyZoom(event.target.value.replace("%", ""));
-      }
-    }
-
-    function handleArtifactToolbarWheel(event) {
-      if (!event.target.closest("#zoom-control")) return;
-      event.preventDefault();
-      applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
-    }
-
     function wireEvents() {
       $("prev").addEventListener("click", () => move(-1));
       $("next").addEventListener("click", () => move(1));
@@ -1113,9 +1111,6 @@
       $("copy-path").addEventListener("click", () => copyText(artifact().path));
       $("secondary-comment-action").addEventListener("click", secondaryEditorAction);
       $("primary-comment-action").addEventListener("click", commitEditor);
-      $("artifact-toolbar").addEventListener("click", handleArtifactToolbarClick);
-      $("artifact-toolbar").addEventListener("change", handleArtifactToolbarChange);
-      $("artifact-toolbar").addEventListener("wheel", handleArtifactToolbarWheel, { passive: false });
       $("markdown-source").addEventListener("input", () => {
         const item = artifact();
         const plan = artifactRenderer().markdownInputPlan({
