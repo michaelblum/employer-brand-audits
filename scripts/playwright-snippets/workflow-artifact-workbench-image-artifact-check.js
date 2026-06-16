@@ -1,7 +1,7 @@
 async (page) => {
   await page.reload();
   const model = await page.evaluate(async () => {
-    const state = await fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json());
+    const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
     const artifacts = state.collection?.artifacts || [];
     const imageIndex = artifacts.findIndex((artifact) => artifact.type === "image");
     if (imageIndex < 0) throw new Error("No image artifact in collection");

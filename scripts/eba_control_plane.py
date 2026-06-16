@@ -12,7 +12,7 @@ from typing import Any
 
 REGISTRY_SCHEMA_VERSION = "eba_registry.v1"
 
-ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "demo", "workbench", "gh"}
+ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "gh"}
 ALLOWED_DEV_COMMANDS = {"situation", "validate", "demo", "workbench", "trace", "gh", "hooks"}
 DEFAULT_ALLOWED_PATHS = [
     "AGENTS.md",
@@ -318,8 +318,13 @@ def begin_turn(repo_root: Path, worker_id: str | None) -> dict[str, Any]:
     return packet
 
 
-def assert_dev_command_allowed(repo_root: Path, command: str) -> None:
-    if command not in ACTIVE_TURN_REQUIRED_COMMANDS:
+def assert_dev_command_allowed(
+    repo_root: Path,
+    command: str,
+    *,
+    require_active_turn: bool = False,
+) -> None:
+    if not require_active_turn and command not in ACTIVE_TURN_REQUIRED_COMMANDS:
         return
     registry = load_registry(repo_root)
     current = read_json(current_turn_path(repo_root))
@@ -445,7 +450,7 @@ def concrete_sop_checks(repo_root: Path) -> list[dict[str, Any]]:
             repo_root,
             name="agents_turn_gate",
             path="AGENTS.md",
-            required=["./eba begin", "./eba dev validate", "./eba dev demo"],
+            required=["./eba begin", "./eba dev validate", "without opening a turn"],
         ),
         required_text_check(
             repo_root,
@@ -481,7 +486,7 @@ def concrete_sop_checks(repo_root: Path) -> list[dict[str, Any]]:
             repo_root,
             name="sop_turn_commands",
             path="docs/superpowers/project-sop.md",
-            required=["./eba begin", "./eba end", "./eba dev demo", "active `./eba begin` turn"],
+            required=["./eba begin", "./eba end", "./eba dev demo", "view-only user requests"],
         ),
         adr_008_browser_boundary_check(repo_root),
     ]

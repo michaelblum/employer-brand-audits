@@ -5,7 +5,9 @@
     };
     const app = {
       collection: null,
-      annotations: {},
+      interactionOverlays: [],
+      contexts: [],
+      context: null,
       index: 0,
       drag: null,
       pendingAnchor: null,
@@ -37,7 +39,7 @@
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     }[char]));
     const artifact = () => app.collection.artifacts[app.index];
-    const artifactAnnotations = (id) => app.annotations[id] || [];
+    const artifactAnnotations = (id) => interactionOverlay().annotationOverlays(app.interactionOverlays, id);
     const artifactIndexById = (id) => app.collection.artifacts.findIndex((item) => item.id === id);
     const annotationById = (artifactId, annotationId) => artifactAnnotations(artifactId).find((note) => note.id === annotationId);
     const artifactUrl = (item) => `/artifact/${String(item.path || "").split("/").map(encodeURIComponent).join("/")}`;
@@ -65,9 +67,9 @@
             overlay: interactionOverlay(),
             effects: {
               editor: {
-                setAnnotations: (annotations) => { app.annotations = annotations; },
+                setInteractionOverlays: (interactionOverlays) => { app.interactionOverlays = interactionOverlays || []; },
                 closeEditor,
-                syncAnnotations,
+                syncInteractionOverlays,
                 renderSidebar,
                 showToast,
               },
@@ -139,7 +141,9 @@
     const workflowSidebar = () => window.ArtifactPrimitives.workflowSidebar;
     const workflowSidebarContext = () => workflowSidebar().workflowSidebarContext({
       artifacts: app.collection.artifacts,
-      annotations: app.annotations,
+      interactionOverlays: app.interactionOverlays,
+      contexts: app.contexts,
+      context: app.context,
       activeIndex: app.index,
       filters: app.filters,
       iconHref,
@@ -169,13 +173,68 @@
       showToast("Copied");
     }
 
-    async function syncAnnotations() {
-      const response = await fetch("/api/annotation-state", {
+    function hasUnsavedInteractionOverlays() {
+      return app.interactionOverlays.some((overlay) => !overlay.resolved_at_epoch);
+    }
+
+    function applyWorkbenchStatePayload(payload) {
+      app.collection = payload.collection;
+      app.interactionOverlays = payload.interaction_overlays || [];
+      app.contexts = payload.contexts || [];
+      app.context = payload.context || null;
+      app.workflowProjectionModel = workflowSidebar().workflowProjectionModel(payload.workbench_projection || null);
+    }
+
+    async function switchWorkbenchContext(manifest) {
+      if (!manifest || manifest === app.context?.manifest) return;
+      if (hasUnsavedInteractionOverlays()) {
+        const discard = window.confirm("Switching workflows will discard current notes and input drafts.");
+        if (!discard) {
+          renderOverview();
+          return;
+        }
+      }
+      const response = await fetch("/api/workbench-context", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ annotations: app.annotations }),
+        body: JSON.stringify({ manifest, changed_by: "human" }),
       });
-      if (!response.ok) showToast("Annotation sync failed");
+      if (!response.ok) {
+        showToast("Context switch failed");
+        renderOverview();
+        return;
+      }
+      const payload = await response.json();
+      closeEditor();
+      hideAnnotationMarker();
+      app.index = 0;
+      app.filters = { stepId: null, slot: null, compositeId: null };
+      applyWorkbenchStatePayload(payload);
+      render();
+    }
+
+    async function syncInteractionOverlays() {
+      const response = await fetch("/api/workbench-state", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ interaction_overlays: app.interactionOverlays }),
+      });
+      if (!response.ok) showToast("Overlay sync failed");
+    }
+
+    async function syncWorkbenchViewState() {
+      const current = artifact();
+      if (!current) return;
+      await fetch("/api/workbench-state", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          view: {
+            active_artifact_id: current.id,
+            active_index: app.index,
+          },
+        }),
+      });
     }
 
     function imageViewerOptions() {
@@ -509,6 +568,12 @@
 
     function renderOverview() {
       $("overview-popover").innerHTML = workflowSidebar().renderOverviewHtml(workflowSidebarContext());
+      const select = $("overview-popover").querySelector("[data-context-select]");
+      if (select) {
+        select.addEventListener("change", () => {
+          void switchWorkbenchContext(select.value);
+        });
+      }
       $("overview-popover").querySelectorAll("[data-index]").forEach((button) => {
         button.addEventListener("click", () => {
           $("overview-popover").hidden = true;
@@ -569,15 +634,15 @@
           const targetAnnotationId = row.dataset.annotationId;
           const payload = JSON.parse(event.dataTransfer.getData("text/plain") || "{}");
           const plan = interactionOverlay().annotationReorderPlan({
-            annotations: app.annotations,
+            interactionOverlays: app.interactionOverlays,
             artifactId: targetArtifactId,
             sourceArtifactId: payload.artifactId,
             sourceAnnotationId: payload.annotationId,
             targetAnnotationId,
           });
           if (!plan) return;
-          app.annotations[plan.artifactId] = plan.notes;
-          await syncAnnotations();
+          app.interactionOverlays = plan.interactionOverlays;
+          await syncInteractionOverlays();
           renderSidebar();
         });
       });
@@ -593,6 +658,7 @@
       renderOverview();
       renderSidebar();
       renderShell();
+      void syncWorkbenchViewState();
     }
 
     function imagePoint(event) {
@@ -871,7 +937,7 @@
 
     async function commitEditor() {
       await applyOverlayEditorIntent(interactionOverlay().commitOverlayEditorIntent({
-        annotations: app.annotations,
+        interactionOverlays: app.interactionOverlays,
         artifact: artifact(),
         editorMode: app.editorMode,
         editing: app.editing,
@@ -882,7 +948,7 @@
 
     async function secondaryEditorAction() {
       await applyOverlayEditorIntent(interactionOverlay().secondaryOverlayEditorIntent({
-        annotations: app.annotations,
+        interactionOverlays: app.interactionOverlays,
         editorMode: app.editorMode,
         editing: app.editing,
       }));
@@ -1070,14 +1136,9 @@
     }
 
     async function boot() {
-      const [stateResponse, projectionPayload] = await Promise.all([
-        fetch("/api/annotation-state"),
-        fetchWorkbenchProjection(),
-      ]);
+      const stateResponse = await fetch("/api/workbench-state");
       const payload = await stateResponse.json();
-      app.collection = payload.collection;
-      app.annotations = payload.annotations || {};
-      app.workflowProjectionModel = workflowSidebar().workflowProjectionModel(projectionPayload);
+      applyWorkbenchStatePayload(payload);
       setArtifactDocumentTheme(storedArtifactDocumentTheme());
       if (!app.collection.artifacts.length) {
         $("stage").innerHTML = "<div class='small'>No artifacts found.</div>";

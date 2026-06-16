@@ -1,7 +1,7 @@
 async (page) => {
   await page.reload();
   const model = await page.evaluate(async () => {
-    const state = await fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json());
+    const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
     const artifacts = state.collection?.artifacts || [];
     const imageIndex = artifacts.findIndex((artifact) => artifact.type === "image");
     if (imageIndex < 0) throw new Error("No image artifact available for annotation reorder smoke");
@@ -9,46 +9,50 @@ async (page) => {
     return {
       artifactId,
       imageIndex,
-      originalAnnotations: state.annotations || {},
-      originalNotes: state.annotations?.[artifactId] || [],
+      originalInteractionOverlays: state.interaction_overlays || [],
     };
   });
 
   const smokeNotes = ["first", "second", "third"].map((label, index) => ({
     id: `reorder-smoke-${label}`,
-    artifact_id: model.artifactId,
-    kind: "comment",
+    subtype: "annotation",
+    subject: { kind: "artifact", id: model.artifactId },
     anchor: {
       type: "image_region",
       coordinate_space: "natural_image",
       rect: { x: 10 + index, y: 12 + index, width: 24, height: 24 },
     },
-    comment: `Reorder smoke ${label}`,
+    body: { kind: "comment", text: `Reorder smoke ${label}` },
     created_at_epoch: 1781500000 + index,
     updated_at_epoch: null,
   }));
 
   async function restoreAnnotations() {
-    await page.evaluate(async ({ artifactId, originalAnnotations, originalNotes }) => {
-      const annotations = { ...originalAnnotations, [artifactId]: originalNotes };
-      const response = await fetch("/api/annotation-state", {
+    await page.evaluate(async ({ originalInteractionOverlays }) => {
+      const response = await fetch("/api/workbench-state", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ annotations }),
+        body: JSON.stringify({ interaction_overlays: originalInteractionOverlays }),
       });
-      if (!response.ok) throw new Error(`Annotation restore failed: ${response.status}`);
+      if (!response.ok) throw new Error(`Interaction overlay restore failed: ${response.status}`);
     }, model);
   }
 
   try {
-    await page.evaluate(async ({ artifactId, originalAnnotations, smokeNotes }) => {
-      const annotations = { ...originalAnnotations, [artifactId]: smokeNotes };
-      const response = await fetch("/api/annotation-state", {
+    await page.evaluate(async ({ artifactId, originalInteractionOverlays, smokeNotes }) => {
+      const interactionOverlays = originalInteractionOverlays
+        .filter((overlay) => !(
+          overlay?.subtype === "annotation"
+          && overlay?.subject?.kind === "artifact"
+          && overlay?.subject?.id === artifactId
+        ))
+        .concat(smokeNotes);
+      const response = await fetch("/api/workbench-state", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ annotations }),
+        body: JSON.stringify({ interaction_overlays: interactionOverlays }),
       });
-      if (!response.ok) throw new Error(`Annotation seed failed: ${response.status}`);
+      if (!response.ok) throw new Error(`Interaction overlay seed failed: ${response.status}`);
     }, { ...model, smokeNotes });
 
     await page.reload();
@@ -79,17 +83,29 @@ async (page) => {
     });
 
     await page.waitForFunction((artifactId) => {
-      return fetch("/api/annotation-state", { cache: "no-store" })
+      return fetch("/api/workbench-state", { cache: "no-store" })
         .then((response) => response.json())
         .then((state) => {
-          const ids = (state.annotations?.[artifactId] || []).map((note) => note.id);
+          const ids = (state.interaction_overlays || [])
+            .filter((overlay) => (
+              overlay?.subtype === "annotation"
+              && overlay?.subject?.kind === "artifact"
+              && overlay?.subject?.id === artifactId
+            ))
+            .map((note) => note.id);
           return ids.join(",") === "reorder-smoke-third,reorder-smoke-first,reorder-smoke-second";
         });
     }, model.artifactId, { timeout: 5000 });
 
     const order = await page.evaluate(async ({ artifactId }) => {
-      const state = await fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json());
-      return (state.annotations?.[artifactId] || []).map((note) => note.id);
+      const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
+      return (state.interaction_overlays || [])
+        .filter((overlay) => (
+          overlay?.subtype === "annotation"
+          && overlay?.subject?.kind === "artifact"
+          && overlay?.subject?.id === artifactId
+        ))
+        .map((note) => note.id);
     }, model);
 
     return {

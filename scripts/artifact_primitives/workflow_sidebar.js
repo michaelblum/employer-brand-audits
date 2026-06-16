@@ -68,7 +68,9 @@
 
   function workflowSidebarContext({
     artifacts = [],
-    annotations = {},
+    interactionOverlays = [],
+    contexts = [],
+    context = null,
     activeIndex = 0,
     filters = {},
     iconHref = null,
@@ -77,7 +79,9 @@
     const model = projectionModel || workflowProjectionModel(null);
     return {
       artifacts,
-      annotations,
+      interactionOverlays,
+      contexts,
+      context,
       activeIndex,
       filters,
       iconHref,
@@ -94,11 +98,27 @@
   }
 
   function artifactAnnotations(context, artifactId) {
-    return context.annotations?.[artifactId] || [];
+    const overlay = ROOT.interactionOverlay;
+    if (overlay && typeof overlay.annotationOverlays === "function") {
+      return overlay.annotationOverlays(context.interactionOverlays || [], artifactId);
+    }
+    return (context.interactionOverlays || []).filter((item) => (
+      item?.subtype === "annotation"
+      && item.subject?.kind === "artifact"
+      && item.subject?.id === artifactId
+    ));
   }
 
   function annotationAnchor(note) {
     return note?.anchor || {};
+  }
+
+  function annotationText(note) {
+    const overlay = ROOT.interactionOverlay;
+    if (overlay && typeof overlay.annotationText === "function") {
+      return overlay.annotationText(note);
+    }
+    return note?.body?.text || "";
   }
 
   function anchorSummary(anchor = {}) {
@@ -223,8 +243,24 @@
   }
 
   function renderOverviewHtml(context = {}) {
+    const contexts = context.contexts || [];
+    const activeManifest = context.context?.manifest || contexts.find((item) => item.active)?.manifest || "";
+    const activeContext = contexts.find((item) => item.manifest === activeManifest) || null;
+    const contextPicker = contexts.length ? `
+        <div class="context-switcher">
+          <label for="workbench-context-select">Workflow</label>
+          <select id="workbench-context-select" data-context-select>
+            ${contexts.map((item) => `
+              <option value="${escapeHtml(item.manifest)}" ${item.manifest === activeManifest ? "selected" : ""}>
+                ${escapeHtml(item.label || item.manifest)}
+              </option>
+            `).join("")}
+          </select>
+          <div class="small">${escapeHtml(activeContext?.subtitle || activeManifest)}</div>
+        </div>
+      ` : "";
     const artifacts = context.artifacts || [];
-    return visibleArtifactIndexes(context).map((index) => {
+    const artifactButtons = visibleArtifactIndexes(context).map((index) => {
       const item = artifacts[index] || {};
       return `
         <button class="artifact-option ${index === context.activeIndex ? "active" : ""}" type="button" data-index="${index}">
@@ -233,6 +269,7 @@
         </button>
       `;
     }).join("");
+    return contextPicker + artifactButtons;
   }
 
   function filterSteps(context = {}) {
@@ -326,7 +363,7 @@
     const annotationHtml = notes.length
       ? notes.map((note) => `
             <div class="annotation" draggable="true" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
-              <div class="annotation-text" title="${escapeHtml(note.comment)}">${escapeHtml(note.comment)}</div>
+              <div class="annotation-text" title="${escapeHtml(annotationText(note))}">${escapeHtml(annotationText(note))}</div>
               <div class="small">${escapeHtml(anchorSummary(annotationAnchor(note)))}</div>
             </div>
           `).join("")

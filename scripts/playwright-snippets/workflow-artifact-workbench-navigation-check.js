@@ -3,7 +3,7 @@ async (page) => {
 
   const model = await page.evaluate(async () => {
     const [state, projection] = await Promise.all([
-      fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json()),
+      fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json()),
       fetch("/api/workbench-projection", { cache: "no-store" }).then((response) => response.json()),
     ]);
     const collection = state.collection?.artifacts || [];
@@ -44,7 +44,7 @@ async (page) => {
 
   const filteredState = await page.evaluate(async (stepId) => {
     const [state, projection] = await Promise.all([
-      fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json()),
+      fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json()),
       fetch("/api/workbench-projection", { cache: "no-store" }).then((response) => response.json()),
     ]);
     const collection = state.collection?.artifacts || [];

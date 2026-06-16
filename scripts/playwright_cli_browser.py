@@ -98,6 +98,18 @@ def window_maximize(args: argparse.Namespace) -> int:
     return _run(_session_prefix(args.session) + ["run-code", code])
 
 
+def window_focus(args: argparse.Namespace) -> int:
+    # Do not add Browser.setWindowBounds here. Focus must not move or resize the
+    # managed workbench window.
+    code = (
+        "async page => {"
+        "await page.bringToFront();"
+        "await page.evaluate(() => window.focus());"
+        "}"
+    )
+    return _run(_session_prefix(args.session) + ["run-code", code])
+
+
 def tab_list(args: argparse.Namespace) -> int:
     return _run(_session_prefix(args.session) + ["tab-list"])
 
@@ -194,6 +206,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = with_session(sub.add_parser("window-maximize", help="Maximize the browser window on its current display"))
     p.set_defaults(func=window_maximize)
+
+    p = with_session(sub.add_parser("window-focus", help="Bring the browser window to the front"))
+    p.set_defaults(func=window_focus)
 
     p = with_session(sub.add_parser("tab-list", help="List browser tabs"))
     p.set_defaults(func=tab_list)

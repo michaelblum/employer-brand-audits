@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import shlex
 import signal
 import shutil
 import socket
@@ -18,11 +19,13 @@ from typing import Any
 try:
     from playwright_cli_workbench_server import (
         WORKBENCH_ASSET_MANIFEST_PATH,
+        WORKBENCH_STATE_PATH,
         build_workbench_asset_manifest,
     )
 except ModuleNotFoundError:
     from scripts.playwright_cli_workbench_server import (
         WORKBENCH_ASSET_MANIFEST_PATH,
+        WORKBENCH_STATE_PATH,
         build_workbench_asset_manifest,
     )
 
@@ -50,10 +53,10 @@ def parse_args() -> argparse.Namespace:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    for command in ("start", "status", "stop", "open", "state", "surface"):
+    for command in ("start", "status", "stop", "open", "state", "glance", "surface"):
         subparser = subparsers.add_parser(command)
         subparser.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
-        if command in {"start", "status", "state", "surface"}:
+        if command in {"start", "status", "state", "glance", "surface"}:
             subparser.add_argument("--host", default=DEFAULT_HOST)
             subparser.add_argument("--port", type=int, default=DEFAULT_PORT)
         if command in {"start", "surface"}:
@@ -167,12 +170,40 @@ def process_command(pid: int) -> str:
     return completed.stdout.strip()
 
 
-def is_owned_workbench_server(pid: int, manifest_path: Path) -> bool:
+def workbench_server_manifest_from_command(command: str) -> Path | None:
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return None
+    for index, part in enumerate(parts):
+        if part == str(SERVER_SCRIPT) or part.endswith("playwright_cli_workbench_server.py"):
+            if index + 1 >= len(parts):
+                return None
+            candidate = Path(parts[index + 1]).expanduser().resolve()
+            if candidate.name == "manifest.json" and REPO_ROOT in candidate.parents:
+                return candidate
+    return None
+
+
+def active_workbench_server_manifest(pid: int) -> Path | None:
+    command = process_command(pid)
+    return workbench_server_manifest_from_command(command)
+
+
+def is_repo_workbench_server(pid: int) -> bool:
     command = process_command(pid)
     return (
-        str(SERVER_SCRIPT) in command
-        and str(manifest_path) in command
-        and "playwright_cli_workbench_server.py" in command
+        "playwright_cli_workbench_server.py" in command
+        and workbench_server_manifest_from_command(command) is not None
+    )
+
+
+def is_owned_workbench_server(pid: int, manifest_path: Path) -> bool:
+    active_manifest = active_workbench_server_manifest(pid)
+    return (
+        active_manifest is not None
+        and active_manifest == manifest_path.resolve()
+        and is_repo_workbench_server(pid)
     )
 
 
@@ -300,6 +331,24 @@ def port_accepts_connection(host: str, port: int) -> bool:
         return sock.connect_ex((host, port)) == 0
 
 
+def listening_pid(host: str, port: int) -> int | None:
+    completed = subprocess.run(
+        ["lsof", "-nP", f"-iTCP@{host}:{port}", "-sTCP:LISTEN", "-t"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return None
+    for line in completed.stdout.splitlines():
+        try:
+            return int(line.strip())
+        except ValueError:
+            continue
+    return None
+
+
 def wait_for_port_release(host: str, port: int, timeout: float = 5.0) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -410,6 +459,7 @@ def build_workbench_browser_plan(
         "session": session,
         "profile": profile_path,
         "browser": browser,
+        "url": url,
         "viewport_size": viewport_size,
         "open_command": [
             sys.executable,
@@ -427,6 +477,18 @@ def build_workbench_browser_plan(
             sys.executable,
             wrapper,
             "window-maximize",
+            *common,
+        ],
+        "window_focus_command": [
+            sys.executable,
+            wrapper,
+            "window-focus",
+            *common,
+        ],
+        "close_command": [
+            sys.executable,
+            wrapper,
+            "close",
             *common,
         ],
         "goto_command": [
@@ -647,6 +709,101 @@ def viewport_sync_command(session: str, metrics: dict[str, Any]) -> list[str] | 
     ]
 
 
+def open_or_reuse_managed_workbench(
+    plan: dict[str, Any],
+    before: dict[str, Any],
+    log_handle: Any,
+) -> tuple[str, subprocess.CompletedProcess[str]]:
+    action_command = plan["goto_command"] if before.get("alive") else plan["open_command"]
+    action = "goto" if before.get("alive") else "open"
+    log_handle.write(f"\n## {action} {int(time.time())} {plan['url']}\n")
+    return action, run_browser_command(action_command, log_handle)
+
+
+def close_reused_managed_workbench(
+    plan: dict[str, Any],
+    before: dict[str, Any],
+    log_handle: Any,
+) -> subprocess.CompletedProcess[str] | None:
+    if not before.get("alive"):
+        return None
+    log_handle.write(f"\n## close {int(time.time())} {plan['session']}\n")
+    return run_browser_command(plan["close_command"], log_handle)
+
+
+def apply_explicit_initial_viewport_resize(
+    plan: dict[str, Any],
+    action: str,
+    log_handle: Any,
+) -> subprocess.CompletedProcess[str] | None:
+    if action != "open" or plan["initial_resize_command"] is None:
+        return None
+    return run_browser_command(plan["initial_resize_command"], log_handle)
+
+
+def sync_managed_workbench_viewport_to_display(
+    *,
+    session: str,
+    plan: dict[str, Any],
+    action: str,
+    previous_browser_state: dict[str, Any],
+    log_handle: Any,
+) -> dict[str, Any]:
+    """Maximize/sync only when display state says the fixed viewport is stale."""
+    viewport_metrics = browser_page_metrics(session)
+    display_signature = browser_display_signature(viewport_metrics)
+    viewport_target = None
+    window_maximize_result = None
+    viewport_sync_result = None
+    previous_signature = (
+        previous_browser_state.get("display_signature")
+        if isinstance(previous_browser_state, dict)
+        else None
+    )
+    should_reset_window = (
+        action == "open"
+        or previous_signature is None
+        or (
+            display_signature is not None
+            and previous_signature != display_signature
+        )
+    )
+    if should_reset_window:
+        window_maximize_result = run_browser_command(
+            plan["window_maximize_command"],
+            log_handle,
+        )
+        if window_maximize_result.returncode == 0:
+            viewport_metrics = browser_page_metrics(session)
+            display_signature = browser_display_signature(viewport_metrics)
+        sync_command = viewport_sync_command(session, viewport_metrics)
+        viewport_target = viewport_target_from_metrics(viewport_metrics)
+        if sync_command is not None:
+            viewport_sync_result = run_browser_command(sync_command, log_handle)
+            if viewport_sync_result.returncode == 0:
+                viewport_metrics = browser_page_metrics(session)
+                display_signature = browser_display_signature(viewport_metrics)
+                viewport_target = viewport_target_from_metrics(viewport_metrics)
+    else:
+        viewport_target = viewport_target_from_metrics(viewport_metrics)
+    return {
+        "display_signature": display_signature,
+        "viewport_metrics": viewport_metrics,
+        "viewport_target": viewport_target,
+        "window_maximize_result": window_maximize_result,
+        "viewport_sync_result": viewport_sync_result,
+    }
+
+
+def bring_managed_workbench_to_front(
+    plan: dict[str, Any],
+    log_handle: Any,
+) -> subprocess.CompletedProcess[str]:
+    # Keep focus separate from resize/maximize. This path must not move or resize
+    # the human-positioned workbench window.
+    return run_browser_command(plan["window_focus_command"], log_handle)
+
+
 def open_with_playwright(
     url: str,
     paths: dict[str, Path],
@@ -655,6 +812,7 @@ def open_with_playwright(
     *,
     session: str = DEFAULT_BROWSER_SESSION,
     profile: Path = DEFAULT_BROWSER_PROFILE,
+    replace_existing_session: bool = False,
 ) -> dict[str, Any]:
     require_session_aware_cli()
     require_workbench_browser_wrapper()
@@ -669,53 +827,45 @@ def open_with_playwright(
     )
     before = browser_session_status(session)
     previous_browser_state = read_json(paths["browser_state"], {})
-    action_command = plan["goto_command"] if before.get("alive") else plan["open_command"]
-    action = "goto" if before.get("alive") else "open"
     resize_result = None
     window_maximize_result = None
+    window_focus_result = None
     viewport_sync_result = None
+    close_result = None
     viewport_metrics = None
     display_signature = None
     viewport_target = None
     with paths["browser_log"].open("a", encoding="utf-8") as log_handle:
-        log_handle.write(f"\n## {action} {int(time.time())} {url}\n")
-        action_result = run_browser_command(action_command, log_handle)
-        if action == "open" and plan["initial_resize_command"] is not None:
-            resize_result = run_browser_command(plan["initial_resize_command"], log_handle)
+        effective_before = before
+        if replace_existing_session:
+            close_result = close_reused_managed_workbench(plan, before, log_handle)
+            if close_result is not None and close_result.returncode == 0:
+                effective_before = {**before, "alive": False}
+        if close_result is not None and close_result.returncode != 0:
+            action = "close"
+            action_result = close_result
+        else:
+            action, action_result = open_or_reuse_managed_workbench(
+                plan,
+                effective_before,
+                log_handle,
+            )
+        resize_result = apply_explicit_initial_viewport_resize(plan, action, log_handle)
         if viewport_size is None and action_result.returncode == 0:
-            viewport_metrics = browser_page_metrics(session)
-            display_signature = browser_display_signature(viewport_metrics)
-            previous_signature = (
-                previous_browser_state.get("display_signature")
-                if isinstance(previous_browser_state, dict)
-                else None
+            sync_state = sync_managed_workbench_viewport_to_display(
+                session=session,
+                plan=plan,
+                action=action,
+                previous_browser_state=previous_browser_state,
+                log_handle=log_handle,
             )
-            should_reset_window = (
-                action == "open"
-                or previous_signature is None
-                or (
-                    display_signature is not None
-                    and previous_signature != display_signature
-                )
-            )
-            if should_reset_window:
-                window_maximize_result = run_browser_command(
-                    plan["window_maximize_command"],
-                    log_handle,
-                )
-                if window_maximize_result.returncode == 0:
-                    viewport_metrics = browser_page_metrics(session)
-                    display_signature = browser_display_signature(viewport_metrics)
-                sync_command = viewport_sync_command(session, viewport_metrics)
-                viewport_target = viewport_target_from_metrics(viewport_metrics)
-                if sync_command is not None:
-                    viewport_sync_result = run_browser_command(sync_command, log_handle)
-                    if viewport_sync_result.returncode == 0:
-                        viewport_metrics = browser_page_metrics(session)
-                        display_signature = browser_display_signature(viewport_metrics)
-                        viewport_target = viewport_target_from_metrics(viewport_metrics)
-            else:
-                viewport_target = viewport_target_from_metrics(viewport_metrics)
+            viewport_metrics = sync_state["viewport_metrics"]
+            display_signature = sync_state["display_signature"]
+            viewport_target = sync_state["viewport_target"]
+            window_maximize_result = sync_state["window_maximize_result"]
+            viewport_sync_result = sync_state["viewport_sync_result"]
+        if action_result.returncode == 0:
+            window_focus_result = bring_managed_workbench_to_front(plan, log_handle)
     if action_result.returncode != 0:
         raise SystemExit(
             f"Workbench browser {action} failed. See {relative_path(paths['browser_log'])}."
@@ -731,6 +881,10 @@ def open_with_playwright(
     if viewport_sync_result is not None and viewport_sync_result.returncode != 0:
         raise SystemExit(
             f"Workbench browser viewport sync failed. See {relative_path(paths['browser_log'])}."
+        )
+    if window_focus_result is not None and window_focus_result.returncode != 0:
+        raise SystemExit(
+            f"Workbench browser focus failed. See {relative_path(paths['browser_log'])}."
         )
     after = browser_session_status(session)
     write_json_atomic(
@@ -749,9 +903,11 @@ def open_with_playwright(
         "opened": True,
         "method": "repo-playwright-cli",
         "session": session,
-        "reused": bool(before.get("alive")),
+        "reused": bool(before.get("alive")) and close_result is None,
+        "replaced": close_result is not None,
         "resized": resize_result is not None,
         "window_maximized": window_maximize_result is not None,
+        "window_focused": window_focus_result is not None,
         "viewport_synced": viewport_sync_result is not None,
         "viewport_metrics": viewport_metrics,
         "display_signature": display_signature,
@@ -764,15 +920,15 @@ def open_with_playwright(
     }
 
 
-def read_annotation_state(url: str) -> dict[str, Any]:
+def read_workbench_state(url: str) -> dict[str, Any]:
     with urllib.request.urlopen(url, timeout=2.0) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
-def summarize_annotation_state(state: dict[str, Any]) -> dict[str, Any]:
+def summarize_workbench_state(state: dict[str, Any]) -> dict[str, Any]:
     collection = state.get("collection", {}) if isinstance(state, dict) else {}
     artifacts = collection.get("artifacts", []) if isinstance(collection, dict) else []
-    annotations = state.get("annotations", {}) if isinstance(state, dict) else {}
+    overlays = state.get("interaction_overlays", []) if isinstance(state, dict) else []
     types: dict[str, int] = {}
     for artifact in artifacts:
         artifact_type = str(artifact.get("type") or artifact.get("mime_type") or "unknown")
@@ -780,8 +936,99 @@ def summarize_annotation_state(state: dict[str, Any]) -> dict[str, Any]:
     return {
         "artifact_count": len(artifacts),
         "artifact_types": types,
-        "annotation_count": sum(len(value) for value in annotations.values() if isinstance(value, list)),
+        "interaction_overlay_count": len(overlays) if isinstance(overlays, list) else 0,
+        "annotation_count": sum(
+            1
+            for overlay in overlays
+            if isinstance(overlay, dict) and overlay.get("subtype") == "annotation"
+        ) if isinstance(overlays, list) else 0,
         "updated_at_epoch": state.get("updated_at_epoch"),
+    }
+
+
+def summarize_workbench_glance(state: dict[str, Any]) -> dict[str, Any]:
+    collection = state.get("collection", {}) if isinstance(state, dict) else {}
+    artifacts = collection.get("artifacts", []) if isinstance(collection, dict) else []
+    artifact_by_id = {
+        str(artifact.get("id")): artifact
+        for artifact in artifacts
+        if isinstance(artifact, dict) and artifact.get("id")
+    }
+    view = state.get("view", {}) if isinstance(state, dict) else {}
+    active_artifact_id = str(view.get("active_artifact_id") or "") if isinstance(view, dict) else ""
+    overlays = state.get("interaction_overlays", []) if isinstance(state, dict) else []
+    annotation_artifact_ids = []
+    if isinstance(overlays, list):
+        for overlay in overlays:
+            if not isinstance(overlay, dict) or overlay.get("subtype") != "annotation":
+                continue
+            subject = overlay.get("subject") if isinstance(overlay.get("subject"), dict) else {}
+            artifact_id = str(subject.get("id") or "")
+            if artifact_id:
+                annotation_artifact_ids.append(artifact_id)
+    if not active_artifact_id and annotation_artifact_ids:
+        active_artifact_id = annotation_artifact_ids[-1]
+    current_artifact = artifact_by_id.get(active_artifact_id)
+    if current_artifact is None and artifacts:
+        current_artifact = artifacts[0]
+        active_artifact_id = str(current_artifact.get("id") or "")
+    contexts = state.get("contexts", []) if isinstance(state, dict) else []
+    active_context = next(
+        (
+            context
+            for context in contexts
+            if isinstance(context, dict) and context.get("active")
+        ),
+        None,
+    )
+    context = state.get("context", {}) if isinstance(state, dict) else {}
+    annotations = []
+    if isinstance(overlays, list):
+        for overlay in overlays:
+            if not isinstance(overlay, dict) or overlay.get("subtype") != "annotation":
+                continue
+            subject = overlay.get("subject") if isinstance(overlay.get("subject"), dict) else {}
+            artifact_id = str(subject.get("id") or "")
+            artifact = artifact_by_id.get(artifact_id, {})
+            body = overlay.get("body") if isinstance(overlay.get("body"), dict) else {}
+            annotations.append(
+                {
+                    "id": overlay.get("id"),
+                    "artifact_id": artifact_id,
+                    "artifact_name": artifact.get("name"),
+                    "text": body.get("text"),
+                    "anchor": overlay.get("anchor"),
+                    "created_at_epoch": overlay.get("created_at_epoch"),
+                }
+            )
+    return {
+        "status": "workbench_glance",
+        "current": {
+            "manifest": context.get("manifest") if isinstance(context, dict) else collection.get("manifest"),
+            "label": active_context.get("label") if isinstance(active_context, dict) else None,
+            "subtitle": active_context.get("subtitle") if isinstance(active_context, dict) else None,
+            "changed_by": context.get("changed_by") if isinstance(context, dict) else None,
+            "changed_at_epoch": context.get("changed_at_epoch") if isinstance(context, dict) else None,
+        },
+        "current_artifact": (
+            {
+                "id": current_artifact.get("id"),
+                "name": current_artifact.get("name"),
+                "type": current_artifact.get("type"),
+                "kind": current_artifact.get("kind"),
+                "path": current_artifact.get("path"),
+                "active_index": (
+                    view.get("active_index")
+                    if isinstance(view, dict) and view.get("active_index") is not None
+                    else artifacts.index(current_artifact)
+                ),
+            }
+            if isinstance(current_artifact, dict)
+            else None
+        ),
+        "model": summarize_workbench_state(state),
+        "annotations": annotations,
+        "updated_at_epoch": state.get("updated_at_epoch") if isinstance(state, dict) else None,
     }
 
 
@@ -816,13 +1063,14 @@ def command_start(args: argparse.Namespace) -> int:
                     args.viewport_size,
                     session=args.browser_session,
                     profile=args.profile,
+                    replace_existing_session=True,
                 )
             if not command_quiet(args):
                 print(f"Artifact viewer already running: {url}")
                 print(f"pid={pid}")
                 print(f"health={status}")
                 print(f"asset_health={asset_health['status']}")
-                print(f"annotation_state={url}api/annotation-state")
+                print(f"workbench_state={url}{WORKBENCH_STATE_PATH.removeprefix('/')}")
                 print(f"workbench_projection={url}api/workbench-projection")
             return 0
 
@@ -830,10 +1078,25 @@ def command_start(args: argparse.Namespace) -> int:
         remove_stale_state(paths)
 
     if port_accepts_connection(args.host, args.port):
-        raise SystemExit(
-            f"Port {args.host}:{args.port} is already in use and is not owned by this manager. "
-            "Run status/stop for the owning gate or choose another port."
-        )
+        port_pid = listening_pid(args.host, args.port)
+        if port_pid is None or not is_repo_workbench_server(port_pid):
+            raise SystemExit(
+                f"Port {args.host}:{args.port} is already in use and is not a repo workbench server. "
+                "Stop the unrelated listener or choose another port."
+            )
+        active_manifest = active_workbench_server_manifest(port_pid)
+        if active_manifest == manifest_path.resolve():
+            paths["pid"].write_text(f"{port_pid}\n", encoding="utf-8")
+            return command_start(args)
+        stop_paths = paths_for(active_manifest) if active_manifest else paths
+        stop_status = stop_owned_pid(port_pid, stop_paths)
+        wait_for_port_release(args.host, args.port)
+        if not command_quiet(args):
+            previous = active_manifest.relative_to(REPO_ROOT) if active_manifest else "unknown"
+            print(
+                "Commandeering repo workbench server from "
+                f"{previous} ({stop_status} PID {port_pid})"
+            )
 
     paths["artifact_root"].mkdir(parents=True, exist_ok=True)
     log_handle = paths["log"].open("a", encoding="utf-8")
@@ -866,7 +1129,7 @@ def command_start(args: argparse.Namespace) -> int:
             "port": args.port,
             "manifest": str(manifest_path.relative_to(REPO_ROOT)),
             "log": str(paths["log"].relative_to(REPO_ROOT)),
-            "annotation_state_url": f"{url}api/annotation-state",
+            "workbench_state_url": f"{url}{WORKBENCH_STATE_PATH.removeprefix('/')}",
             "workbench_projection_url": f"{url}api/workbench-projection",
             "started_at_epoch": int(time.time()),
         },
@@ -894,13 +1157,14 @@ def command_start(args: argparse.Namespace) -> int:
             args.viewport_size,
             session=args.browser_session,
             profile=args.profile,
+            replace_existing_session=True,
         )
     if not command_quiet(args):
         print(f"Artifact viewer running: {url}")
         print(f"pid={process.pid}")
         print(f"health={status}")
         print(f"log={paths['log']}")
-        print(f"annotation_state={url}api/annotation-state")
+        print(f"workbench_state={url}{WORKBENCH_STATE_PATH.removeprefix('/')}")
         print(f"workbench_projection={url}api/workbench-projection")
     return 0
 
@@ -912,25 +1176,33 @@ def status_payload(args: argparse.Namespace, manifest_path: Path) -> dict[str, A
     host = state.get("host", getattr(args, "host", DEFAULT_HOST))
     port = int(state.get("port", getattr(args, "port", DEFAULT_PORT)))
     url = state.get("url", f"http://{host}:{port}/")
+    port_pid = listening_pid(host, port) if pid is None and port_accepts_connection(host, port) else None
+    effective_pid = pid if pid is not None else port_pid
+    active_manifest = active_workbench_server_manifest(effective_pid) if effective_pid else None
     alive = bool(pid is not None and pid_alive(pid))
-    owned = bool(pid is not None and alive and is_owned_workbench_server(pid, manifest_path))
-    healthy, health_status = health(url) if alive or port_accepts_connection(host, port) else (False, "not_listening")
+    repo_owned = bool(effective_pid is not None and pid_alive(effective_pid) and is_repo_workbench_server(effective_pid))
+    owned = bool(effective_pid is not None and repo_owned and active_manifest == manifest_path.resolve())
+    port_alive = bool(effective_pid is not None and pid_alive(effective_pid))
+    healthy, health_status = health(url) if port_alive or port_accepts_connection(host, port) else (False, "not_listening")
     asset_health = (
         workbench_asset_health(url)
-        if owned and healthy
+        if repo_owned and healthy
         else {"healthy": False, "status": "not_checked"}
     )
     return {
         "url": url,
-        "pid": pid,
-        "alive": alive,
+        "pid": effective_pid,
+        "alive": port_alive,
         "owned": owned,
+        "repo_owned": repo_owned,
+        "commandeerable": bool(repo_owned and not owned),
+        "active_manifest": str(active_manifest.relative_to(REPO_ROOT)) if active_manifest else None,
         "health": health_status if healthy else f"unhealthy:{health_status}",
         "asset_health": asset_health,
         "asset_manifest_url": f"{url.rstrip('/')}{WORKBENCH_ASSET_MANIFEST_PATH}",
         "manifest": str(manifest_path.relative_to(REPO_ROOT)),
         "log": str(paths["log"].relative_to(REPO_ROOT)),
-        "annotation_state_url": f"{url.rstrip('/')}/api/annotation-state",
+        "workbench_state_url": f"{url.rstrip('/')}{WORKBENCH_STATE_PATH}",
         "workbench_projection_url": f"{url.rstrip('/')}/api/workbench-projection",
         "browser_session": browser_session_status(DEFAULT_BROWSER_SESSION),
     }
@@ -981,6 +1253,7 @@ def command_open(args: argparse.Namespace) -> int:
         args.viewport_size,
         session=args.browser_session,
         profile=args.profile,
+        replace_existing_session=True,
     )
     print(f"Opened {url} in session={browser['session']} method={browser['method']}")
     return 0
@@ -989,15 +1262,66 @@ def command_open(args: argparse.Namespace) -> int:
 def command_state(args: argparse.Namespace) -> int:
     manifest_path = safe_manifest_path(args.manifest)
     payload = status_payload(args, manifest_path)
-    if not payload["alive"] or not payload["owned"]:
-        raise SystemExit("Artifact viewer is not running under this manager")
-    url = payload["annotation_state_url"]
+    if not payload["alive"] or not payload["repo_owned"]:
+        raise SystemExit("Artifact workbench is not running under this repo")
+    url = payload["workbench_state_url"]
     healthy, status = health(url)
     if not healthy:
-        raise SystemExit(f"Annotation state is not healthy at {url}: {status}")
+        raise SystemExit(f"Workbench state is not healthy at {url}: {status}")
     with urllib.request.urlopen(url, timeout=2.0) as response:
         sys.stdout.write(response.read().decode("utf-8"))
     return 0
+
+
+def command_glance(args: argparse.Namespace) -> int:
+    manifest_path = safe_manifest_path(args.manifest)
+    payload = status_payload(args, manifest_path)
+    if not payload["alive"] or not payload["repo_owned"]:
+        raise SystemExit("Artifact workbench is not running under this repo")
+    url = payload["workbench_state_url"]
+    healthy, status = health(url)
+    if not healthy:
+        raise SystemExit(f"Workbench state is not healthy at {url}: {status}")
+    state = read_workbench_state(url)
+    glance = summarize_workbench_glance(state)
+    glance["url"] = payload["url"]
+    glance["workbench_state_url"] = payload["workbench_state_url"]
+    print(json.dumps(glance, indent=2, sort_keys=True))
+    return 0
+
+
+def restart_surface_server(
+    args: argparse.Namespace,
+    manifest_path: Path,
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], int]:
+    pid = payload.get("pid")
+    if isinstance(pid, int) and payload.get("repo_owned"):
+        active_manifest_value = payload.get("active_manifest") or payload.get("manifest")
+        active_manifest = (
+            safe_manifest_path(REPO_ROOT / active_manifest_value)
+            if active_manifest_value
+            else manifest_path
+        )
+        stop_owned_pid(pid, paths_for(active_manifest))
+        wait_for_port_release(args.host, args.port)
+    start_args = argparse.Namespace(
+        manifest=manifest_path,
+        host=args.host,
+        port=args.port,
+        open=False,
+        timeout=args.timeout,
+        quiet=True,
+    )
+    start_result = command_start(start_args)
+    if start_result != 0:
+        return payload, start_result
+    next_payload = status_payload(args, manifest_path)
+    if not next_payload["alive"] or not next_payload["owned"] or next_payload["health"] != "200":
+        raise SystemExit("Artifact workbench failed to reach healthy managed state")
+    if not next_payload.get("asset_health", {}).get("healthy"):
+        raise SystemExit("Artifact workbench assets failed to reach healthy managed state")
+    return next_payload, 0
 
 
 def command_surface(args: argparse.Namespace) -> int:
@@ -1010,37 +1334,32 @@ def command_surface(args: argparse.Namespace) -> int:
         or payload["health"] != "200"
         or not payload.get("asset_health", {}).get("healthy")
     ):
-        start_args = argparse.Namespace(
-            manifest=manifest_path,
-            host=args.host,
-            port=args.port,
-            open=False,
-            timeout=args.timeout,
-            quiet=True,
-        )
-        start_result = command_start(start_args)
+        payload, start_result = restart_surface_server(args, manifest_path, payload)
         if start_result != 0:
             return start_result
-        payload = status_payload(args, manifest_path)
-        if not payload["alive"] or not payload["owned"] or payload["health"] != "200":
-            raise SystemExit("Artifact workbench failed to reach healthy managed state")
-        if not payload.get("asset_health", {}).get("healthy"):
-            raise SystemExit("Artifact workbench assets failed to reach healthy managed state")
 
-    state = read_annotation_state(payload["annotation_state_url"])
+    try:
+        state = read_workbench_state(payload["workbench_state_url"])
+    except (TimeoutError, urllib.error.HTTPError, urllib.error.URLError):
+        payload, start_result = restart_surface_server(args, manifest_path, payload)
+        if start_result != 0:
+            return start_result
+        state = read_workbench_state(payload["workbench_state_url"])
     result: dict[str, Any] = {
         "url": payload["url"],
-        "annotation_state_url": payload["annotation_state_url"],
+        "workbench_state_url": payload["workbench_state_url"],
         "workbench_projection_url": payload["workbench_projection_url"],
         "server": {
             "pid": payload["pid"],
             "health": payload["health"],
             "asset_health": payload["asset_health"],
             "owned": payload["owned"],
+            "repo_owned": payload["repo_owned"],
+            "active_manifest": payload["active_manifest"],
             "log": payload["log"],
         },
         "manifest": payload["manifest"],
-        "model": summarize_annotation_state(state),
+        "model": summarize_workbench_state(state),
     }
 
     if args.no_browser:
@@ -1053,13 +1372,14 @@ def command_surface(args: argparse.Namespace) -> int:
             args.viewport_size,
             session=args.browser_session,
             profile=args.profile,
+            replace_existing_session=True,
         )
 
     if args.json:
         print(json.dumps(result, indent=2, sort_keys=True))
     else:
         print(f"Artifact workbench: {result['url']}")
-        print(f"annotation_state={result['annotation_state_url']}")
+        print(f"workbench_state={result['workbench_state_url']}")
         print(f"workbench_projection={result['workbench_projection_url']}")
         print(f"server_pid={result['server']['pid']} health={result['server']['health']}")
         print(
@@ -1086,6 +1406,7 @@ def main() -> int:
         "stop": command_stop,
         "open": command_open,
         "state": command_state,
+        "glance": command_glance,
         "surface": command_surface,
     }
     return commands[args.command](args)

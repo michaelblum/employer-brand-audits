@@ -10,6 +10,8 @@ const overlay = window.ArtifactPrimitives.interactionOverlay;
 [
   "annotationReorderPlan",
   "annotationOverlayTarget",
+  "annotationOverlays",
+  "annotationText",
   "beginOverlayDraft",
   "closedEditorSession",
   "commitOverlayEditorIntent",
@@ -57,20 +59,21 @@ const textAnchor = {
 };
 const editingNote = {
   id: "note-1",
-  artifact_id: "hero",
+  subtype: "annotation",
+  subject: { kind: "artifact", id: "hero" },
   anchor: textAnchor,
-  comment: "Review this",
+  body: { kind: "comment", text: "Review this" },
 };
 const persistedNote = {
   id: "hero-note-1",
-  artifact_id: "hero",
-  kind: "comment",
+  subtype: "annotation",
+  subject: { kind: "artifact", id: "hero" },
   anchor: imageAnchor,
-  comment: "Needs work",
+  body: { kind: "comment", text: "Needs work" },
   created_at_epoch: 10,
   updated_at_epoch: null,
 };
-const persistedAnnotations = { hero: [persistedNote] };
+const persistedInteractionOverlays = [persistedNote];
 
 assert.deepEqual(overlay.supportedOverlaySubtypes(), ["annotation"]);
 assert.deepEqual(overlay.overlaySubtypeModel("annotation"), {
@@ -202,13 +205,13 @@ assert.deepEqual(
 assert.equal(overlay.existingOverlayEditorPlan({ note: null }), null);
 assert.deepEqual(
   overlay.existingOverlayEditorPlan({
-    note: { id: "note-2", anchor: imageAnchor, comment: "Crop this" },
+    note: { id: "note-2", anchor: imageAnchor, body: { kind: "comment", text: "Crop this" } },
     markdownMode: "source",
   }),
   {
     subtype: "annotation",
     editorMode: "edit",
-    editing: { id: "note-2", anchor: imageAnchor, comment: "Crop this" },
+    editing: { id: "note-2", anchor: imageAnchor, body: { kind: "comment", text: "Crop this" } },
     pendingAnchor: null,
     actionMode: "edit",
     comment: "Crop this",
@@ -259,7 +262,7 @@ assert.equal(
 
 assert.equal(
   overlay.commitOverlayEditorIntent({
-    annotations: persistedAnnotations,
+    interactionOverlays: persistedInteractionOverlays,
     artifact: { id: "hero" },
     editorMode: "create",
     editing: null,
@@ -271,7 +274,7 @@ assert.equal(
 );
 
 const updateIntent = overlay.commitOverlayEditorIntent({
-  annotations: persistedAnnotations,
+  interactionOverlays: persistedInteractionOverlays,
   artifact: { id: "hero" },
   editorMode: "edit",
   editing: persistedNote,
@@ -282,12 +285,12 @@ const updateIntent = overlay.commitOverlayEditorIntent({
 assert.equal(updateIntent.subtype, "annotation");
 assert.equal(updateIntent.action, "update");
 assert.equal(updateIntent.toast, "Comment updated");
-assert.equal(updateIntent.annotations.hero[0].comment, "Updated comment");
-assert.equal(updateIntent.annotations.hero[0].updated_at_epoch, 1781423000);
-assert.equal(persistedAnnotations.hero[0].comment, "Needs work");
+assert.equal(updateIntent.interactionOverlays[0].body.text, "Updated comment");
+assert.equal(updateIntent.interactionOverlays[0].updated_at_epoch, 1781423000);
+assert.equal(persistedInteractionOverlays[0].body.text, "Needs work");
 
 const appendIntent = overlay.commitOverlayEditorIntent({
-  annotations: persistedAnnotations,
+  interactionOverlays: persistedInteractionOverlays,
   artifact: { id: "hero" },
   editorMode: "create",
   editing: null,
@@ -298,28 +301,24 @@ const appendIntent = overlay.commitOverlayEditorIntent({
 assert.equal(appendIntent.subtype, "annotation");
 assert.equal(appendIntent.action, "append");
 assert.equal(appendIntent.toast, "Comment added");
-assert.equal(appendIntent.note.id, `hero-${(1781423000456).toString(36)}`);
-assert.equal(appendIntent.note.comment, "New source note");
+assert.equal(appendIntent.note.id, `overlay-hero-${(1781423000456).toString(36)}`);
+assert.equal(appendIntent.note.body.text, "New source note");
 assert.equal(appendIntent.note.anchor, textAnchor);
 assert.deepEqual(
-  appendIntent.annotations.hero.map((note) => note.id),
+  appendIntent.interactionOverlays.map((note) => note.id),
   ["hero-note-1", appendIntent.note.id],
 );
-assert.equal(persistedAnnotations.hero.length, 1);
+assert.equal(persistedInteractionOverlays.length, 1);
 
-const reorderAnnotations = {
-  hero: [
-    { id: "note-a", comment: "First" },
-    { id: "note-b", comment: "Second" },
-    { id: "note-c", comment: "Third" },
-  ],
-  other: [
-    { id: "other-note", comment: "Other" },
-  ],
-};
+const reorderOverlays = [
+  { id: "note-a", subtype: "annotation", subject: { kind: "artifact", id: "hero" }, body: { text: "First" } },
+  { id: "note-b", subtype: "annotation", subject: { kind: "artifact", id: "hero" }, body: { text: "Second" } },
+  { id: "note-c", subtype: "annotation", subject: { kind: "artifact", id: "hero" }, body: { text: "Third" } },
+  { id: "other-note", subtype: "annotation", subject: { kind: "artifact", id: "other" }, body: { text: "Other" } },
+];
 assert.deepEqual(
   overlay.annotationReorderPlan({
-    annotations: reorderAnnotations,
+    interactionOverlays: reorderOverlays,
     artifactId: "hero",
     sourceArtifactId: "hero",
     sourceAnnotationId: "note-c",
@@ -327,20 +326,16 @@ assert.deepEqual(
   }),
   {
     artifactId: "hero",
-    notes: [
-      { id: "note-c", comment: "Third" },
-      { id: "note-a", comment: "First" },
-      { id: "note-b", comment: "Second" },
-    ],
+    interactionOverlays: [reorderOverlays[2], reorderOverlays[0], reorderOverlays[1], reorderOverlays[3]],
   },
 );
 assert.deepEqual(
-  reorderAnnotations.hero.map((note) => note.id),
-  ["note-a", "note-b", "note-c"],
+  reorderOverlays.map((note) => note.id),
+  ["note-a", "note-b", "note-c", "other-note"],
 );
 assert.equal(
   overlay.annotationReorderPlan({
-    annotations: reorderAnnotations,
+    interactionOverlays: reorderOverlays,
     artifactId: "hero",
     sourceArtifactId: "other",
     sourceAnnotationId: "other-note",
@@ -350,7 +345,7 @@ assert.equal(
 );
 assert.equal(
   overlay.annotationReorderPlan({
-    annotations: reorderAnnotations,
+    interactionOverlays: reorderOverlays,
     artifactId: "hero",
     sourceArtifactId: "hero",
     sourceAnnotationId: "note-a",
@@ -360,7 +355,7 @@ assert.equal(
 );
 assert.equal(
   overlay.annotationReorderPlan({
-    annotations: reorderAnnotations,
+    interactionOverlays: reorderOverlays,
     artifactId: "hero",
     sourceArtifactId: "hero",
     sourceAnnotationId: "missing",
@@ -370,28 +365,28 @@ assert.equal(
 );
 
 const deleteIntent = overlay.secondaryOverlayEditorIntent({
-  annotations: persistedAnnotations,
+  interactionOverlays: persistedInteractionOverlays,
   editorMode: "edit",
   editing: persistedNote,
 });
 assert.equal(deleteIntent.subtype, "annotation");
 assert.equal(deleteIntent.action, "delete");
 assert.equal(deleteIntent.toast, "Comment deleted");
-assert.deepEqual(deleteIntent.annotations.hero, []);
-assert.equal(persistedAnnotations.hero.length, 1);
+assert.deepEqual(deleteIntent.interactionOverlays, []);
+assert.equal(persistedInteractionOverlays.length, 1);
 
 assert.deepEqual(
   overlay.secondaryOverlayEditorIntent({
-    annotations: persistedAnnotations,
+    interactionOverlays: persistedInteractionOverlays,
     editorMode: "create",
     editing: null,
   }),
   {
     subtype: "annotation",
     action: "cancel",
-    annotations: persistedAnnotations,
+    interactionOverlays: persistedInteractionOverlays,
     closeEditor: true,
-    syncAnnotations: false,
+    syncInteractionOverlays: false,
     renderSidebar: false,
     toast: null,
   },

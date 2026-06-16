@@ -13,9 +13,9 @@ const calls = [];
 const controller = controllerApi.createInteractionOverlayController({
   effects: {
     editor: {
-      setAnnotations: (annotations) => calls.push(["setAnnotations", annotations]),
+      setInteractionOverlays: (interactionOverlays) => calls.push(["setInteractionOverlays", interactionOverlays]),
       closeEditor: () => calls.push(["closeEditor"]),
-      syncAnnotations: async () => calls.push(["syncAnnotations"]),
+      syncInteractionOverlays: async () => calls.push(["syncInteractionOverlays"]),
       renderSidebar: () => calls.push(["renderSidebar"]),
       showToast: (message) => calls.push(["showToast", message]),
     },
@@ -47,16 +47,16 @@ assert.equal(typeof controller.selectAnnotation, "function");
 
 (async () => {
   await controller.runEditorIntent({
-    annotations: { hero: [] },
+    interactionOverlays: [],
     closeEditor: true,
-    syncAnnotations: true,
+    syncInteractionOverlays: true,
     renderSidebar: true,
     toast: "Saved",
   });
   assert.deepEqual(calls.splice(0), [
-    ["setAnnotations", { hero: [] }],
+    ["setInteractionOverlays", []],
     ["closeEditor"],
-    ["syncAnnotations"],
+    ["syncInteractionOverlays"],
     ["renderSidebar"],
     ["showToast", "Saved"],
   ]);
@@ -170,7 +170,7 @@ assert.equal(typeof controller.selectAnnotation, "function");
 
   assert.equal(
     shellController.openExistingEditor({
-      note: { id: "note-1", anchor: imageAnchor, comment: "Crop this" },
+      note: { id: "note-1", anchor: imageAnchor, body: { kind: "comment", text: "Crop this" } },
       markdownMode: "source",
     }),
     true,
@@ -178,7 +178,7 @@ assert.equal(typeof controller.selectAnnotation, "function");
   assert.deepEqual(shellCalls.splice(0), [
     ["setEditorSession", {
       editorMode: "edit",
-      editing: { id: "note-1", anchor: imageAnchor, comment: "Crop this" },
+      editing: { id: "note-1", anchor: imageAnchor, body: { kind: "comment", text: "Crop this" } },
       pendingAnchor: null,
     }],
     ["setCommentValue", "Crop this"],
@@ -192,7 +192,7 @@ assert.equal(typeof controller.selectAnnotation, "function");
 
   assert.equal(
     shellController.openExistingEditor({
-      note: { id: "note-2", anchor: textAnchor, comment: "Source note" },
+      note: { id: "note-2", anchor: textAnchor, body: { kind: "comment", text: "Source note" } },
       markdownMode: "source",
     }),
     true,
@@ -200,7 +200,7 @@ assert.equal(typeof controller.selectAnnotation, "function");
   assert.deepEqual(shellCalls.splice(0), [
     ["setEditorSession", {
       editorMode: "edit",
-      editing: { id: "note-2", anchor: textAnchor, comment: "Source note" },
+      editing: { id: "note-2", anchor: textAnchor, body: { kind: "comment", text: "Source note" } },
       pendingAnchor: null,
     }],
     ["setCommentValue", "Source note"],
@@ -223,7 +223,13 @@ assert.equal(typeof controller.selectAnnotation, "function");
     ["hideMarkdownMarker"],
   ]);
 
-  const annotationNote = { id: "note-3", anchor: imageAnchor, comment: "Marker note" };
+  const annotationNote = {
+    id: "note-3",
+    subtype: "annotation",
+    subject: { kind: "artifact", id: "hero" },
+    anchor: imageAnchor,
+    body: { kind: "comment", text: "Marker note" },
+  };
   assert.equal(
     shellController.showAnnotationMarker({
       artifactId: "hero",

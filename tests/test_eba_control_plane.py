@@ -213,6 +213,44 @@ def test_dev_command_gate_prefers_current_turn_over_stale_registry(
     assert_dev_command_allowed(repo, "gh")
 
 
+def test_dev_command_gate_can_force_active_turn_for_ungated_family(
+    tmp_path: Path,
+) -> None:
+    from scripts.eba_control_plane import assert_dev_command_allowed
+
+    repo = copy_repo(tmp_path)
+
+    assert_dev_command_allowed(repo, "workbench")
+    with pytest.raises(ControlPlaneError) as exc_info:
+        assert_dev_command_allowed(repo, "workbench", require_active_turn=True)
+    assert exc_info.value.payload["reason"] == "no_current_turn"
+
+    assert eba(repo, "begin", "--worker-id", "current-worker").returncode == 0
+    assert_dev_command_allowed(repo, "workbench", require_active_turn=True)
+
+
+@pytest.mark.parametrize(
+    "workbench_args",
+    [
+        ("click", "artifact-title"),
+        ("fill", "comment-text", "hello"),
+        ("press", "Enter"),
+    ],
+)
+def test_workbench_interaction_commands_require_active_turn(
+    tmp_path: Path,
+    workbench_args: tuple[str, ...],
+) -> None:
+    repo = copy_repo(tmp_path)
+
+    result = eba(repo, "dev", "workbench", *workbench_args)
+
+    assert result.returncode != 0
+    payload = parse_json(result)
+    assert payload["reason"] == "no_current_turn"
+    assert payload["command"] == "./eba dev workbench"
+
+
 def test_begin_corridor_covers_dox_boundaries(tmp_path: Path) -> None:
     repo = copy_repo(tmp_path)
 
@@ -347,6 +385,10 @@ def test_trace_and_gh_command_authorization_shape() -> None:
     assert "trace" not in ACTIVE_TURN_REQUIRED_COMMANDS
     assert "hooks" in ALLOWED_DEV_COMMANDS
     assert "hooks" not in ACTIVE_TURN_REQUIRED_COMMANDS
+    assert "demo" in ALLOWED_DEV_COMMANDS
+    assert "demo" not in ACTIVE_TURN_REQUIRED_COMMANDS
+    assert "workbench" in ALLOWED_DEV_COMMANDS
+    assert "workbench" not in ACTIVE_TURN_REQUIRED_COMMANDS
     assert "gh" in ALLOWED_DEV_COMMANDS
     assert "gh" in ACTIVE_TURN_REQUIRED_COMMANDS
 

@@ -9,7 +9,9 @@ Provider-specific files such as `.claude/CLAUDE.md` should only point here.
 - Use `./eba dev situation --json` for current repo and workbench state.
 - If you did not receive an `./eba begin` turn packet at session start, manually
   run `./eba begin --worker-id <stable-id>` before `./eba dev validate`,
-  `./eba dev demo`, or substantive repo edits.
+  substantive repo edits, or interactive workbench commands such as `click`,
+  `fill`, or `press`. View-only workbench/demo refreshes may use
+  `./eba dev demo` or `./eba dev workbench ...` without opening a turn.
 - After an active turn exists, include its `EBA-Sig` (`<worker-id>/<turn-id>`)
   in the first substantive session response and final/checkpoint responses.
 - Before editing, follow the DOX Read Before Editing chain for the paths you
@@ -79,39 +81,44 @@ version:
 
 ## Browser And Demo Flow
 
-For the current workflow-artifact-workbench implementation of the workflow artifact
-workbench, prefer the command surface:
+For the current workflow-artifact-workbench implementation of the workflow
+artifact workbench, prefer the command surface. For user requests to view or
+refresh the workbench, run this fast path first:
 
 ```bash
 ./eba dev demo
 ```
 
-This starts or reuses the managed workbench, opens the surface when possible,
-and prints the compact inspection recipe. Use `./eba dev demo --no-browser` in
-headless contexts where opening a browser is not appropriate.
+This starts or reuses the managed workbench server, summons the browser surface
+when possible, and prints the compact inspection recipe. Use `./eba dev demo
+--no-browser` in headless contexts where opening a browser is not appropriate.
 
-For routine browser control after the same active `./eba begin` turn gate has
-been satisfied, use the managed workbench control surface:
+For routine browser control, use the managed workbench control surface:
 
 ```bash
 ./eba dev workbench reset
 ./eba dev workbench refresh
+./eba dev workbench glance --json
+./eba dev workbench context --json
 ./eba dev workbench tabs
 ./eba dev workbench tab-select <index>
 ```
 
-`reset` starts or reuses the managed `eba-workbench` browser session. Reusing an
-existing session must navigate in place and must not resize or reposition the
-window; if a human has moved the workbench to a display, agents should leave it
-there. The demo/reset path may maximize the managed window and sync Playwright's
-fixed viewport to the current display's visible bounds when the workbench opens,
-has no recorded display state, or appears to have moved displays. Capture and
-smoke flows keep their fixed deterministic viewport settings. Use the same
-`./eba dev workbench` surface for snapshot/click/fill/press operations instead
-of raw browser-control tools.
+Passive workbench reads such as `glance`, `context`, `tabs`, and `tab-select`
+must not resize or reposition the browser window. Explicit human-visible summon
+paths such as `demo`, `reset`, and `refresh` may close and relaunch the managed
+`eba-workbench` browser session so the headed Chrome window is raised without
+accumulating duplicate windows. After a fresh launch, the demo/reset/refresh
+path may maximize the managed window and sync Playwright's fixed viewport to the
+current display's visible bounds. Capture and smoke flows keep their fixed
+deterministic viewport settings. Workbench `click`, `fill`, and `press` still
+require an active turn. Use `./eba dev workbench context --json` for the current
+full workbench context, available workflow manifests, and session-local
+interaction overlays. Use `./eba dev workbench glance --json` for the fast
+"what is on the workbench now?" read. Use the same `./eba dev workbench` surface
+for snapshot/click/fill/press operations instead of raw browser-control tools.
 
-For controlled/debug use after the same active `./eba begin` turn gate has
-been satisfied, the lower-level surface command is:
+For controlled/debug use, the lower-level surface command is:
 
 ```bash
 python3 scripts/playwright_cli_workbench_gate.py surface artifacts/playwright-cli-public-page-matrix/latest/manifest.json

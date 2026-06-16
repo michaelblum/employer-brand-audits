@@ -2,7 +2,7 @@ async (page) => {
   await page.reload();
   const model = await page.evaluate(async () => {
     const [state, projection] = await Promise.all([
-      fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json()),
+      fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json()),
       fetch("/api/workbench-projection", { cache: "no-store" }).then((response) => response.json()),
     ]);
     const mermaidArtifact = (projection.artifacts || []).find((artifact) => (
@@ -38,12 +38,17 @@ async (page) => {
   if (!mermaidLine) throw new Error("No Mermaid source line found");
 
   await page.evaluate(async ({ artifactId, line }) => {
-    const state = await fetch("/api/annotation-state", { cache: "no-store" }).then((response) => response.json());
-    const annotations = state.annotations || {};
-    annotations[artifactId] = [{
+    const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
+    const interactionOverlays = (state.interaction_overlays || [])
+      .filter((overlay) => !(
+        overlay?.subtype === "annotation"
+        && overlay?.subject?.kind === "artifact"
+        && overlay?.subject?.id === artifactId
+      ))
+      .concat([{
       id: `${artifactId}-mermaid-source-line-smoke`,
-      artifact_id: artifactId,
-      kind: "comment",
+      subtype: "annotation",
+      subject: { kind: "artifact", id: artifactId },
       anchor: {
         type: "text_range",
         coordinate_space: "markdown_source",
@@ -51,16 +56,16 @@ async (page) => {
         end: { line, column: 24 },
         excerpt: "Mermaid source line",
       },
-      comment: "Mermaid source-line annotation smoke",
+      body: { kind: "comment", text: "Mermaid source-line annotation smoke" },
       created_at_epoch: Math.floor(Date.now() / 1000),
       updated_at_epoch: null,
-    }];
-    const response = await fetch("/api/annotation-state", {
+    }]);
+    const response = await fetch("/api/workbench-state", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ annotations }),
+      body: JSON.stringify({ interaction_overlays: interactionOverlays }),
     });
-    if (!response.ok) throw new Error(`Annotation sync failed: ${response.status}`);
+    if (!response.ok) throw new Error(`Interaction overlay sync failed: ${response.status}`);
   }, { artifactId: model.artifactId, line: mermaidLine });
 
   await page.reload();
