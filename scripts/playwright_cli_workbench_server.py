@@ -39,6 +39,7 @@ WORKBENCH_ASSETS = {
     "/assets/artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
     "/assets/artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
     "/assets/artifact-toolbar.js": (WORKBENCH_DIR / "artifact_toolbar.js", "text/javascript"),
+    "/assets/artifact-binding.js": (WORKBENCH_DIR / "artifact_binding.js", "text/javascript"),
     "/assets/artifact-workbench-icons.svg": (WORKBENCH_DIR / "icons.svg", "image/svg+xml"),
     "/assets/artifact-primitives/mermaid_renderer.js": (
         ARTIFACT_PRIMITIVES_DIR / "mermaid_renderer.js",

@@ -87,6 +87,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "tests/artifact_binding_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "tests/artifact_registry_check.js"],
             validation_commands(),
         )
@@ -112,6 +116,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn(
             ["node", "--check", "scripts/artifact_workbench/artifact_toolbar.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifact_workbench/artifact_binding.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -144,6 +152,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertIn("/assets/artifact-primitives/interaction_overlay.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay_controller.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-toolbar.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-binding.js", WORKBENCH_ASSETS)
 
     def test_workbench_index_references_served_assets_and_icons(self) -> None:
         from scripts.playwright_cli_workbench_server import WORKBENCH_ASSETS, WORKBENCH_INDEX

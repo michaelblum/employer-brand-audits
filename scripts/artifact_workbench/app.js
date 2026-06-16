@@ -44,6 +44,7 @@
     const artifactRegistry = () => window.Artifacts.registry;
     const artifactRenderer = () => window.ArtifactPrimitives.artifactRenderer;
     const artifactToolbar = () => window.WorkbenchArtifactToolbar;
+    const artifactBinding = () => window.WorkbenchArtifactBinding;
     const documentRenderer = () => window.ArtifactPrimitives.document;
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
@@ -137,7 +138,7 @@
       return overlayControllerInstance;
     }
     const artifactNavigation = () => window.Artifacts.navigation;
-    let unbindArtifactControls = null;
+    let artifactBindingInstance = null;
     const artifactNavigationContext = () => artifactNavigation().artifactNavigationContext({
       artifacts: app.collection.artifacts,
       interactionOverlays: app.interactionOverlays,
@@ -303,55 +304,20 @@
       applyZoom(result.value, result.mode);
     }
 
-    function artifactToolbarPlan(item = artifact()) {
-      return artifactRegistry().artifactToolbarPlan({
-        artifact: item,
-        imageNaturalWidth: $("artifact-image").naturalWidth,
-        imageNaturalHeight: $("artifact-image").naturalHeight,
-        markdownContentById: app.markdownContent,
-        documentContentById: app.documentContent,
-        markdown: window.ArtifactPrimitives.markdown,
-        document: documentRenderer(),
-      });
-    }
-
-    function selectedArtifactComponent(item = artifact()) {
-      return artifactRegistry().resolveArtifactComponent(item, { document: documentRenderer() });
-    }
-
-    function artifactCapabilities(item = artifact()) {
-      return selectedArtifactComponent(item)?.capabilities || {};
-    }
-
-    function artifactSupports(capability, item = artifact()) {
-      return Boolean(artifactCapabilities(item)[capability]);
-    }
-
     function supportsImageRegionAnnotations(item = artifact()) {
-      return artifactSupports("imageRegionAnnotations", item);
+      return workbenchArtifactBinding().supports("imageRegionAnnotations", item);
     }
 
     function supportsImageZoom(item = artifact()) {
-      return artifactSupports("imageZoom", item);
+      return workbenchArtifactBinding().supports("imageZoom", item);
     }
 
     function supportsMarkdownEditing(item = artifact()) {
-      return artifactSupports("markdownEditing", item);
+      return workbenchArtifactBinding().supports("markdownEditing", item);
     }
 
     function supportsTextRangeAnnotations(item = artifact()) {
-      return artifactSupports("textRangeAnnotations", item);
-    }
-
-    function artifactControlState(item = artifact()) {
-      return {
-        artifactDocumentTheme: app.artifactDocumentTheme,
-        markdownDirty: app.markdownDirty,
-        markdownMode: app.markdownMode,
-        zoomMode: app.zoomMode,
-        zoomPercent: app.zoomPercent,
-        artifact: item,
-      };
+      return workbenchArtifactBinding().supports("textRangeAnnotations", item);
     }
 
     function artifactControlActions() {
@@ -365,37 +331,39 @@
       };
     }
 
-    function bindArtifactControls(item = artifact()) {
-      if (unbindArtifactControls) unbindArtifactControls();
-      const component = selectedArtifactComponent(item);
-      unbindArtifactControls = typeof component.bindControls === "function"
-        ? component.bindControls({
-          rootEl: $("artifact-toolbar"),
-          actions: artifactControlActions(),
-          state: artifactControlState(item),
-          artifact: item,
-        })
-        : null;
-    }
-
-    function syncArtifactControls(item = artifact()) {
-      const component = selectedArtifactComponent(item);
-      if (typeof component.syncControls !== "function") return;
-      component.syncControls({
-        rootEl: $("artifact-toolbar"),
-        state: artifactControlState(item),
-        artifact: item,
-      });
+    function workbenchArtifactBinding() {
+      if (!artifactBindingInstance) {
+        artifactBindingInstance = artifactBinding().createArtifactBinding({
+          getDefaultArtifact: artifact,
+          registry: artifactRegistry,
+          toolbar: artifactToolbar,
+          elements: {
+            toolbarRoot: () => $("artifact-toolbar"),
+            image: () => $("artifact-image"),
+          },
+          documentRenderer,
+          markdown: () => window.ArtifactPrimitives.markdown,
+          getContext: () => ({
+            artifactDocumentTheme: app.artifactDocumentTheme,
+            markdownContentById: app.markdownContent,
+            markdownDirty: app.markdownDirty,
+            markdownMode: app.markdownMode,
+            zoomMode: app.zoomMode,
+            zoomPercent: app.zoomPercent,
+            documentContentById: app.documentContent,
+          }),
+          actions: artifactControlActions,
+        });
+      }
+      return artifactBindingInstance;
     }
 
     function updateArtifactToolbar(item = artifact()) {
-      artifactToolbar().mountToolbar($("artifact-toolbar"), artifactToolbarPlan(item));
-      bindArtifactControls(item);
-      syncArtifactControls(item);
+      workbenchArtifactBinding().updateToolbar(item);
     }
 
     function artifactStagePlan(item = artifact()) {
-      return artifactRegistry().artifactStagePlan(item, { document: documentRenderer() });
+      return workbenchArtifactBinding().stagePlan(item);
     }
 
     function applyArtifactStagePlan(plan) {
