@@ -100,6 +100,7 @@ For routine browser control, use the managed workbench control surface:
 ./eba dev workbench refresh
 ./eba dev workbench glance --json
 ./eba dev workbench context --json
+./eba dev workbench live-smoke --fixture easy-audit --json
 ./eba dev workbench tabs
 ./eba dev workbench tab-select <index>
 ```
@@ -115,8 +116,11 @@ deterministic viewport settings. Workbench `click`, `fill`, and `press` still
 require an active turn. Use `./eba dev workbench context --json` for the current
 full workbench context, available workflow manifests, and session-local
 interaction overlays. Use `./eba dev workbench glance --json` for the fast
-"what is on the workbench now?" read. Use the same `./eba dev workbench` surface
-for snapshot/click/fill/press operations instead of raw browser-control tools.
+"what is on the workbench now?" read. Use
+`./eba dev workbench live-smoke --fixture easy-audit --json` after browser-loaded
+asset or app-shell changes when a bounded live boot/runtime check is needed.
+Use the same `./eba dev workbench` surface for snapshot/click/fill/press
+operations instead of raw browser-control tools.
 
 For controlled/debug use, the lower-level surface command is:
 

@@ -131,6 +131,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-live-boot-check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/playwright-snippets/artifact-workbench-navigation-check.js"],
             validation_commands(),
         )
@@ -1352,6 +1356,86 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 ]
             ],
         )
+
+    def test_eba_workbench_live_smoke_prepares_surface_and_runs_single_boot_snippet(self) -> None:
+        from argparse import Namespace
+        from scripts import eba_cli
+
+        commands: list[list[str]] = []
+        releases: list[Path] = []
+        temp_root = tempfile.TemporaryDirectory(dir=REPO_ROOT)
+        self.addCleanup(temp_root.cleanup)
+        manifest = Path(temp_root.name) / "manifest.json"
+        manifest.write_text("{}", encoding="utf-8")
+        manifest_label = str(manifest.relative_to(REPO_ROOT))
+
+        class Result:
+            returncode = 0
+            stdout = '{"status":"surface","server":{"asset_health":{"healthy":true}}}\n'
+            stderr = ""
+
+        class SmokeResult:
+            returncode = 0
+            stdout = '### Result\n{"status":"passed","assetCount":20}\n'
+            stderr = ""
+
+        def fake_run(command: list[str], *, capture: bool = True, check: bool = False) -> object:
+            commands.append(command)
+            return Result() if len(commands) == 1 else SmokeResult()
+
+        original_run = eba_cli.run
+        original_release = eba_cli.release_default_demo_server
+        try:
+            eba_cli.run = fake_run  # type: ignore[assignment]
+            eba_cli.release_default_demo_server = lambda path: releases.append(path)  # type: ignore[assignment]
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = eba_cli.command_workbench(
+                    Namespace(
+                        workbench_action="live-smoke",
+                        manifest=manifest,
+                        fixture=None,
+                        json=True,
+                        session="eba-workbench",
+                    )
+                )
+        finally:
+            eba_cli.run = original_run  # type: ignore[assignment]
+            eba_cli.release_default_demo_server = original_release  # type: ignore[assignment]
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(releases, [manifest])
+        self.assertEqual(
+            commands,
+            [
+                [
+                    sys.executable,
+                    str(eba_cli.WORKBENCH_GATE),
+                    "surface",
+                    str(manifest),
+                    "--port",
+                    "8765",
+                    "--timeout",
+                    "10",
+                    "--json",
+                ],
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "run-code",
+                    "scripts/playwright-snippets/artifact-workbench-live-boot-check.js",
+                    "--session",
+                    "eba-workbench",
+                ],
+            ],
+        )
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "passed")
+        self.assertEqual(payload["manifest"], manifest_label)
+        self.assertEqual(payload["surface"]["status"], "surface")
+        self.assertEqual(payload["smoke"]["status"], "passed")
+        self.assertEqual(payload["smoke"]["assetCount"], 20)
+        self.assertNotIn("smoke_stdout", payload)
 
     def test_workbench_glance_summarizes_current_annotations_without_projection_blob(self) -> None:
         state = {

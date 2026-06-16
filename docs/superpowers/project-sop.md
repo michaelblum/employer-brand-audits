@@ -111,6 +111,7 @@ For routine browser control, use the managed workbench control surface:
 ./eba dev workbench refresh
 ./eba dev workbench glance --json
 ./eba dev workbench context --json
+./eba dev workbench live-smoke --fixture easy-audit --json
 ./eba dev workbench tabs
 ./eba dev workbench tab-select <index>
 ```
@@ -123,7 +124,8 @@ duplicates; those paths may then maximize and sync the fixed viewport to the
 current display's visible bounds. Workbench `click`, `fill`, and `press` still
 require an active turn. For "what is on the workbench now?" questions, use
 `glance` first; it returns the compact live context, current artifact, and
-annotation summary.
+annotation summary. Use `live-smoke` after browser-loaded workbench asset or
+app-shell changes when a bounded live boot/runtime check is warranted.
 
 ## Command Surface
 
@@ -141,7 +143,7 @@ Agents should prefer `./eba dev ...` for common project mechanisms:
 - `./eba dev validate` for the current validation ladder.
 - `./eba dev demo` for a prepared artifact workbench inspection surface.
 - `./eba dev workbench` for managed `eba-workbench` context, refresh, tab,
-  snapshot, glance, and interaction controls.
+  snapshot, glance, live-smoke, and interaction controls.
 
 Update the command surface as the project evolves and new repeated mechanisms
 appear. Keep it small, typed, and honest; do not add routes that are not wired

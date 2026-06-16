@@ -38,6 +38,9 @@ DEFAULT_MANIFEST = (
 )
 WORKBENCH_GATE = REPO_ROOT / "scripts" / "playwright_cli_workbench_gate.py"
 BROWSER_WRAPPER = REPO_ROOT / "scripts" / "playwright_cli_browser.py"
+WORKBENCH_LIVE_BOOT_SMOKE = (
+    REPO_ROOT / "scripts" / "playwright-snippets" / "artifact-workbench-live-boot-check.js"
+)
 THREAD_WORKBENCH = (
     Path.home() / ".codex" / "skills" / "codex-thread-workbench" / "scripts" / "thread_workbench.py"
 )
@@ -88,6 +91,21 @@ def run_with_stdin(args: list[str], input_text: str) -> subprocess.CompletedProc
 
 def print_json(value: Any) -> None:
     print(json.dumps(value, indent=2, sort_keys=True))
+
+
+def parse_playwright_cli_result(stdout: str) -> Any | None:
+    marker = "### Result"
+    marker_index = stdout.find(marker)
+    if marker_index < 0:
+        return None
+    result_lines = stdout[marker_index + len(marker) :].splitlines()
+    result_text = next((line.strip() for line in result_lines if line.strip()), "")
+    if not result_text:
+        return None
+    try:
+        return json.loads(result_text)
+    except json.JSONDecodeError:
+        return result_text
 
 
 def git(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -295,6 +313,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-image-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-layout-regression-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-markdown-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-live-boot-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-mermaid-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-navigation-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-annotation-reorder-check.js"],
@@ -448,6 +467,66 @@ def command_workbench_refresh(args: argparse.Namespace) -> int:
     return completed.returncode
 
 
+def command_workbench_live_smoke(args: argparse.Namespace) -> int:
+    manifest = resolve_manifest(args)
+    if not manifest.exists():
+        print(f"Manifest not found: {manifest}", file=sys.stderr)
+        return 1
+    release_default_demo_server(manifest)
+    surface_command = [
+        sys.executable,
+        str(WORKBENCH_GATE),
+        "surface",
+        str(manifest),
+        "--port",
+        WORKBENCH_PORT,
+        "--timeout",
+        "10",
+        "--json",
+    ]
+    surface = run(surface_command, capture=True)
+    if surface.returncode != 0:
+        if surface.stdout:
+            print(surface.stdout, end="")
+        if surface.stderr:
+            print(surface.stderr, file=sys.stderr, end="")
+        return surface.returncode
+
+    smoke_command = [
+        sys.executable,
+        str(BROWSER_WRAPPER.relative_to(REPO_ROOT)),
+        "run-code",
+        str(WORKBENCH_LIVE_BOOT_SMOKE.relative_to(REPO_ROOT)),
+        "--session",
+        args.session,
+    ]
+    smoke = run(smoke_command, capture=True)
+    if getattr(args, "json", False):
+        try:
+            surface_payload = json.loads(surface.stdout)
+        except json.JSONDecodeError:
+            surface_payload = {"raw": surface.stdout}
+        smoke_payload = parse_playwright_cli_result(smoke.stdout)
+        payload = {
+            "manifest": str(manifest.relative_to(REPO_ROOT) if manifest.is_absolute() else manifest),
+            "smoke": smoke_payload,
+            "status": "passed" if smoke.returncode == 0 else "failed",
+            "surface": surface_payload,
+        }
+        if smoke.returncode != 0 or smoke_payload is None:
+            payload["smoke_stderr"] = smoke.stderr
+            payload["smoke_stdout"] = smoke.stdout
+        print_json(payload)
+    else:
+        if surface.stdout:
+            print(surface.stdout, end="")
+        if smoke.stdout:
+            print(smoke.stdout, end="")
+    if smoke.stderr:
+        print(smoke.stderr, file=sys.stderr, end="")
+    return smoke.returncode
+
+
 def command_workbench(args: argparse.Namespace) -> int:
     action = args.workbench_action
     if action in {"click", "fill", "press"}:
@@ -463,6 +542,8 @@ def command_workbench(args: argparse.Namespace) -> int:
         )
     if action == "refresh":
         return command_workbench_refresh(args)
+    if action == "live-smoke":
+        return command_workbench_live_smoke(args)
     if action in {"context", "glance"}:
         manifest = resolve_manifest(args)
         command = [
@@ -692,6 +773,12 @@ def build_parser() -> argparse.ArgumentParser:
     refresh = workbench_subparsers.add_parser("refresh", help="Replace and raise the current workbench browser")
     refresh.add_argument("--json", action="store_true")
     refresh.set_defaults(func=command_workbench, values=[])
+
+    live_smoke = workbench_subparsers.add_parser("live-smoke", help="Run a bounded live workbench boot smoke")
+    live_smoke.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
+    live_smoke.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and smoke a named fixture")
+    live_smoke.add_argument("--json", action="store_true")
+    live_smoke.set_defaults(func=command_workbench)
 
     tabs = workbench_subparsers.add_parser("tabs", help="List workbench browser tabs")
     tabs.set_defaults(func=command_workbench, values=[])
