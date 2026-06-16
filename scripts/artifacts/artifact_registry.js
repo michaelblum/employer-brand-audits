@@ -5,6 +5,7 @@
   function components() {
     return [
       ROOT.types?.markdown,
+      ROOT.types?.html,
       ROOT.types?.document,
       ROOT.types?.image,
     ].filter(Boolean);

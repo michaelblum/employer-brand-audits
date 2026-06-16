@@ -21,6 +21,7 @@ const artifacts = [
   { id: "hero", name: "Hero <Shot>", path: "hero.png", type: "image" },
   { id: "summary", name: "Summary", path: "summary.md", type: "markdown" },
   { id: "raw", name: "Raw", path: "raw.json", type: "json" },
+  { id: "report-html", name: "Report HTML", path: "report.html", type: "html" },
 ];
 const projectedArtifactsById = {
   hero: {
@@ -46,6 +47,14 @@ const projectedArtifactsById = {
     source_page: { slug: "home" },
     status: "warning",
     facets: { artifact_type: "json" },
+  },
+  "report-html": {
+    id: "report-html",
+    produced_by_step_id: "analyze",
+    slot: "report.html",
+    source_page: { slug: "report" },
+    status: "ok",
+    facets: { artifact_type: "html" },
   },
 };
 const projectedWithoutSourcePage = {
@@ -90,6 +99,19 @@ const interactionOverlays = [
       type: "text_range",
       start: { line: 2, column: 1 },
       end: { line: 4, column: 1 },
+    },
+  },
+  {
+    id: "note-3",
+    subtype: "annotation",
+    subject: { kind: "artifact", id: "report-html" },
+    body: { kind: "comment", text: "CTA needs context" },
+    anchor: {
+      type: "html_element",
+      selector_candidates: ["#apply", "a#apply.cta.primary"],
+      tag: "a",
+      text: "Apply now",
+      rect: { x: 20, y: 30, width: 140, height: 44 },
     },
   },
 ];
@@ -187,7 +209,7 @@ assert.equal(navigator.filterSummaryText({ total: 3, visible: 1 }), "1 of 3 arti
 
 const html = navigator.renderSidebarHtml(context);
 assert.match(html, /Easy Audit/);
-assert.match(html, /1 of 3 artifacts/);
+assert.match(html, /1 of 4 artifacts/);
 assert.match(html, /data-filter-kind="clear"/);
 assert.match(html, /Hero &lt;Shot&gt;/);
 assert.match(html, /Contrast &lt;needs&gt; work/);
@@ -201,6 +223,8 @@ const unfilteredHtml = navigator.renderSidebarHtml({
 });
 assert.match(unfilteredHtml, /Artifact summary/);
 assert.match(unfilteredHtml, /lines 2-4/);
+assert.match(unfilteredHtml, /Report HTML/);
+assert.match(unfilteredHtml, /element #apply/);
 assert.match(unfilteredHtml, /artifact-row active/);
 
 const noEmptyProjectionPillHtml = navigator.renderSidebarHtml({
@@ -270,7 +294,7 @@ assert.deepEqual(
     filters: { stepId: null, slot: null, compositeId: null },
     delta: -1,
   }),
-  { activeIndex: 2 },
+  { activeIndex: 3 },
 );
 assert.deepEqual(
   navigator.artifactMovePlan({

@@ -35,6 +35,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "--check", "scripts/artifact_primitives/html_renderer.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/artifact_primitives/artifact_renderer.js"],
             validation_commands(),
         )
@@ -48,6 +52,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn(
             ["node", "--check", "scripts/artifacts/types/markdown_artifact.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/types/html_artifact.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -76,6 +84,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn(
             ["node", "tests/document_renderer_primitive_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "tests/html_renderer_primitive_check.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -143,9 +155,11 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-primitives/html_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/core/artifact_common.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/image_artifact.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/markdown_artifact.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/types/html_artifact.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/document_artifact.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/artifact_registry.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/artifact_renderer.js", WORKBENCH_ASSETS)

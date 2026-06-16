@@ -19,6 +19,9 @@ and app shell JavaScript.
 - The workspace and artifact toolbar are shell-owned mount points. The selected
   artifact component owns type-specific stage, readout, controls, and control
   binding inside those mount points through `scripts/artifacts/`.
+- HTML artifacts use the shared document stage and annotation editor; the shell
+  may route saved `html_element` anchors to the marker/popover, but HTML
+  identity extraction and inspector binding stay with the HTML type/primitive.
 - `styles.css` owns the static workbench stylesheet, including shared toolbar
   and current type-control classes, until a deliberate per-type CSS asset
   boundary exists. Do not add artifact-type behavior to the shell JavaScript to

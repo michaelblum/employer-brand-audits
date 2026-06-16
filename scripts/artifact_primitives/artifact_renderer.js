@@ -74,6 +74,16 @@
     };
   }
 
+  function htmlRenderPayload(artifact = {}, { content = "", url = "" } = {}) {
+    return {
+      ...artifact,
+      content,
+      url,
+      mimeType: artifact.mime_type ?? artifact.mimeType,
+      sizeBytes: artifact.size_bytes ?? artifact.sizeBytes,
+    };
+  }
+
   function artifactSelectionPlan({ requestedIndex = 0, artifactCount = 0 } = {}) {
     const count = Number(artifactCount || 0);
     if (count <= 0) {
@@ -191,6 +201,12 @@
         return { renderKind, status: "rendered" };
       }
 
+      if (renderKind === "html") {
+        const content = await requiredEffect(effects, "loadDocument")(artifact);
+        await requiredEffect(effects, "renderHtml")({ artifact, content, stagePlan: plan, renderKind });
+        return { renderKind, status: "rendered" };
+      }
+
       const content = await requiredEffect(effects, "loadDocument")(artifact);
       await requiredEffect(effects, "renderDocument")({ artifact, content, stagePlan: plan, renderKind });
       return { renderKind, status: "rendered" };
@@ -207,6 +223,7 @@
     documentLoadPlan,
     documentLoadResultPlan,
     documentRenderPayload,
+    htmlRenderPayload,
     markdownLoadPlan,
     markdownLoadResultPlan,
     markdownInputPlan,

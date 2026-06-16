@@ -189,6 +189,22 @@
           }
           return true;
         }
+        if (plan.placement?.type === "html_element") {
+          if (typeof editorShellEffects.scrollHtmlElementIntoView === "function") {
+            editorShellEffects.scrollHtmlElementIntoView(plan.anchor);
+          }
+          if (typeof editorShellEffects.requestAnimationFrame === "function") {
+            editorShellEffects.requestAnimationFrame(() => {
+              if (typeof editorShellEffects.placeSelectionForAnchor === "function") {
+                editorShellEffects.placeSelectionForAnchor(plan.anchor);
+              }
+              if (typeof editorShellEffects.placePopoverForAnchor === "function") {
+                editorShellEffects.placePopoverForAnchor(plan.anchor);
+              }
+            });
+          }
+          return true;
+        }
         return true;
       },
       closeEditor() {

@@ -437,6 +437,53 @@ flowchart TD
 """
 
 
+def report_html() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acme Robotics Employer Brand Audit</title>
+  <style>
+    body { margin: 0; color: #17202a; background: #f8fafc; font-family: Arial, Helvetica, sans-serif; line-height: 1.5; }
+    main { max-width: 880px; margin: 0 auto; padding: 44px 28px 80px; }
+    header, section { margin-bottom: 24px; padding: 24px; border: 1px solid #cbd5e1; background: #fff; }
+    h1, h2 { margin-top: 0; }
+    .finding-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .finding-card { padding: 14px; border: 1px solid #d8e1ea; background: #f1f5f9; }
+    .cta { display: inline-flex; margin-top: 10px; padding: 10px 14px; background: #164f8f; color: #fff; text-decoration: none; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <header id="executive-readout">
+      <p>Employer Brand Audit</p>
+      <h1>Acme Robotics</h1>
+      <p>Acme Robotics presents a credible engineering story, but the careers page asks candidates to infer too much about team practices, hiring criteria, and growth.</p>
+      <a id="apply-context" class="cta primary" role="button" href="https://acme.example/careers">Review careers page CTA</a>
+    </header>
+    <section id="findings">
+      <h2>Findings</h2>
+      <div class="finding-grid">
+        <article class="finding-card" id="mission-signal"><h3>Mission</h3><p>Clear robotics mission and category fit.</p></article>
+        <article class="finding-card" id="process-gap"><h3>Process</h3><p>Interview stages and decision criteria need proof.</p></article>
+        <article class="finding-card" id="employee-proof"><h3>Proof</h3><p>Employee-authored examples would make the story concrete.</p></article>
+      </div>
+    </section>
+    <section id="recommended-edits">
+      <h2>Recommended edits</h2>
+      <ol>
+        <li>Add one engineering-team proof block near the top of the careers page.</li>
+        <li>Publish a short interview-process explainer linked from every technical role.</li>
+        <li>Tie benefits language to robotics-specific working rhythms and learning loops.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
 def analysis_markdown() -> str:
     return """# KILOS Analysis
 
@@ -532,7 +579,7 @@ def build_manifest(output_dir: Path) -> dict[str, Any]:
                 "started_at": "2026-06-13T01:07:00Z",
                 "completed_at": "2026-06-13T01:09:00Z",
                 "required_inputs": [],
-                "artifact_ids": ["l4-final-report"],
+                "artifact_ids": ["l4-final-report", "l4-final-report-html"],
                 "parent_step_ids": ["l3-synthesis"],
             },
         ],
@@ -621,6 +668,18 @@ def build_manifest(output_dir: Path) -> dict[str, Any]:
                 "params": {"url": "https://acme.example/careers"},
                 "card": {"summary": "Final employer brand audit", "tags": {"layer": "L4"}},
             },
+            {
+                "id": "l4-final-report-html",
+                "layer": 4,
+                "type": "html",
+                "status": "complete",
+                "created_at": "2026-06-13T01:09:30Z",
+                "produced_by_step_id": "l4-report",
+                "parent_ids": ["l4-final-report", "l3-synthesis-notes"],
+                "file_path": "l4-final-report.html",
+                "params": {"url": "https://acme.example/careers"},
+                "card": {"summary": "Final employer brand audit HTML", "tags": {"layer": "L4"}},
+            },
         ],
     }
 
@@ -657,6 +716,7 @@ def generate_easy_audit_fixture(output_dir: Path = DEFAULT_OUTPUT_DIR) -> Path:
         "Strong mission and category clarity. Main gap: candidates need concrete proof of hiring process, team practices, and growth paths.\n",
     )
     write_text(output_dir / "l4-final-report.md", report_markdown())
+    write_text(output_dir / "l4-final-report.html", report_html())
     manifest_path = output_dir / "manifest.json"
     write_json(manifest_path, build_manifest(output_dir))
     return manifest_path

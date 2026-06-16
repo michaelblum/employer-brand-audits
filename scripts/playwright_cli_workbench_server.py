@@ -61,6 +61,10 @@ WORKBENCH_ASSETS = {
         ARTIFACT_PRIMITIVES_DIR / "document_renderer.js",
         "text/javascript",
     ),
+    "/assets/artifact-primitives/html_renderer.js": (
+        ARTIFACT_PRIMITIVES_DIR / "html_renderer.js",
+        "text/javascript",
+    ),
     "/assets/artifacts/core/artifact_common.js": (
         ARTIFACTS_DIR / "core" / "artifact_common.js",
         "text/javascript",
@@ -71,6 +75,10 @@ WORKBENCH_ASSETS = {
     ),
     "/assets/artifacts/types/markdown_artifact.js": (
         ARTIFACTS_DIR / "types" / "markdown_artifact.js",
+        "text/javascript",
+    ),
+    "/assets/artifacts/types/html_artifact.js": (
+        ARTIFACTS_DIR / "types" / "html_artifact.js",
         "text/javascript",
     ),
     "/assets/artifacts/types/document_artifact.js": (
@@ -201,7 +209,7 @@ def safe_artifact_path(relative_path: str, artifact_root: Path) -> Path | None:
 
 def workbench_projected_artifact(artifact: dict[str, Any], artifact_root: Path) -> bool:
     artifact_type = artifact.get("type")
-    if artifact_type not in {"image", "markdown", "json", "text", "log", "file"}:
+    if artifact_type not in {"image", "markdown", "html", "json", "text", "log", "file"}:
         return False
     path = safe_artifact_path(str(artifact.get("path", "")), artifact_root)
     return path is not None

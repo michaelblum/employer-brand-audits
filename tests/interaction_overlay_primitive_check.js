@@ -57,6 +57,18 @@ const textAnchor = {
   start: { line: 2, column: 1 },
   end: { line: 4, column: 10 },
 };
+const htmlAnchor = {
+  type: "html_element",
+  coordinate_space: "html_document",
+  selector_candidates: ["#apply", "a#apply.cta.primary"],
+  tag: "a",
+  id: "apply",
+  classes: ["cta", "primary"],
+  role: "button",
+  accessible_name: "Apply now",
+  text: "Apply now for robotics roles",
+  rect: { x: 20, y: 30, width: 140, height: 44 },
+};
 const editingNote = {
   id: "note-1",
   subtype: "annotation",
@@ -79,7 +91,7 @@ assert.deepEqual(overlay.supportedOverlaySubtypes(), ["annotation"]);
 assert.deepEqual(overlay.overlaySubtypeModel("annotation"), {
   subtype: "annotation",
   editorModes: ["create", "edit"],
-  anchorTypes: ["image_region", "text_range"],
+  anchorTypes: ["image_region", "text_range", "html_element"],
   draftTypes: ["image", "markdown"],
   intentActions: ["append", "update", "delete", "cancel"],
 });
@@ -119,6 +131,16 @@ assert.deepEqual(
     }),
   }),
   { x: 2, y: 4, width: 80, height: 30, source: "text" },
+);
+assert.deepEqual(
+  overlay.displayRectForAnchor({
+    anchor: htmlAnchor,
+    htmlElementRect: (resolvedAnchor) => ({
+      ...resolvedAnchor.rect,
+      source: "html",
+    }),
+  }),
+  { x: 20, y: 30, width: 140, height: 44, source: "html" },
 );
 assert.equal(overlay.displayRectForAnchor({ anchor: { type: "unknown" } }), null);
 
@@ -240,6 +262,14 @@ assert.deepEqual(
   {
     type: "text_range",
     ensurePreview: false,
+  },
+);
+assert.deepEqual(
+  overlay.existingOverlayEditorPlan({
+    note: { id: "note-html", anchor: htmlAnchor, body: { kind: "comment", text: "Annotate CTA" } },
+  }).placement,
+  {
+    type: "html_element",
   },
 );
 

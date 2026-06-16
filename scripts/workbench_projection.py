@@ -194,6 +194,8 @@ def audit_workbench_type(artifact_type: str, path_value: str) -> str:
         return "image"
     if suffix in {".md", ".markdown"} or mime_type == "text/markdown":
         return "markdown"
+    if suffix in {".html", ".htm"} or mime_type == "text/html" or artifact_type == "html":
+        return "html"
     if suffix == ".json" or mime_type == "application/json":
         return "json"
     if mime_type.startswith("text/"):
@@ -685,7 +687,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
         add_host_facet(host_index, host, artifact_id)
 
         capabilities = ["view"]
-        if workbench_type in {"image", "markdown"}:
+        if workbench_type in {"image", "markdown", "html"}:
             capabilities.append("annotate")
         if workbench_type == "markdown":
             capabilities.append("edit")
