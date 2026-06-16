@@ -109,12 +109,13 @@ Passive workbench reads such as `glance`, `context`, `tabs`, and `tab-select`
 must not resize or reposition the browser window. Explicit human-visible summon
 paths such as `demo`, `reset`, and `refresh` may close and relaunch the managed
 `eba-workbench` browser session so the headed Chrome window is raised without
-accumulating duplicate windows. After a fresh launch, the demo/reset/refresh
-path may maximize the managed window and sync Playwright's fixed viewport to the
-current display's visible bounds. Capture and smoke flows keep their fixed
-deterministic viewport settings. Workbench `click`, `fill`, and `press` still
-require an active turn. Use `./eba dev workbench context --json` for the current
-full workbench context, available workflow manifests, and session-local
+accumulating duplicate windows or blank/duplicate workbench tabs. After a fresh
+launch, the demo/reset/refresh path may maximize the managed window and sync
+Playwright's fixed viewport to the current display's visible bounds. Capture and
+smoke flows keep their fixed deterministic viewport settings. Workbench `click`,
+`fill`, and `press` still require an active turn. Use
+`./eba dev workbench context --json` for the current full workbench context,
+available workflow manifests, and session-local
 interaction overlays. Use `./eba dev workbench glance --json` for the fast
 "what is on the workbench now?" read. Use
 `./eba dev workbench live-smoke --fixture easy-audit --json` after browser-loaded
