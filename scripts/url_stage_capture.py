@@ -163,44 +163,41 @@ def source_tree_node_from_element(element: dict[str, Any], index: int) -> dict[s
     }
 
 
-def build_dom_source_tree(blueprint: dict[str, Any]) -> dict[str, Any]:
+def build_dom_source_tree(blueprint: dict[str, Any]) -> dict[str, Any] | None:
     existing = blueprint.get("dom_tree")
     if isinstance(existing, dict):
         result = dict(existing)
         result.setdefault("schema_version", "web_snapshot_dom_tree.v0")
         return result
-    children = [
+    return None
+
+
+def build_extracted_structure_nodes(blueprint: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
         source_tree_node_from_element(element, index)
         for index, element in enumerate(blueprint.get("elements") or [], start=1)
         if isinstance(element, dict)
     ]
-    return {
-        "schema_version": "web_snapshot_dom_tree.v0",
-        "source": "normalized_blueprint_elements",
-        "root": {
-            "id": "dom:document",
-            "kind": "document",
-            "tag": "document",
-            "url": str(blueprint.get("url") or ""),
-            "title": str(blueprint.get("title") or ""),
-            "children": children,
-        },
-    }
 
 
-def build_ax_source_tree(blueprint: dict[str, Any], page_snapshot: str = "") -> dict[str, Any]:
+def build_ax_source_tree(blueprint: dict[str, Any]) -> dict[str, Any] | None:
     existing = blueprint.get("ax_tree")
     if isinstance(existing, dict):
         result = dict(existing)
         result.setdefault("schema_version", "web_snapshot_ax_tree.v0")
         return result
-    return {
-        "schema_version": "web_snapshot_ax_tree.v0",
-        "source": "playwright_snapshot_text",
-        "root": None,
-        "nodes": [],
-        "snapshot_text": str(page_snapshot or "")[:20000],
-    }
+    return None
+
+
+def build_source_trees(blueprint: dict[str, Any]) -> dict[str, Any]:
+    source_trees: dict[str, Any] = {}
+    dom_tree = build_dom_source_tree(blueprint)
+    ax_tree = build_ax_source_tree(blueprint)
+    if dom_tree is not None:
+        source_trees["dom"] = dom_tree
+    if ax_tree is not None:
+        source_trees["ax"] = ax_tree
+    return source_trees
 
 
 def flatten_dom_nodes(tree: dict[str, Any]) -> list[dict[str, Any]]:
@@ -310,10 +307,13 @@ def build_web_snapshot_data(
         screenshot_dimensions=screenshot_dimensions,
         screenshot_path=screenshot_path,
     )
-    dom_tree = build_dom_source_tree(blueprint)
-    ax_tree = build_ax_source_tree(blueprint, page_snapshot)
+    source_trees = build_source_trees(blueprint)
     visible_lines = compact_lines(visible_text)
-    structure_nodes = flatten_dom_nodes(dom_tree)
+    structure_nodes = (
+        flatten_dom_nodes(source_trees["dom"])
+        if isinstance(source_trees.get("dom"), dict)
+        else build_extracted_structure_nodes(blueprint)
+    )
     return {
         "schema_version": "web_snapshot.v0",
         "source_url": str(blueprint.get("url") or ""),
@@ -327,10 +327,7 @@ def build_web_snapshot_data(
             "viewport": blueprint.get("viewport") or {},
             "document": blueprint.get("document") or {},
         },
-        "source_trees": {
-            "dom": dom_tree,
-            "ax": ax_tree,
-        },
+        "source_trees": source_trees,
         "links": [],
         "projection_catalog": {
             "target_map": {
@@ -344,7 +341,7 @@ def build_web_snapshot_data(
             },
             "structure": {
                 "schema_version": "web_snapshot_structure.v0",
-                "description": "Flattened normalized DOM nodes for quick agent and UI traversal.",
+                "description": "Normalized extracted structure records for quick agent and UI traversal.",
             },
             "page_snapshot": {
                 "schema_version": "web_snapshot_page_snapshot.v0",
@@ -360,10 +357,12 @@ def build_web_snapshot_data(
             },
             "structure": {
                 "schema_version": "web_snapshot_structure.v0",
+                "source": "dom_tree" if isinstance(source_trees.get("dom"), dict) else "normalized_blueprint_elements",
                 "nodes": structure_nodes,
             },
             "page_snapshot": {
                 "schema_version": "web_snapshot_page_snapshot.v0",
+                "source": "playwright_snapshot_text",
                 "text": str(page_snapshot or ""),
             },
         },

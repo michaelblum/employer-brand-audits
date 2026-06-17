@@ -461,15 +461,37 @@ def url_stage_manifest_context(manifest: dict[str, Any]) -> dict[str, Any]:
     return context
 
 
+def validate_url_stage_web_snapshot_data(data: dict[str, Any], *, path_value: str) -> dict[str, Any]:
+    if data.get("schema_version") != "web_snapshot.v0":
+        raise ValueError(f"URL stage web_snapshot_data has invalid schema_version: {path_value}")
+    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
+    image = visual.get("image") if isinstance(visual.get("image"), dict) else {}
+    dimensions = image.get("dimensions") if isinstance(image.get("dimensions"), dict) else {}
+    if not dimensions.get("width") or not dimensions.get("height"):
+        raise ValueError(f"URL stage web_snapshot_data is missing visual.image.dimensions: {path_value}")
+    projections = data.get("projections") if isinstance(data.get("projections"), dict) else {}
+    target_map = projections.get("target_map") if isinstance(projections.get("target_map"), dict) else {}
+    if target_map.get("coordinate_space") != "screenshot":
+        raise ValueError(f"URL stage web_snapshot_data target_map must use screenshot coordinates: {path_value}")
+    targets = target_map.get("targets")
+    if not isinstance(targets, list):
+        raise ValueError(f"URL stage web_snapshot_data is missing projections.target_map.targets: {path_value}")
+    return data
+
+
 def read_url_stage_web_snapshot_data(path_value: str, manifest_dir: Path) -> dict[str, Any]:
     path = url_stage_resolved_path(path_value, manifest_dir)
     if path is None:
-        return {}
+        raise ValueError(f"URL stage web_snapshot_data path is invalid: {path_value}")
     try:
         data = read_json(path)
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
+    except OSError as error:
+        raise ValueError(f"URL stage web_snapshot_data could not be read: {path_value}") from error
+    except json.JSONDecodeError as error:
+        raise ValueError(f"URL stage web_snapshot_data is invalid JSON: {path_value}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"URL stage web_snapshot_data must be an object: {path_value}")
+    return validate_url_stage_web_snapshot_data(data, path_value=path_value)
 
 
 def url_stage_web_snapshot_data_facets(data: dict[str, Any]) -> dict[str, Any]:
@@ -551,11 +573,9 @@ def project_url_stage_manifest(manifest_path: str | Path) -> dict[str, Any]:
     projected_artifact_ids: list[str] = []
     web_snapshot_data_key = "web_snapshot_data"
     web_snapshot_data_raw = page_artifacts.get(web_snapshot_data_key)
-    web_snapshot_data = (
-        read_url_stage_web_snapshot_data(str(web_snapshot_data_raw), manifest_dir)
-        if web_snapshot_data_raw
-        else {}
-    )
+    if not web_snapshot_data_raw:
+        raise ValueError(f"URL stage manifest is missing required artifact: {web_snapshot_data_key}")
+    web_snapshot_data = read_url_stage_web_snapshot_data(str(web_snapshot_data_raw), manifest_dir)
     web_snapshot_data_facets = url_stage_web_snapshot_data_facets(web_snapshot_data)
     parent_ids_by_key = {
         "web_snapshot": [web_snapshot_data_key],

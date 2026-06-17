@@ -521,6 +521,23 @@ def clean_overlay_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
             }
         except (KeyError, TypeError, ValueError):
             return None
+        screenshot_rect = None
+        raw_screenshot_rect = anchor.get("screenshot_rect")
+        if isinstance(raw_screenshot_rect, dict):
+            try:
+                screenshot_rect = {
+                    "x": int(raw_screenshot_rect["x"]),
+                    "y": int(raw_screenshot_rect["y"]),
+                    "width": int(raw_screenshot_rect["width"]),
+                    "height": int(raw_screenshot_rect["height"]),
+                }
+            except (KeyError, TypeError, ValueError):
+                screenshot_rect = None
+        target_map_selector_candidates = [
+            str(selector).strip()
+            for selector in (anchor.get("target_map_selector_candidates") if isinstance(anchor.get("target_map_selector_candidates"), list) else [])
+            if str(selector).strip()
+        ][:8]
         ancestor_trail = []
         for item in anchor.get("ancestor_trail") or []:
             if not isinstance(item, dict):
@@ -533,7 +550,7 @@ def clean_overlay_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
                     "classes": [str(value)[:120] for value in classes[:12]],
                 }
             )
-        return {
+        clean_anchor = {
             "type": "html_element",
             "coordinate_space": "html_document",
             "selector_candidates": selector_candidates,
@@ -550,6 +567,17 @@ def clean_overlay_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
             "ancestor_trail": ancestor_trail[:12],
             "source_url": str(anchor.get("source_url") or "")[:1000],
         }
+        web_target_id = str(anchor.get("web_target_id") or "").strip()
+        if web_target_id:
+            clean_anchor["web_target_id"] = web_target_id[:160]
+        target_kind = str(anchor.get("target_kind") or "").strip()
+        if target_kind:
+            clean_anchor["target_kind"] = target_kind[:80]
+        if screenshot_rect:
+            clean_anchor["screenshot_rect"] = screenshot_rect
+        if target_map_selector_candidates:
+            clean_anchor["target_map_selector_candidates"] = target_map_selector_candidates
+        return clean_anchor
     return None
 
 

@@ -49,12 +49,11 @@ linked from the data object rather than a separate sidebar artifact.
 
 - `visual`: screenshot path, dimensions, coordinate space, viewport, document
   size, and capture context;
-- `source_trees`: normalized DOM and AX/source-tree slots, with separate trees
-  and join links when available instead of pretending the browser gives one
-  perfect tree;
+- `source_trees`: real normalized DOM and AX/source-tree slots only when the
+  extractor supplies them, with separate trees and join links when available;
 - `projection_catalog`: machine-readable projection descriptors;
-- `projections`: derived shapes such as target map, visible text, structure,
-  and page snapshot;
+- `projections`: derived shapes such as target map, visible text, extracted
+  structure records, and Playwright page snapshot text;
 - `ui_views`: the curated subset of projections exposed as stage toolbar modes;
 - `replay_policy`: snapshot replay coordinates are authoritative inside the
   frozen workbench artifact; live-page replay treats selectors and semantics as

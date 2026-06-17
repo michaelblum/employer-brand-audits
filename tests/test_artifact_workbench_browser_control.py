@@ -2308,6 +2308,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                         "accessible_name": "Acme Robotics",
                         "text": "Acme Robotics",
                         "rect": {"x": 53, "y": 125, "width": 782, "height": 48},
+                        "web_target_id": "target-7",
+                        "target_kind": "link",
+                        "screenshot_rect": {"x": 140, "y": 260, "width": 220, "height": 52},
+                        "target_map_selector_candidates": ["#apply", "a.primary"],
                         "ancestor_trail": [
                             {"tag": "header", "id": "executive-readout", "classes": []},
                             {"tag": "main", "id": "", "classes": []},
@@ -2325,6 +2329,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertEqual(clean[0]["anchor"]["type"], "html_element")
         self.assertEqual(clean[0]["anchor"]["selector_candidates"], ["h1", "#executive-readout h1"])
         self.assertEqual(clean[0]["anchor"]["rect"], {"x": 53, "y": 125, "width": 782, "height": 48})
+        self.assertEqual(clean[0]["anchor"]["web_target_id"], "target-7")
+        self.assertEqual(clean[0]["anchor"]["target_kind"], "link")
+        self.assertEqual(clean[0]["anchor"]["screenshot_rect"], {"x": 140, "y": 260, "width": 220, "height": 52})
+        self.assertEqual(clean[0]["anchor"]["target_map_selector_candidates"], ["#apply", "a.primary"])
         self.assertEqual(clean[0]["body"]["text"], "HTML annotation demo")
 
 

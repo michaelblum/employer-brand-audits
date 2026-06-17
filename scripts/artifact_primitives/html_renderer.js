@@ -171,12 +171,49 @@
     return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
   }
 
+  function cssStringEscape(value) {
+    return String(value ?? "").replace(/["\\\n\r\f]/g, (char) => ({
+      '"': '\\"',
+      "\\": "\\\\",
+      "\n": "\\a ",
+      "\r": "\\d ",
+      "\f": "\\c ",
+    }[char]));
+  }
+
+  function cleanRect(value) {
+    if (!value || typeof value !== "object") return null;
+    return {
+      x: Math.round(Number(value.x || 0)),
+      y: Math.round(Number(value.y || 0)),
+      width: Math.max(1, Math.round(Number(value.width || 0))),
+      height: Math.max(1, Math.round(Number(value.height || 0))),
+    };
+  }
+
+  function webTargetMetadata(element) {
+    const raw = element?.getAttribute?.("data-web-target");
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function selectorCandidates(element) {
     const tag = String(element?.tagName || "").toLowerCase();
     const id = element?.id || element?.getAttribute?.("id") || "";
     const classes = elementClasses(element);
     const classSelector = classes.map((item) => `.${cssEscape(item)}`).join("");
     const candidates = [];
+    const webTargetId = element?.getAttribute?.("data-web-target-id") || "";
+    if (webTargetId) {
+      const escapedWebTargetId = cssStringEscape(webTargetId);
+      candidates.push(`[data-web-target-id="${escapedWebTargetId}"]`);
+      if (tag) candidates.push(`${tag}[data-web-target-id="${escapedWebTargetId}"]`);
+    }
     if (id) candidates.push(`#${cssEscape(id)}`);
     if (tag && (id || classSelector)) candidates.push(`${tag}${id ? `#${cssEscape(id)}` : ""}${classSelector}`);
     if (tag && classSelector) candidates.push(`${tag}${classSelector}`);
@@ -225,7 +262,12 @@
 
   function htmlElementAnchorForElement(element, { sourceUrl = "" } = {}) {
     const tag = String(element?.tagName || "").toLowerCase();
-    return {
+    const metadata = webTargetMetadata(element);
+    const webTargetId = element?.getAttribute?.("data-web-target-id") || metadata?.id || "";
+    const targetMapSelectors = Array.isArray(metadata?.selector_candidates)
+      ? metadata.selector_candidates.map((item) => String(item)).filter(Boolean)
+      : [];
+    const anchor = {
       type: "html_element",
       coordinate_space: "html_document",
       selector_candidates: selectorCandidates(element),
@@ -239,6 +281,12 @@
       ancestor_trail: ancestorTrail(element),
       source_url: sourceUrl,
     };
+    if (webTargetId) anchor.web_target_id = String(webTargetId);
+    if (metadata?.target_kind) anchor.target_kind = String(metadata.target_kind);
+    const screenshotRect = cleanRect(metadata?.rect);
+    if (screenshotRect) anchor.screenshot_rect = screenshotRect;
+    if (targetMapSelectors.length) anchor.target_map_selector_candidates = targetMapSelectors;
+    return anchor;
   }
 
   function displayRectForHtmlElementAnchor({ anchor, frameEl, wrapEl } = {}) {

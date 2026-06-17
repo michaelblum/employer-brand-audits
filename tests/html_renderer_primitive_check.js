@@ -158,6 +158,35 @@ assert.deepEqual(anchor.ancestor_trail, [
 ]);
 assert.equal(anchor.source_url, "https://acme.example/careers");
 
+const webTarget = fakeElement({
+  tagName: "BUTTON",
+  className: "web-target",
+  textContent: "",
+  attrs: {
+    "data-web-target-id": "target-7",
+    "data-web-target": JSON.stringify({
+      id: "target-7",
+      label: "Apply now",
+      role: "link",
+      tag: "a",
+      target_kind: "link",
+      rect: { x: 140, y: 260, width: 220, height: 52 },
+      selector_candidates: ["#apply", "a.primary"],
+    }),
+  },
+  rect: { left: 140, top: 260, width: 220, height: 52, right: 360, bottom: 312 },
+});
+
+const webTargetAnchor = renderer.htmlElementAnchorForElement(webTarget, {
+  sourceUrl: "https://acme.example/careers",
+});
+assert.equal(webTargetAnchor.web_target_id, "target-7");
+assert.equal(webTargetAnchor.target_kind, "link");
+assert.deepEqual(webTargetAnchor.screenshot_rect, { x: 140, y: 260, width: 220, height: 52 });
+assert.deepEqual(webTargetAnchor.target_map_selector_candidates, ["#apply", "a.primary"]);
+assert.equal(webTargetAnchor.selector_candidates[0], '[data-web-target-id="target-7"]');
+assert.equal(webTargetAnchor.selector_candidates[1], 'button[data-web-target-id="target-7"]');
+
 assert.deepEqual(
   renderer.displayRectForHtmlElementAnchor({
     anchor,

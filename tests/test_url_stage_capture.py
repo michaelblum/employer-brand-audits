@@ -19,6 +19,7 @@ from scripts.url_stage_capture import (
     slugify_stage_name,
     write_url_stage_manifest,
 )
+from scripts.workbench_projection import project_url_stage_manifest
 
 
 class UrlStageCaptureTests(unittest.TestCase):
@@ -180,10 +181,11 @@ class UrlStageCaptureTests(unittest.TestCase):
         self.assertEqual(data["schema_version"], "web_snapshot.v0")
         self.assertEqual(data["visual"]["coordinate_space"], "screenshot")
         self.assertEqual(data["visual"]["image"]["path"], "artifacts/url-stage/acme/latest/page.full-page.png")
-        self.assertEqual(data["source_trees"]["dom"]["schema_version"], "web_snapshot_dom_tree.v0")
-        self.assertEqual(data["source_trees"]["ax"]["schema_version"], "web_snapshot_ax_tree.v0")
+        self.assertEqual(data["source_trees"], {})
         self.assertEqual(data["projections"]["target_map"]["targets"][0]["rect"], {"x": 200, "y": 400, "width": 300, "height": 80})
         self.assertEqual(data["projections"]["visible_text"]["lines"], ["Apply now", "Engineering careers"])
+        self.assertEqual(data["projections"]["structure"]["source"], "normalized_blueprint_elements")
+        self.assertEqual(data["projections"]["page_snapshot"]["source"], "playwright_snapshot_text")
         self.assertEqual(data["projection_catalog"]["target_map"]["coordinate_space"], "screenshot")
         self.assertEqual(
             [view["id"] for view in data["ui_views"]],
@@ -231,6 +233,38 @@ class UrlStageCaptureTests(unittest.TestCase):
             "artifacts/.url-stage-test-" + root.name.rsplit(".url-stage-test-", 1)[-1] + "/web-snapshot-data.json",
         )
         self.assertEqual(manifest["screenshot"]["dimensions"], {"width": 1000, "height": 1200})
+
+    def test_url_stage_projection_rejects_missing_canonical_web_snapshot_data(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix=".url-stage-test-", dir=REPO_ROOT / "artifacts"))
+        try:
+            web_snapshot = root / "web-snapshot.html"
+            page_screenshot = root / "page.full-page.png"
+            capture_log = root / "capture.log"
+            web_snapshot.write_text("<!doctype html><html></html>\n", encoding="utf-8")
+            page_screenshot.write_bytes(b"fixture screenshot bytes")
+            capture_log.write_text("capture log\n", encoding="utf-8")
+            manifest_path = write_url_stage_manifest(
+                output_dir=root,
+                slug="acme-careers",
+                url="https://example.com/jobs",
+                status="passed",
+                viewport={"width": 1000, "height": 800, "devicePixelRatio": 1},
+                paths={
+                    "web_snapshot": web_snapshot,
+                    "web_snapshot_data": root / "missing-web-snapshot-data.json",
+                    "page_screenshot": page_screenshot,
+                    "capture_log": capture_log,
+                },
+                screenshot_dimensions={"width": 1000, "height": 1200},
+            )
+
+            with self.assertRaisesRegex(ValueError, "web_snapshot_data"):
+                project_url_stage_manifest(manifest_path)
+        finally:
+            for child in sorted(root.glob("*"), reverse=True):
+                if child.is_file():
+                    child.unlink()
+            root.rmdir()
 
     def test_validation_includes_url_stage_capture_files(self) -> None:
         from scripts.eba_cli import validation_commands
