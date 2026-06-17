@@ -136,6 +136,46 @@ class WorkbenchServerHardeningTests(unittest.TestCase):
                     body: Any = json.loads(data)
                     self.assertEqual("Cross-origin mutation rejected", body["error"])
 
+    def test_cross_origin_mutation_cannot_bypass_with_spoofed_host_header(self) -> None:
+        with RunningWorkbenchServer() as server:
+            response, data = server.request(
+                "POST",
+                "/api/workbench-state",
+                json.dumps({"view": {"active_artifact_id": "l1-careers-text"}}),
+                headers={
+                    "content-type": "application/json",
+                    "origin": f"http://evil.test:{server.port}",
+                    "host": f"evil.test:{server.port}",
+                },
+            )
+
+        self.assertEqual(HTTPStatus.FORBIDDEN, response.status)
+        self.assertEqual({"error": "Cross-origin mutation rejected"}, json.loads(data))
+
+    def test_malformed_utf8_mutation_bodies_get_clean_json_400(self) -> None:
+        invalid_utf8 = b'{"broken":"\xff"}'
+        blocked_requests = [
+            ("POST", "/api/workbench-state", invalid_utf8),
+            ("PUT", "/api/artifact-content/l0-intake-flow", invalid_utf8),
+        ]
+        with RunningWorkbenchServer() as server:
+            for method, path, payload in blocked_requests:
+                with self.subTest(method=method, path=path):
+                    response, data = server.request(
+                        method,
+                        path,
+                        payload,
+                        headers={
+                            "content-type": "application/json",
+                            "origin": server.same_origin,
+                        },
+                    )
+
+                    self.assertEqual(HTTPStatus.BAD_REQUEST, response.status)
+                    self.assertEqual("application/json; charset=utf-8", response.getheader("content-type"))
+                    self.assertEqual("nosniff", response.getheader("x-content-type-options"))
+                    self.assertEqual({"error": "Invalid UTF-8 request body"}, json.loads(data))
+
     def test_oversized_mutation_body_gets_clean_json_413(self) -> None:
         with RunningWorkbenchServer() as server:
             response, data = server.request_with_content_length(

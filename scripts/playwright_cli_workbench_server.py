@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import mimetypes
 import posixpath
@@ -138,6 +139,35 @@ WORKBENCH_ASSETS = {
         "text/javascript",
     ),
 }
+
+
+def loopback_origin_netloc(host: str, port: int) -> str | None:
+    normalized_host = str(host or "").strip().strip("[]").lower()
+    if not normalized_host:
+        return None
+    if normalized_host == "localhost":
+        return f"localhost:{port}"
+    try:
+        address = ipaddress.ip_address(normalized_host)
+    except ValueError:
+        return None
+    if not address.is_loopback:
+        return None
+    if address.version == 6:
+        return f"[{address.compressed}]:{port}"
+    return f"{address.compressed}:{port}"
+
+
+def allowed_loopback_origin_netlocs(bind_host: str, bind_port: int) -> set[str]:
+    allowed = {
+        f"127.0.0.1:{bind_port}",
+        f"localhost:{bind_port}",
+        f"[::1]:{bind_port}",
+    }
+    bound_netloc = loopback_origin_netloc(bind_host, bind_port)
+    if bound_netloc:
+        allowed.add(bound_netloc)
+    return allowed
 
 
 def repo_relative_path(path: Path) -> str:
@@ -715,16 +745,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         parsed_origin = urlparse(origin)
         if parsed_origin.scheme != "http" or not parsed_origin.netloc:
             return False
-        request_host = str(self.headers.get("host") or "").strip().lower()
         bind_host, bind_port = self.server.server_address[:2]
-        allowed_hosts = {
-            request_host,
-            f"{bind_host}:{bind_port}".lower(),
-            f"127.0.0.1:{bind_port}",
-            f"localhost:{bind_port}",
-        }
-        allowed_hosts.discard("")
-        return parsed_origin.netloc.lower() in allowed_hosts
+        return parsed_origin.netloc.lower() in allowed_loopback_origin_netlocs(bind_host, bind_port)
 
     def reject_disallowed_mutation_origin(self) -> bool:
         if self.mutation_origin_allowed():
@@ -745,6 +767,13 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Request body too large"})
             return None
         return self.rfile.read(length)
+
+    def decode_mutation_body(self, body: bytes) -> str | None:
+        try:
+            return body.decode("utf-8")
+        except UnicodeDecodeError:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid UTF-8 request body"})
+            return None
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -791,8 +820,11 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         body = self.read_mutation_body()
         if body is None:
             return
+        body_text = self.decode_mutation_body(body)
+        if body_text is None:
+            return
         try:
-            payload = json.loads(body.decode("utf-8"))
+            payload = json.loads(body_text)
         except json.JSONDecodeError:
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid JSON"})
             return
@@ -821,7 +853,9 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         body = self.read_mutation_body()
         if body is None:
             return
-        content = body.decode("utf-8")
+        content = self.decode_mutation_body(body)
+        if content is None:
+            return
         artifact = self.server.write_markdown_artifact(artifact_id_value, content)
         if artifact is None:
             self.send_json(HTTPStatus.NOT_FOUND, {"error": "Markdown artifact not found"})

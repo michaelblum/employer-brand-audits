@@ -15,6 +15,7 @@ assert.equal(typeof boundedInputControls.selectedOptionRecord, "function");
 assert.equal(typeof boundedInputControls.renderControlHtml, "function");
 assert.equal(typeof boundedInputControls.renderLayerHtml, "function");
 assert.equal(typeof boundedInputControls.definitionForControl, "function");
+assert.equal(typeof boundedInputControls.bindControls, "function");
 
 const definitions = [
   {
@@ -118,3 +119,144 @@ assert.equal(
   }),
   null,
 );
+
+class FakeElement {
+  constructor({
+    dataset = {},
+    hidden = false,
+    matches = [],
+    textContent = "",
+    value = "",
+  } = {}) {
+    this.dataset = dataset;
+    this.hidden = hidden;
+    this.matchesSet = new Set(matches);
+    this.textContent = textContent;
+    this.value = value;
+    this.attributes = {};
+    this.listeners = {};
+    this.parent = null;
+    this.queries = new Map();
+    this.queryAll = new Map();
+    this.focused = false;
+  }
+
+  addEventListener(type, listener) {
+    this.listeners[type] = this.listeners[type] || [];
+    this.listeners[type].push(listener);
+  }
+
+  closest(selector) {
+    return this.matchesSet.has(selector) ? this : this.parent?.closest(selector) || null;
+  }
+
+  dispatch(type, event = {}) {
+    const payload = {
+      key: "",
+      preventDefault: () => { payload.defaultPrevented = true; },
+      stopPropagation: () => { payload.propagationStopped = true; },
+      ...event,
+    };
+    (this.listeners[type] || []).forEach((listener) => listener(payload));
+    return payload;
+  }
+
+  focus() {
+    this.focused = true;
+    global.document.activeElement = this;
+  }
+
+  matches(selector) {
+    return this.matchesSet.has(selector);
+  }
+
+  querySelector(selector) {
+    return this.queries.get(selector) || null;
+  }
+
+  querySelectorAll(selector) {
+    return this.queryAll.get(selector) || [];
+  }
+
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+  }
+
+  getAttribute(name) {
+    return this.attributes[name] || "";
+  }
+}
+
+global.document = { activeElement: null };
+
+const textInput = new FakeElement({
+  dataset: { stepId: "l0-seed-intake", inputId: "company" },
+  value: "Draft Co",
+});
+const textLayer = new FakeElement();
+textLayer.queryAll.set("[data-bounded-input-control]", [textInput]);
+const textChanges = [];
+boundedInputControls.bindControls({
+  layerEl: textLayer,
+  definitions,
+  onChange: (change) => textChanges.push(change),
+});
+textInput.value = "Typed Co";
+textInput.dispatch("input");
+assert.equal(textChanges.length, 1);
+assert.equal(textChanges[0].definition, definitions[0]);
+assert.equal(textChanges[0].value, "Typed Co");
+
+const selectRoot = new FakeElement({ matches: ["[data-bounded-input-select]"] });
+const trigger = new FakeElement({
+  dataset: { stepId: "l0-seed-intake", inputId: "workflow_template" },
+  matches: ["[data-bounded-input-select-trigger]"],
+  value: "foundational",
+});
+const label = new FakeElement({ textContent: "Foundational audit" });
+const menu = new FakeElement({ hidden: true });
+const optionA = new FakeElement({ dataset: { value: "foundational" }, textContent: "Foundational audit" });
+const optionB = new FakeElement({ dataset: { value: "tech-talent-audit" }, textContent: "Tech talent audit" });
+trigger.parent = selectRoot;
+optionA.parent = selectRoot;
+optionB.parent = selectRoot;
+selectRoot.queries.set("[data-bounded-input-select-trigger]", trigger);
+selectRoot.queries.set("[data-bounded-input-select-label]", label);
+selectRoot.queries.set("[data-bounded-input-select-menu]", menu);
+selectRoot.queryAll.set("[data-bounded-input-select-option]", [optionA, optionB]);
+const selectLayer = new FakeElement();
+selectLayer.queryAll.set("[data-bounded-input-control]", [trigger]);
+selectLayer.queryAll.set("[data-bounded-input-select]", [selectRoot]);
+const selectChanges = [];
+boundedInputControls.bindControls({
+  layerEl: selectLayer,
+  definitions,
+  onChange: (change) => selectChanges.push(change),
+});
+
+trigger.dispatch("click");
+assert.equal(menu.hidden, false);
+assert.equal(trigger.getAttribute("aria-expanded"), "true");
+optionB.dispatch("click");
+assert.equal(menu.hidden, true);
+assert.equal(trigger.getAttribute("aria-expanded"), "false");
+assert.equal(trigger.value, "tech-talent-audit");
+assert.equal(label.textContent, "Tech talent audit");
+assert.equal(optionA.getAttribute("aria-selected"), "false");
+assert.equal(optionB.getAttribute("aria-selected"), "true");
+assert.equal(trigger.focused, true);
+assert.equal(selectChanges.length, 1);
+assert.equal(selectChanges[0].definition, definitions[1]);
+assert.equal(selectChanges[0].value, "tech-talent-audit");
+
+trigger.dispatch("keydown", { key: "ArrowDown" });
+assert.equal(menu.hidden, false);
+assert.equal(global.document.activeElement, optionB);
+optionB.dispatch("keydown", { key: "Enter" });
+assert.equal(trigger.value, "tech-talent-audit");
+assert.equal(selectChanges.length, 2);
+
+trigger.dispatch("click");
+optionA.focus();
+optionA.dispatch("keydown", { key: "ArrowDown" });
+assert.equal(global.document.activeElement, optionB);
