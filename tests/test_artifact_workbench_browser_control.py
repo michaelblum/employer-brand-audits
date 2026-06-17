@@ -174,6 +174,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             ["node", "--check", "scripts/playwright-snippets/artifact-workbench-bounded-input-check.js"],
             validation_commands(),
         )
+        self.assertIn(
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-web-snapshot-check.js"],
+            validation_commands(),
+        )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/html_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/core/artifact_common.js", WORKBENCH_ASSETS)

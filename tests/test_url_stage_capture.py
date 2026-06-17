@@ -81,7 +81,7 @@ class UrlStageCaptureTests(unittest.TestCase):
         html = build_web_snapshot_html(target_map)
 
         self.assertIn('data-web-snapshot-stage="true"', html)
-        self.assertIn('src="/artifacts/url-stage/acme/latest/page.full-page.png"', html)
+        self.assertIn('src="/artifact/artifacts/url-stage/acme/latest/page.full-page.png"', html)
         self.assertIn('data-web-target-id="target-1"', html)
         self.assertIn("left:20px;top:30px;width:200px;height:48px", html)
         self.assertIn("Apply now", html)
@@ -126,6 +126,7 @@ class UrlStageCaptureTests(unittest.TestCase):
 
         self.assertIn([sys.executable, "tests/test_url_stage_capture.py"], validation_commands())
         self.assertIn(["node", "--check", "scripts/playwright-snippets/extract-web-blueprint.js"], validation_commands())
+        self.assertIn(["node", "--check", "scripts/playwright-snippets/artifact-workbench-web-snapshot-check.js"], validation_commands())
 
     def test_stage_url_parser_is_registered(self) -> None:
         from scripts.eba_cli import build_parser

@@ -91,7 +91,7 @@ def url_stage_fixture_manifest(root: Path) -> Path:
         """<!doctype html>
 <html><body>
   <div data-web-snapshot-stage="true">
-    <img src="/artifacts/url-stage/url-stage-basic/latest/page.full-page.png" alt="Captured web page snapshot">
+    <img src="/artifact/artifacts/url-stage/url-stage-basic/latest/page.full-page.png" alt="Captured web page snapshot">
     <button class="web-target" data-web-target-id="target-1" aria-label="Apply now"></button>
   </div>
 </body></html>

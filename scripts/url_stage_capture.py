@@ -186,7 +186,7 @@ def build_target_map(
 def build_web_snapshot_html(target_map: dict[str, Any]) -> str:
     screenshot = target_map.get("screenshot") if isinstance(target_map.get("screenshot"), dict) else {}
     dimensions = screenshot.get("dimensions") if isinstance(screenshot.get("dimensions"), dict) else {}
-    image_path = "/" + str(screenshot.get("path") or "").lstrip("/")
+    image_path = "/artifact/" + str(screenshot.get("path") or "").lstrip("/")
     width = int(dimensions.get("width") or 1)
     height = int(dimensions.get("height") or 1)
     target_html = []
