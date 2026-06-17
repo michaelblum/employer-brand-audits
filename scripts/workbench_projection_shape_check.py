@@ -76,6 +76,94 @@ flowchart TD
     return manifest_path
 
 
+def url_stage_fixture_manifest(root: Path) -> Path:
+    stage_dir = root / "url-stage-basic"
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    web_snapshot = stage_dir / "web-snapshot.html"
+    page_screenshot = stage_dir / "page.full-page.png"
+    target_map = stage_dir / "target-map.json"
+    blueprint = stage_dir / "web-blueprint.json"
+    visible_text = stage_dir / "visible-text.txt"
+    page_snapshot = stage_dir / "page-snapshot.txt"
+    capture_log = stage_dir / "capture.log"
+
+    web_snapshot.write_text(
+        """<!doctype html>
+<html><body>
+  <div data-web-snapshot-stage="true">
+    <img src="/artifacts/url-stage/url-stage-basic/latest/page.full-page.png" alt="Captured web page snapshot">
+    <button class="web-target" data-web-target-id="target-1" aria-label="Apply now"></button>
+  </div>
+</body></html>
+""",
+        encoding="utf-8",
+    )
+    page_screenshot.write_bytes(b"fixture screenshot bytes")
+    write_json(
+        target_map,
+        {
+            "schema_version": "url_stage_target_map.v0",
+            "coordinate_space": "screenshot",
+            "source_url": "https://example.com/careers/",
+            "screenshot": {
+                "path": str(page_screenshot.relative_to(REPO_ROOT)),
+                "dimensions": {"width": 1200, "height": 1600},
+            },
+            "targets": [
+                {
+                    "id": "target-1",
+                    "label": "Apply now",
+                    "target_kind": "link",
+                    "rect": {"x": 80, "y": 120, "width": 140, "height": 48},
+                    "selector_candidates": ["#apply-now", "a.primary"],
+                    "confidence": 0.91,
+                }
+            ],
+        },
+    )
+    write_json(
+        blueprint,
+        {
+            "schema_version": "url_stage_blueprint.v0",
+            "url": "https://example.com/careers/",
+            "title": "Careers",
+            "viewport": {"width": 1200, "height": 900, "devicePixelRatio": 1},
+            "document": {"width": 1200, "height": 1600},
+            "elements": [],
+        },
+    )
+    visible_text.write_text("Apply now\nEngineering careers\n", encoding="utf-8")
+    page_snapshot.write_text("button Apply now [ref=e1]\n", encoding="utf-8")
+    capture_log.write_text("captured fixture\n", encoding="utf-8")
+
+    manifest_path = stage_dir / "manifest.json"
+    write_json(
+        manifest_path,
+        {
+            "schema_version": "url_stage_capture.v0",
+            "slug": "url-stage-basic",
+            "url": "https://example.com/careers/",
+            "status": "passed",
+            "viewport": {"width": 1200, "height": 900, "devicePixelRatio": 1},
+            "screenshot": {
+                "path": str(page_screenshot.relative_to(REPO_ROOT)),
+                "dimensions": {"width": 1200, "height": 1600},
+            },
+            "blueprint": {"path": str(blueprint.relative_to(REPO_ROOT))},
+            "artifacts": {
+                "web_snapshot": str(web_snapshot.relative_to(REPO_ROOT)),
+                "page_screenshot": str(page_screenshot.relative_to(REPO_ROOT)),
+                "target_map": str(target_map.relative_to(REPO_ROOT)),
+                "blueprint": str(blueprint.relative_to(REPO_ROOT)),
+                "visible_text": str(visible_text.relative_to(REPO_ROOT)),
+                "page_snapshot": str(page_snapshot.relative_to(REPO_ROOT)),
+                "capture_log": str(capture_log.relative_to(REPO_ROOT)),
+            },
+        },
+    )
+    return manifest_path
+
+
 def assert_matrix_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     artifacts = payload.get("artifacts") or []
     edges = payload.get("edges") or []
@@ -127,6 +215,95 @@ def assert_matrix_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
         "mermaid_artifact_id": mermaid_id,
         "composite_group_id": group_id,
         "composite_artifact_ids": sorted(expected_ids),
+    }
+
+
+def assert_url_stage_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
+    require(
+        payload.get("source", {}).get("format") == "url_stage_capture",
+        "URL stage source format drifted",
+    )
+    require(
+        payload.get("source", {}).get("adapter") == "project_url_stage_manifest",
+        "URL stage adapter drifted",
+    )
+    require(
+        payload.get("source", {}).get("workbench_context") == {"artifact_control_policy": "read-only"},
+        "URL stage should default to read-only type controls",
+    )
+    artifacts = payload.get("artifacts") or []
+    edges = payload.get("edges") or []
+    groups = payload.get("artifact_groups") or []
+    resources = payload.get("resources") or []
+    web_snapshot = next((artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:web_snapshot"), None)
+    target_map = next((artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:target_map"), None)
+    page_screenshot = next(
+        (artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:page_screenshot"),
+        None,
+    )
+    visible_text = next((artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:visible_text"), None)
+    expected_artifact_ids = {
+        "url-stage-basic:web_snapshot",
+        "url-stage-basic:page_screenshot",
+        "url-stage-basic:target_map",
+        "url-stage-basic:blueprint",
+        "url-stage-basic:visible_text",
+        "url-stage-basic:page_snapshot",
+        "url-stage-basic:capture_log",
+    }
+    require(
+        {artifact.get("id") for artifact in artifacts} == expected_artifact_ids,
+        "URL stage projected artifact ids drifted",
+    )
+    require(isinstance(web_snapshot, dict), "Missing URL stage web snapshot artifact")
+    require(web_snapshot.get("type") == "html", "URL stage web snapshot must project through HTML renderer")
+    require(web_snapshot.get("kind") == "web_snapshot", "URL stage web snapshot semantic kind drifted")
+    require(web_snapshot.get("slot") == "web.snapshot", "URL stage web snapshot slot drifted")
+    require(web_snapshot.get("mime_type") == "text/html", "URL stage web snapshot MIME type drifted")
+    require(web_snapshot.get("parent_ids") == ["url-stage-basic:page_screenshot", "url-stage-basic:target_map"], "URL stage web snapshot parents drifted")
+    require("annotate" in (web_snapshot.get("capabilities") or []), "URL stage web snapshot should expose annotate")
+    require("edit" not in (web_snapshot.get("capabilities") or []), "URL stage web snapshot should not expose edit")
+    require(isinstance(page_screenshot, dict), "Missing URL stage screenshot artifact")
+    require(page_screenshot.get("type") == "image", "URL stage screenshot must project as image")
+    require(page_screenshot.get("dimensions") == {"width": 1200, "height": 1600}, "URL stage screenshot dimensions drifted")
+    require(isinstance(target_map, dict), "Missing URL stage target map artifact")
+    require(target_map.get("type") == "json", "URL stage target map must project as json")
+    require(target_map.get("kind") == "target_map", "URL stage target map kind drifted")
+    require(target_map.get("facets", {}).get("coordinate_space") == "screenshot", "URL stage target map coordinate space drifted")
+    require(target_map.get("facets", {}).get("target_count") == 1, "URL stage target count drifted")
+    require(isinstance(visible_text, dict), "Missing URL stage visible text artifact")
+    require(visible_text.get("type") == "text", "URL stage visible text must project as text")
+    require(
+        len([resource for resource in resources if resource.get("type") == "url"]) == 1,
+        "URL stage URL resources must be deduplicated",
+    )
+    group = next((item for item in groups if item.get("id") == "composite:url-stage:url-stage-basic"), None)
+    require(isinstance(group, dict), "Missing URL stage composite group")
+    require(group.get("kind") == "web_snapshot_bundle", "URL stage composite kind drifted")
+    require(set(group.get("artifact_ids") or []) == expected_artifact_ids, "URL stage composite artifact ids drifted")
+    for parent_id in web_snapshot.get("parent_ids") or []:
+        require(
+            any(
+                edge.get("id") == f"edge:url-stage-basic:web_snapshot:{parent_id}"
+                and edge.get("kind") == "derived_from"
+                for edge in edges
+            ),
+            f"Missing URL stage derived_from edge for {parent_id}",
+        )
+    for artifact_id in expected_artifact_ids:
+        require(
+            any(
+                edge.get("id") == f"edge:composite:url-stage:url-stage-basic:{artifact_id}"
+                and edge.get("kind") == "contains"
+                for edge in edges
+            ),
+            f"Missing URL stage contains edge for {artifact_id}",
+        )
+    return {
+        "status": "passed",
+        "adapter": payload.get("source", {}).get("adapter"),
+        "web_snapshot_artifact_id": web_snapshot.get("id"),
+        "projected_artifact_ids": sorted(expected_artifact_ids),
     }
 
 
@@ -366,10 +543,12 @@ def main() -> int:
     try:
         matrix_path = fixture_manifest(root)
         audit_path = generate_easy_audit_fixture(root / "easy-audit")
+        url_stage_path = url_stage_fixture_manifest(root)
         matrix_payload = project_matrix_manifest(matrix_path)
         audit_payload = project_audit_manifest(audit_path)
         autodetected_matrix_payload = project_workbench_manifest(matrix_path)
         autodetected_audit_payload = project_workbench_manifest(audit_path)
+        autodetected_url_stage_payload = project_workbench_manifest(url_stage_path)
         require(
             autodetected_matrix_payload.get("source", {}).get("adapter") == "project_matrix_manifest",
             "Workbench projection auto-detection did not select the matrix adapter",
@@ -378,10 +557,15 @@ def main() -> int:
             autodetected_audit_payload.get("source", {}).get("adapter") == "project_audit_manifest",
             "Workbench projection auto-detection did not select the ADR-002 adapter",
         )
+        require(
+            autodetected_url_stage_payload.get("source", {}).get("adapter") == "project_url_stage_manifest",
+            "Workbench projection auto-detection did not select the URL stage adapter",
+        )
         result = {
             "status": "passed",
             "matrix": assert_matrix_projection_shape(matrix_payload),
             "audit_manifest": assert_audit_projection_shape(audit_payload),
+            "url_stage": assert_url_stage_projection_shape(autodetected_url_stage_payload),
             "audit_server_collection": assert_audit_server_collection(audit_path, audit_payload),
         }
         print(json.dumps(result, indent=2, sort_keys=True))

@@ -102,6 +102,58 @@ RESOURCE_FILE_KEYS = {
     "restore_stdout": "debug.restore_stdout",
 }
 
+URL_STAGE_ARTIFACT_SLOTS = {
+    "web_snapshot": {
+        "label": "Web Snapshot",
+        "slot": "web.snapshot",
+        "artifact_type": "html",
+        "kind": "web_snapshot",
+        "layer": 1,
+    },
+    "page_screenshot": {
+        "label": "Page Screenshot",
+        "slot": "web.screenshot",
+        "artifact_type": "image",
+        "kind": "page_screenshot",
+        "layer": 1,
+    },
+    "target_map": {
+        "label": "Target Map",
+        "slot": "web.target_map",
+        "artifact_type": "json",
+        "kind": "target_map",
+        "layer": 1,
+    },
+    "blueprint": {
+        "label": "Web Blueprint",
+        "slot": "web.blueprint",
+        "artifact_type": "json",
+        "kind": "web_blueprint",
+        "layer": 1,
+    },
+    "visible_text": {
+        "label": "Visible Text",
+        "slot": "web.visible_text",
+        "artifact_type": "text",
+        "kind": "visible_text",
+        "layer": 1,
+    },
+    "page_snapshot": {
+        "label": "Page Snapshot",
+        "slot": "web.page_snapshot",
+        "artifact_type": "text",
+        "kind": "page_snapshot",
+        "layer": 1,
+    },
+    "capture_log": {
+        "label": "Capture Log",
+        "slot": "debug.log",
+        "artifact_type": "log",
+        "kind": "capture_log",
+        "layer": 1,
+    },
+}
+
 
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -413,6 +465,279 @@ def local_file_resource(slug: str, key: str, path_value: str, slot: str) -> dict
         "path": path_value,
         "mime_type": mime_type_for(path_value),
         "source_page": {"slug": slug},
+    }
+
+
+def url_stage_artifact_id(slug: str, key: str) -> str:
+    return f"{slug}:{key}"
+
+
+def url_stage_resolved_path(path_value: str, manifest_dir: Path) -> Path | None:
+    return repository_file_path(path_value) or repository_file_path(path_value, manifest_dir)
+
+
+def url_stage_relative_path(path_value: str, manifest_dir: Path) -> str:
+    resolved = url_stage_resolved_path(path_value, manifest_dir)
+    if resolved is None:
+        return path_value
+    try:
+        return str(resolved.relative_to(REPO_ROOT))
+    except ValueError:
+        return path_value
+
+
+def url_stage_manifest_context(manifest: dict[str, Any]) -> dict[str, Any]:
+    context = (
+        dict(manifest.get("workbench_context"))
+        if isinstance(manifest.get("workbench_context"), dict)
+        else {}
+    )
+    context.setdefault("artifact_control_policy", "read-only")
+    return context
+
+
+def url_stage_target_map_facets(path_value: str, manifest_dir: Path) -> dict[str, Any]:
+    path = url_stage_resolved_path(path_value, manifest_dir)
+    if path is None:
+        return {}
+    try:
+        target_map = read_json(path)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(target_map, dict):
+        return {}
+    targets = target_map.get("targets") if isinstance(target_map.get("targets"), list) else []
+    return {
+        "coordinate_space": str(target_map.get("coordinate_space") or ""),
+        "target_count": len(targets),
+    }
+
+
+def project_url_stage_manifest(manifest_path: str | Path) -> dict[str, Any]:
+    """Project a URL-stage capture manifest into the workbench payload.
+
+    The staged page remains an HTML artifact generated over a screenshot. The
+    target map is supporting evidence: its rects are durable screenshot
+    coordinates, while selectors remain advisory replay hints.
+    """
+    path = Path(manifest_path).expanduser().resolve()
+    manifest = read_json(path)
+    if not isinstance(manifest, dict) or str(manifest.get("schema_version") or "") != "url_stage_capture.v0":
+        raise ValueError(f"Expected URL stage capture manifest: {path}")
+
+    manifest_dir = path.parent
+    slug = str(manifest.get("slug") or path.parent.name or "url-stage")
+    url = str(manifest.get("url") or "")
+    host = page_host(url)
+    source_manifest = str(path)
+    workflow_id = f"workflow:url-stage:{slug}"
+    step_id = f"step:url-stage:{slug}"
+    status = str(manifest.get("status") or "unknown")
+    workflow_status = "complete" if status == "passed" else status
+    page_artifacts = manifest.get("artifacts") if isinstance(manifest.get("artifacts"), dict) else {}
+    screenshot = manifest.get("screenshot") if isinstance(manifest.get("screenshot"), dict) else {}
+    screenshot_dimensions = (
+        screenshot.get("dimensions")
+        if isinstance(screenshot.get("dimensions"), dict)
+        else {}
+    )
+    context = url_stage_manifest_context(manifest)
+
+    source_resource_id = source_url_resource_id(slug)
+    resources: list[dict[str, Any]] = [
+        {
+            "id": source_resource_id,
+            "type": "url",
+            "slot": "source.url",
+            "url": url,
+            "host": host,
+            "source_page": {"slug": slug},
+        }
+    ]
+    artifacts: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    host_index: dict[str, dict[str, Any]] = {}
+    slot_index: dict[str, dict[str, Any]] = {}
+    if host:
+        host_index[host] = {
+            "id": f"facet:host:{host}",
+            "kind": "host",
+            "value": host,
+            "page_slugs": [slug],
+            "artifact_ids": [],
+        }
+
+    projected_artifact_ids: list[str] = []
+    parent_ids_by_key = {
+        "web_snapshot": ["page_screenshot", "target_map"],
+        "target_map": ["blueprint", "page_screenshot"],
+    }
+    for key, config in URL_STAGE_ARTIFACT_SLOTS.items():
+        path_value_raw = page_artifacts.get(key)
+        if not path_value_raw:
+            continue
+        path_value = url_stage_relative_path(str(path_value_raw), manifest_dir)
+        artifact_id = url_stage_artifact_id(slug, key)
+        projected_artifact_ids.append(artifact_id)
+        file_resource = local_file_resource(slug, key, path_value, f"artifact.{key}")
+        resources.append(file_resource)
+        resource_ids = [source_resource_id, file_resource["id"]]
+        artifact_type = str(config["artifact_type"])
+        slot = str(config["slot"])
+        add_slot_facet(slot_index, slot, str(config["label"]), artifact_id)
+        add_host_facet(host_index, host, artifact_id)
+        parent_ids = [
+            url_stage_artifact_id(slug, parent_key)
+            for parent_key in parent_ids_by_key.get(key, [])
+            if page_artifacts.get(parent_key)
+        ]
+        capabilities = ["view"]
+        if artifact_type in {"image", "html"}:
+            capabilities.append("annotate")
+
+        facets: dict[str, Any] = {
+            "host": host,
+            "page_slug": slug,
+            "artifact_type": artifact_type,
+            "artifact_kind": config["kind"],
+            "slot": slot,
+            "source_url": url,
+        }
+        if key == "web_snapshot":
+            facets["screenshot_artifact_id"] = url_stage_artifact_id(slug, "page_screenshot")
+            facets["target_map_artifact_id"] = url_stage_artifact_id(slug, "target_map")
+            facets["intent_spine"] = "annotation_overlays"
+            facets["selector_policy"] = "advisory"
+        if key == "target_map":
+            facets.update(url_stage_target_map_facets(path_value, manifest_dir))
+
+        artifact: dict[str, Any] = {
+            "id": artifact_id,
+            "name": f"{slug} {config['label']}",
+            "type": artifact_type,
+            "kind": config["kind"],
+            "slot": slot,
+            "layer": config["layer"],
+            "status": workflow_status,
+            "path": path_value,
+            "mime_type": mime_type_for(path_value),
+            "produced_by_step_id": step_id,
+            "parent_ids": parent_ids,
+            "resource_ids": resource_ids,
+            "source_page": {"slug": slug, "url": url, "host": host},
+            "facets": facets,
+            "capabilities": capabilities,
+        }
+        if key == "web_snapshot":
+            artifact["mime_type"] = "text/html"
+        if key == "page_screenshot":
+            artifact["dimensions"] = screenshot_dimensions
+        artifacts.append(artifact)
+        edges.extend(
+            [
+                {
+                    "id": f"edge:{file_resource['id']}:{artifact_id}",
+                    "kind": "supports",
+                    "from": file_resource["id"],
+                    "to": artifact_id,
+                },
+                {
+                    "id": f"edge:{step_id}:{artifact_id}",
+                    "kind": "produced_by",
+                    "from": step_id,
+                    "to": artifact_id,
+                },
+                {
+                    "id": f"edge:{artifact_id}:{source_resource_id}",
+                    "kind": "observes",
+                    "from": artifact_id,
+                    "to": source_resource_id,
+                },
+            ]
+        )
+        edges.extend(
+            {
+                "id": f"edge:{artifact_id}:{parent_id}",
+                "kind": "derived_from",
+                "from": artifact_id,
+                "to": parent_id,
+            }
+            for parent_id in parent_ids
+        )
+
+    group_id = f"composite:url-stage:{slug}"
+    artifact_groups = []
+    if projected_artifact_ids:
+        artifact_groups.append(
+            {
+                "id": group_id,
+                "kind": "web_snapshot_bundle",
+                "label": f"{slug} web snapshot bundle",
+                "artifact_ids": projected_artifact_ids,
+                "edge_ids": [f"edge:{group_id}:{artifact_id}" for artifact_id in projected_artifact_ids],
+                "source": {"kind": "url_stage_manifest", "slug": slug, "url": url, "host": host},
+                "slot": "web.snapshot.bundle",
+            }
+        )
+        edges.extend(
+            {
+                "id": f"edge:{group_id}:{artifact_id}",
+                "kind": "contains",
+                "from": group_id,
+                "to": artifact_id,
+            }
+            for artifact_id in projected_artifact_ids
+        )
+
+    return {
+        "schema_version": "workbench_projection.v0",
+        "source": {
+            "format": "url_stage_capture",
+            "manifest_path": source_manifest,
+            "adapter": "project_url_stage_manifest",
+            "source_schema_version": manifest.get("schema_version"),
+            "workbench_context": context,
+        },
+        "workflow": {
+            "id": workflow_id,
+            "name": f"{slug} URL stage",
+            "status": workflow_status,
+            "source_manifest": source_manifest,
+            "slug": slug,
+            "url": url,
+            "steps": [
+                {
+                    "id": step_id,
+                    "name": "Capture staged URL",
+                    "description": "Capture a live URL into durable screenshot, target map, text, and synthetic HTML artifacts.",
+                    "status": workflow_status,
+                    "layer": 1,
+                    "required_inputs": [
+                        {
+                            "id": "url",
+                            "label": "Source URL",
+                            "status": "filled" if url else "pending",
+                            "value": url or None,
+                        }
+                    ],
+                    "artifact_ids": projected_artifact_ids,
+                    "parent_step_ids": [],
+                    "source_page": {"slug": slug, "url": url, "host": host},
+                }
+            ],
+        },
+        "resources": resources,
+        "artifacts": artifacts,
+        "artifact_groups": artifact_groups,
+        "edges": edges,
+        "facets": {
+            "hosts": sorted(host_index.values(), key=lambda item: item["value"]),
+            "slots": sorted(slot_index.values(), key=lambda item: item["value"]),
+        },
+        "extension_points": {
+            "intent_spine": "Natural-language overlays are the primary durable interaction record for web snapshots.",
+            "selector_replay": "Selectors in target maps are advisory Playwright CLI replay and mining hints.",
+        },
     }
 
 
@@ -935,6 +1260,8 @@ def project_workbench_manifest(manifest_path: str | Path) -> dict[str, Any]:
     """Project a supported source manifest into the normalized workbench payload."""
     path = Path(manifest_path).expanduser().resolve()
     manifest = read_json(path)
+    if isinstance(manifest, dict) and manifest.get("schema_version") == "url_stage_capture.v0":
+        return project_url_stage_manifest(path)
     if isinstance(manifest, dict) and isinstance(manifest.get("pages"), list):
         return project_matrix_manifest(path)
     if isinstance(manifest, dict) and isinstance(manifest.get("steps"), list) and isinstance(manifest.get("artifacts"), list):
