@@ -415,13 +415,18 @@ def workbench_asset_health(url: str, timeout: float = 1.0) -> dict[str, Any]:
             "expected_fingerprint": expected.get("fingerprint"),
             "actual_fingerprint": actual.get("fingerprint"),
         }
-    if actual.get("server_source_fingerprint") != expected.get("server_source_fingerprint"):
+    actual_startup_fingerprint = actual.get("startup_server_source_fingerprint")
+    if (
+        actual.get("server_source_fingerprint") != expected.get("server_source_fingerprint")
+        or actual_startup_fingerprint != expected.get("server_source_fingerprint")
+    ):
         return {
             "healthy": False,
             "status": "server_source_fingerprint_mismatch",
             "manifest_url": manifest_url,
             "expected_server_source_fingerprint": expected.get("server_source_fingerprint"),
             "actual_server_source_fingerprint": actual.get("server_source_fingerprint"),
+            "actual_startup_server_source_fingerprint": actual_startup_fingerprint,
             "expected_fingerprint": expected.get("fingerprint"),
             "actual_fingerprint": actual.get("fingerprint"),
         }
@@ -452,6 +457,7 @@ def workbench_asset_health(url: str, timeout: float = 1.0) -> dict[str, Any]:
         "asset_count": expected.get("asset_count"),
         "fingerprint": expected.get("fingerprint"),
         "server_source_fingerprint": expected.get("server_source_fingerprint"),
+        "startup_server_source_fingerprint": actual_startup_fingerprint,
     }
 
 

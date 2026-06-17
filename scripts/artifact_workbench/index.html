@@ -9,12 +9,15 @@
 <body>
   <div class="toolbar primary">
     <button class="overview-button" id="overview" type="button"><span>☰</span><span>Overview</span></button>
-    <button class="icon-button" id="prev" type="button" title="Previous artifact">‹</button>
-    <div class="artifact-title" id="artifact-title"></div>
-    <button class="icon-button" id="next" type="button" title="Next artifact">›</button>
+    <div class="toolbar-middle" id="toolbar-middle">
+      <div class="artifact-title" id="artifact-title"></div>
+      <div class="sibling-nav" id="sibling-nav" aria-label="Artifact navigation">
+        <button class="icon-button" id="prev" type="button" title="Previous artifact">‹</button>
+        <button class="icon-button" id="next" type="button" title="Next artifact">›</button>
+      </div>
+    </div>
     <div class="popover" id="overview-popover" hidden></div>
-    <div class="top-spacer"></div>
-    <div class="group">
+    <div class="group toolbar-right">
       <button class="icon-button" id="menu-button" type="button" title="Artifact menu">⋮</button>
       <div class="menu" id="artifact-menu" hidden>
         <button type="button" id="copy-artifact">Copy</button>

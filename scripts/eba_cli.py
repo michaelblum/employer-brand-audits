@@ -322,6 +322,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "tests/artifact_toolbar_check.js"],
         ["node", "tests/artifact_binding_check.js"],
         ["node", "tests/artifact_navigator_check.js"],
+        ["node", "tests/workbench_shell_check.js"],
         ["node", "tests/interaction_overlay_primitive_check.js"],
         ["node", "tests/target_link_primitive_check.js"],
         ["node", "tests/interaction_overlay_controller_check.js"],

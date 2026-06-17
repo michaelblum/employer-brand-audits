@@ -4,7 +4,7 @@
 
 **Goal:** Build a reusable `./eba dev stage-url <url>` path that turns any URL into a frozen, overlay-ready workbench artifact where the visual snapshot is durable and the natural-language intent spine is primary.
 
-**Architecture:** Playwright CLI captures the live page and writes disk artifacts. A Python capture helper normalizes those artifacts into one URL stage manifest, one master web blueprint, and derived views such as target map, visible text, and synthetic `web-snapshot.html`. The workbench projects the staged page as `type: html` with `kind: web_snapshot`, so the app shell uses the existing same-origin HTML renderer and HTML element inspector without a new renderer or artifact component.
+**Architecture:** Playwright CLI captures the live page and writes disk artifacts. A Python capture helper normalizes those artifacts into one URL stage manifest, one screenshot, one canonical `web-snapshot-data.json`, and synthetic `web-snapshot.html`. The workbench projects the staged page as `type: html` with `kind: web_snapshot` plus one supporting `kind: web_snapshot_data` artifact, so the app shell uses the existing same-origin HTML renderer and HTML element inspector without a new renderer or artifact component.
 
 **Tech Stack:** Python command surface and manifest generation, checked-in Playwright CLI snippets, static browser primitives under `scripts/artifacts/`, existing artifact workbench server/projection, Node smoke checks, local HTML fixture for live validation.
 
@@ -12,12 +12,12 @@
 
 ## File Structure
 
-- Create `scripts/url_stage_capture.py`: URL stage capture helper, manifest writer, blueprint-to-target-map projection, and synthetic HTML generation.
+- Create `scripts/url_stage_capture.py`: URL stage capture helper, manifest writer, canonical web-snapshot data builder, target-map projection, and synthetic HTML generation.
 - Create `scripts/playwright-snippets/extract-web-blueprint.js`: checked-in Playwright CLI snippet that extracts viewport, document, and element evidence from the live page.
 - Create `scripts/playwright-fixtures/url-stage-basic.html`: deterministic local page used by tests and live smoke.
 - Create `scripts/playwright-snippets/artifact-workbench-web-snapshot-check.js`: live workbench smoke for hover/click-ready web snapshot rendering.
 - Modify `scripts/eba_cli.py`: add `stage-url`, include new Python/Node checks, and wire the fixture option used by the smoke.
-- Modify `scripts/workbench_projection.py`: detect URL stage manifests and project an HTML-backed `web_snapshot` artifact plus target map, screenshot, text, snapshot, and log artifacts.
+- Modify `scripts/workbench_projection.py`: detect URL stage manifests and project an HTML-backed `web_snapshot` artifact plus one supporting `web_snapshot_data` artifact.
 - Modify `scripts/workbench_projection_shape_check.py`: add shape assertions for a generated URL stage fixture manifest.
 - Modify `tests/test_url_stage_capture.py`: focused Python tests for manifest shape, target-map projection, synthetic HTML, and safe output paths.
 - Modify `tests/test_artifact_workbench_browser_control.py`: validation-surface assertions for the new snippets.
@@ -33,6 +33,21 @@
   controls, readouts, and inspectors do not require app-shell changes.
   Track that separately in
   [issue #36](https://github.com/michaelblum/employer-brand-audits/issues/36).
+
+## Accepted Follow-Up Amendment
+
+After the first slice, the URL-stage artifact shape was tightened:
+
+- Do not expose separate `target_map`, `web_blueprint`, `visible_text`,
+  `page_snapshot`, or `page_screenshot` sidebar artifacts.
+- Write `web-snapshot-data.json` as the canonical data package. It contains
+  `visual`, `source_trees`, `projection_catalog`, `projections`, `ui_views`,
+  replay policy, and site fingerprint hints.
+- Treat UI toolbar modes as a curated subset of machine projections.
+- Render `kind: web_snapshot` HTML as the root stage surface, not inside the
+  generic HTML article/header wrapper.
+- Make the managed workbench summon path self-heal stale Python server code by
+  comparing server startup source fingerprints, not only dynamic asset hashes.
 
 ## Task 1: URL Stage Data Model
 

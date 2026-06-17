@@ -280,6 +280,7 @@ def collection_artifact(projected: dict[str, Any], artifact_root: Path) -> dict[
         "mime_type": str(projected.get("mime_type") or "application/octet-stream"),
         "capabilities": projected.get("capabilities") if isinstance(projected.get("capabilities"), list) else ["view"],
         "source_page": projected.get("source_page") if isinstance(projected.get("source_page"), dict) else None,
+        "facets": projected.get("facets") if isinstance(projected.get("facets"), dict) else None,
         "dimensions": projected.get("dimensions") if isinstance(projected.get("dimensions"), dict) else None,
         "created_at_epoch": created_at_epoch,
     }
@@ -605,6 +606,7 @@ def discover_workbench_contexts(active_manifest: Path) -> list[dict[str, Any]]:
 
 class WorkbenchServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], manifest_path: Path):
+        self.startup_server_source_fingerprint = build_server_source_manifest()["fingerprint"]
         self.interaction_overlays: list[dict[str, Any]] = []
         self.view_state: dict[str, Any] = {}
         self.context_changed_by: str | None = None
@@ -767,7 +769,9 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.OK, self.server.workbench_projection)
             return
         if parsed.path == WORKBENCH_ASSET_MANIFEST_PATH:
-            self.send_json(HTTPStatus.OK, build_workbench_asset_manifest())
+            manifest = build_workbench_asset_manifest()
+            manifest["startup_server_source_fingerprint"] = self.server.startup_server_source_fingerprint
+            self.send_json(HTTPStatus.OK, manifest)
             return
         if parsed.path.startswith("/artifact/"):
             self.serve_artifact(parsed.path.removeprefix("/artifact/"))

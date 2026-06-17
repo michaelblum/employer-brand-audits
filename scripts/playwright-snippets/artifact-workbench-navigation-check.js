@@ -31,6 +31,39 @@ async (page) => {
   });
 
   await page.waitForSelector(".artifact-row[data-index]", { timeout: 5000 });
+  const shellState = await page.evaluate(() => {
+    const toolbarMiddle = document.querySelector("#toolbar-middle");
+    const siblingNav = document.querySelector("#sibling-nav");
+    const toolbarRight = document.querySelector(".toolbar-right");
+    const title = document.querySelector("#artifact-title");
+    const rows = [...document.querySelectorAll(".artifact-row[data-index]")];
+    const compactRows = rows.filter((row) => row.classList.contains("artifact-row-compact"));
+    if (!toolbarMiddle || !siblingNav || !toolbarRight || !title) {
+      throw new Error("Primary toolbar bookend/middle structure is missing");
+    }
+    if (!title.querySelector(".artifact-identity-strip") || !title.querySelector(".artifact-heading")) {
+      throw new Error("Artifact title did not render the identity strip");
+    }
+    if (rows.length !== compactRows.length) {
+      throw new Error("Sidebar rendered non-compact artifact rows");
+    }
+    if (rows.some((row) => row.querySelector(".projection-meta"))) {
+      throw new Error("Compact sidebar rows should not render projection-meta blocks");
+    }
+    const nextRect = document.querySelector("#next")?.getBoundingClientRect();
+    const rightRect = toolbarRight.getBoundingClientRect();
+    return {
+      toolbarMiddleWidth: Math.round(toolbarMiddle.getBoundingClientRect().width),
+      siblingNavWidth: Math.round(siblingNav.getBoundingClientRect().width),
+      rowCount: rows.length,
+      nextX: Math.round(nextRect?.x || 0),
+      rightX: Math.round(rightRect.x),
+    };
+  });
+  if (shellState.siblingNavWidth < 70 || shellState.rightX <= shellState.nextX) {
+    throw new Error(`Toolbar middle/right bookends are not laid out correctly: ${JSON.stringify(shellState)}`);
+  }
+
   await page.evaluate((stepId) => {
     const button = document.querySelector(`[data-filter-kind="step"][data-filter-value="${CSS.escape(stepId)}"]`);
     if (!button) throw new Error(`Step filter button not found: ${stepId}`);

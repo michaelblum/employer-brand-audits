@@ -12,7 +12,9 @@ sys.path.insert(0, str(REPO_ROOT_FOR_IMPORTS))
 from scripts.url_stage_capture import (
     REPO_ROOT,
     build_target_map,
+    build_web_snapshot_data,
     build_web_snapshot_html,
+    build_web_snapshot_html_from_data,
     safe_stage_output_dir,
     slugify_stage_name,
     write_url_stage_manifest,
@@ -85,8 +87,112 @@ class UrlStageCaptureTests(unittest.TestCase):
         self.assertIn('data-web-target-id="target-1"', html)
         self.assertIn("left:20px;top:30px;width:200px;height:48px", html)
         self.assertIn("Apply now", html)
+        self.assertIn(".web-target:hover,.web-target:focus{outline:0;background:transparent;}", html)
 
-    def test_write_url_stage_manifest_records_blueprint_and_derived_artifacts(self) -> None:
+    def test_web_snapshot_html_escapes_attacker_controlled_target_fields(self) -> None:
+        target_map = {
+            "source_url": "https://example.com/jobs",
+            "screenshot": {
+                "path": 'artifacts/url-stage/acme/latest/page-"full".png',
+                "dimensions": {"width": 1200, "height": 900},
+            },
+            "targets": [
+                {
+                    "id": 'target-1" onclick="alert(1)',
+                    "rect": {"x": 20, "y": 30, "width": 200, "height": 48},
+                    "label": '"><img src=x onerror=alert(1)>&<',
+                    "role": 'link" aria-label="bad',
+                    "target_kind": "link",
+                    "selector_candidates": ['#apply"][bad="1'],
+                }
+            ],
+        }
+
+        rendered_html = build_web_snapshot_html(target_map)
+
+        self.assertNotIn('onclick="alert(1)"', rendered_html)
+        self.assertNotIn('<img src=x onerror=alert(1)>', rendered_html)
+        self.assertNotIn('#apply"][bad="1', rendered_html)
+        self.assertIn("&quot;&gt;&lt;img src=x onerror=alert(1)&gt;&amp;&lt;", rendered_html)
+        self.assertIn('data-web-target-id="target-1&quot; onclick=&quot;alert(1)"', rendered_html)
+        self.assertIn("page-&quot;full&quot;.png", rendered_html)
+        self.assertIn("&quot;selector_candidates&quot;: [&quot;#apply\\&quot;][bad=\\&quot;1&quot;]", rendered_html)
+
+    def test_web_snapshot_html_can_be_rendered_from_canonical_data_target_map(self) -> None:
+        data = {
+            "schema_version": "web_snapshot.v0",
+            "projections": {
+                "target_map": {
+                    "source_url": "https://example.com/jobs",
+                    "screenshot": {
+                        "path": "artifacts/url-stage/acme/latest/page.full-page.png",
+                        "dimensions": {"width": 1200, "height": 900},
+                    },
+                    "targets": [
+                        {
+                            "id": "target-canonical",
+                            "rect": {"x": 20, "y": 30, "width": 200, "height": 48},
+                            "label": "Canonical target",
+                            "role": "link",
+                            "target_kind": "link",
+                            "selector_candidates": ["#canonical"],
+                        }
+                    ],
+                }
+            },
+        }
+
+        rendered_html = build_web_snapshot_html_from_data(data)
+
+        self.assertIn('data-web-target-id="target-canonical"', rendered_html)
+        self.assertIn("Canonical target", rendered_html)
+
+    def test_web_snapshot_data_consolidates_source_trees_and_projections(self) -> None:
+        blueprint = {
+            "schema_version": "url_stage_blueprint.v0",
+            "url": "https://example.com/jobs",
+            "title": "Careers",
+            "viewport": {"width": 1000, "height": 800, "devicePixelRatio": 2},
+            "document": {"width": 1000, "height": 1200},
+            "elements": [
+                {
+                    "uid": "target-1",
+                    "tag": "a",
+                    "role": "link",
+                    "accessible_name": "Apply now",
+                    "text": "Apply now",
+                    "selector_candidates": ["#apply", "a.cta"],
+                    "document_rect": {"x": 100, "y": 200, "width": 150, "height": 40},
+                    "target_kind": "link",
+                    "confidence": 0.92,
+                }
+            ],
+        }
+
+        data = build_web_snapshot_data(
+            blueprint,
+            screenshot_dimensions={"width": 2000, "height": 2400},
+            screenshot_path="artifacts/url-stage/acme/latest/page.full-page.png",
+            visible_text="Apply now\nEngineering careers\n",
+            page_snapshot="button Apply now [ref=e1]\n",
+        )
+
+        self.assertEqual(data["schema_version"], "web_snapshot.v0")
+        self.assertEqual(data["visual"]["coordinate_space"], "screenshot")
+        self.assertEqual(data["visual"]["image"]["path"], "artifacts/url-stage/acme/latest/page.full-page.png")
+        self.assertEqual(data["source_trees"]["dom"]["schema_version"], "web_snapshot_dom_tree.v0")
+        self.assertEqual(data["source_trees"]["ax"]["schema_version"], "web_snapshot_ax_tree.v0")
+        self.assertEqual(data["projections"]["target_map"]["targets"][0]["rect"], {"x": 200, "y": 400, "width": 300, "height": 80})
+        self.assertEqual(data["projections"]["visible_text"]["lines"], ["Apply now", "Engineering careers"])
+        self.assertEqual(data["projection_catalog"]["target_map"]["coordinate_space"], "screenshot")
+        self.assertEqual(
+            [view["id"] for view in data["ui_views"]],
+            ["snapshot", "text", "structure"],
+        )
+        self.assertEqual(data["replay_policy"]["snapshot_replay"], "coordinates_authoritative")
+        self.assertEqual(data["replay_policy"]["live_replay"], "semantic_selectors_first_coordinates_advisory")
+
+    def test_write_url_stage_manifest_records_web_snapshot_and_single_data_artifact(self) -> None:
         root = Path(tempfile.mkdtemp(prefix=".url-stage-test-", dir=REPO_ROOT / "artifacts"))
         try:
             manifest_path = write_url_stage_manifest(
@@ -96,12 +202,9 @@ class UrlStageCaptureTests(unittest.TestCase):
                 status="passed",
                 viewport={"width": 1000, "height": 800, "devicePixelRatio": 1},
                 paths={
-                    "blueprint": root / "web-blueprint.json",
-                    "target_map": root / "target-map.json",
                     "web_snapshot": root / "web-snapshot.html",
+                    "web_snapshot_data": root / "web-snapshot-data.json",
                     "page_screenshot": root / "page.full-page.png",
-                    "visible_text": root / "visible-text.txt",
-                    "page_snapshot": root / "page-snapshot.txt",
                     "capture_log": root / "capture.log",
                 },
                 screenshot_dimensions={"width": 1000, "height": 1200},
@@ -116,8 +219,16 @@ class UrlStageCaptureTests(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], "url_stage_capture.v0")
         self.assertEqual(manifest["slug"], "acme-careers")
         self.assertEqual(
+            set(manifest["artifacts"]),
+            {"web_snapshot", "web_snapshot_data", "page_screenshot", "capture_log"},
+        )
+        self.assertEqual(
             manifest["artifacts"]["web_snapshot"],
             "artifacts/.url-stage-test-" + root.name.rsplit(".url-stage-test-", 1)[-1] + "/web-snapshot.html",
+        )
+        self.assertEqual(
+            manifest["artifacts"]["web_snapshot_data"],
+            "artifacts/.url-stage-test-" + root.name.rsplit(".url-stage-test-", 1)[-1] + "/web-snapshot-data.json",
         )
         self.assertEqual(manifest["screenshot"]["dimensions"], {"width": 1000, "height": 1200})
 

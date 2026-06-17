@@ -81,10 +81,7 @@ def url_stage_fixture_manifest(root: Path) -> Path:
     stage_dir.mkdir(parents=True, exist_ok=True)
     web_snapshot = stage_dir / "web-snapshot.html"
     page_screenshot = stage_dir / "page.full-page.png"
-    target_map = stage_dir / "target-map.json"
-    blueprint = stage_dir / "web-blueprint.json"
-    visible_text = stage_dir / "visible-text.txt"
-    page_snapshot = stage_dir / "page-snapshot.txt"
+    web_snapshot_data = stage_dir / "web-snapshot-data.json"
     capture_log = stage_dir / "capture.log"
 
     web_snapshot.write_text(
@@ -100,40 +97,65 @@ def url_stage_fixture_manifest(root: Path) -> Path:
     )
     page_screenshot.write_bytes(b"fixture screenshot bytes")
     write_json(
-        target_map,
+        web_snapshot_data,
         {
-            "schema_version": "url_stage_target_map.v0",
-            "coordinate_space": "screenshot",
+            "schema_version": "web_snapshot.v0",
             "source_url": "https://example.com/careers/",
-            "screenshot": {
-                "path": str(page_screenshot.relative_to(REPO_ROOT)),
-                "dimensions": {"width": 1200, "height": 1600},
+            "visual": {
+                "coordinate_space": "screenshot",
+                "image": {
+                    "path": str(page_screenshot.relative_to(REPO_ROOT)),
+                    "dimensions": {"width": 1200, "height": 1600},
+                },
+                "viewport": {"width": 1200, "height": 900, "devicePixelRatio": 1},
+                "document": {"width": 1200, "height": 1600},
             },
-            "targets": [
-                {
-                    "id": "target-1",
-                    "label": "Apply now",
-                    "target_kind": "link",
-                    "rect": {"x": 80, "y": 120, "width": 140, "height": 48},
-                    "selector_candidates": ["#apply-now", "a.primary"],
-                    "confidence": 0.91,
-                }
+            "source_trees": {
+                "dom": {"schema_version": "web_snapshot_dom_tree.v0", "root": {"id": "dom:document", "children": []}},
+                "ax": {"schema_version": "web_snapshot_ax_tree.v0", "root": None, "nodes": []},
+            },
+            "projections": {
+                "target_map": {
+                    "schema_version": "url_stage_target_map.v0",
+                    "coordinate_space": "screenshot",
+                    "source_url": "https://example.com/careers/",
+                    "screenshot": {
+                        "path": str(page_screenshot.relative_to(REPO_ROOT)),
+                        "dimensions": {"width": 1200, "height": 1600},
+                    },
+                    "targets": [
+                        {
+                            "id": "target-1",
+                            "label": "Apply now",
+                            "target_kind": "link",
+                            "rect": {"x": 80, "y": 120, "width": 140, "height": 48},
+                            "selector_candidates": ["#apply-now", "a.primary"],
+                            "confidence": 0.91,
+                        }
+                    ],
+                },
+                "visible_text": {
+                    "schema_version": "web_snapshot_visible_text.v0",
+                    "lines": ["Apply now", "Engineering careers"],
+                },
+                "page_snapshot": {
+                    "schema_version": "web_snapshot_page_snapshot.v0",
+                    "text": "button Apply now [ref=e1]\n",
+                },
+            },
+            "projection_catalog": {
+                "target_map": {"coordinate_space": "screenshot"},
+                "visible_text": {},
+                "structure": {},
+                "page_snapshot": {},
+            },
+            "ui_views": [
+                {"id": "snapshot", "label": "Snapshot", "projection": "target_map"},
+                {"id": "text", "label": "Text", "projection": "visible_text"},
+                {"id": "structure", "label": "Structure", "projection": "structure"},
             ],
         },
     )
-    write_json(
-        blueprint,
-        {
-            "schema_version": "url_stage_blueprint.v0",
-            "url": "https://example.com/careers/",
-            "title": "Careers",
-            "viewport": {"width": 1200, "height": 900, "devicePixelRatio": 1},
-            "document": {"width": 1200, "height": 1600},
-            "elements": [],
-        },
-    )
-    visible_text.write_text("Apply now\nEngineering careers\n", encoding="utf-8")
-    page_snapshot.write_text("button Apply now [ref=e1]\n", encoding="utf-8")
     capture_log.write_text("captured fixture\n", encoding="utf-8")
 
     manifest_path = stage_dir / "manifest.json"
@@ -149,14 +171,10 @@ def url_stage_fixture_manifest(root: Path) -> Path:
                 "path": str(page_screenshot.relative_to(REPO_ROOT)),
                 "dimensions": {"width": 1200, "height": 1600},
             },
-            "blueprint": {"path": str(blueprint.relative_to(REPO_ROOT))},
             "artifacts": {
                 "web_snapshot": str(web_snapshot.relative_to(REPO_ROOT)),
                 "page_screenshot": str(page_screenshot.relative_to(REPO_ROOT)),
-                "target_map": str(target_map.relative_to(REPO_ROOT)),
-                "blueprint": str(blueprint.relative_to(REPO_ROOT)),
-                "visible_text": str(visible_text.relative_to(REPO_ROOT)),
-                "page_snapshot": str(page_snapshot.relative_to(REPO_ROOT)),
+                "web_snapshot_data": str(web_snapshot_data.relative_to(REPO_ROOT)),
                 "capture_log": str(capture_log.relative_to(REPO_ROOT)),
             },
         },
@@ -236,20 +254,10 @@ def assert_url_stage_projection_shape(payload: dict[str, Any]) -> dict[str, Any]
     groups = payload.get("artifact_groups") or []
     resources = payload.get("resources") or []
     web_snapshot = next((artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:web_snapshot"), None)
-    target_map = next((artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:target_map"), None)
-    page_screenshot = next(
-        (artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:page_screenshot"),
-        None,
-    )
-    visible_text = next((artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:visible_text"), None)
+    web_snapshot_data = next((artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:web_snapshot_data"), None)
     expected_artifact_ids = {
         "url-stage-basic:web_snapshot",
-        "url-stage-basic:page_screenshot",
-        "url-stage-basic:target_map",
-        "url-stage-basic:blueprint",
-        "url-stage-basic:visible_text",
-        "url-stage-basic:page_snapshot",
-        "url-stage-basic:capture_log",
+        "url-stage-basic:web_snapshot_data",
     }
     require(
         {artifact.get("id") for artifact in artifacts} == expected_artifact_ids,
@@ -260,19 +268,18 @@ def assert_url_stage_projection_shape(payload: dict[str, Any]) -> dict[str, Any]
     require(web_snapshot.get("kind") == "web_snapshot", "URL stage web snapshot semantic kind drifted")
     require(web_snapshot.get("slot") == "web.snapshot", "URL stage web snapshot slot drifted")
     require(web_snapshot.get("mime_type") == "text/html", "URL stage web snapshot MIME type drifted")
-    require(web_snapshot.get("parent_ids") == ["url-stage-basic:page_screenshot", "url-stage-basic:target_map"], "URL stage web snapshot parents drifted")
+    require(web_snapshot.get("parent_ids") == ["url-stage-basic:web_snapshot_data"], "URL stage web snapshot parents drifted")
+    require(web_snapshot.get("dimensions") == {"width": 1200, "height": 1600}, "URL stage web snapshot dimensions drifted")
     require("annotate" in (web_snapshot.get("capabilities") or []), "URL stage web snapshot should expose annotate")
     require("edit" not in (web_snapshot.get("capabilities") or []), "URL stage web snapshot should not expose edit")
-    require(isinstance(page_screenshot, dict), "Missing URL stage screenshot artifact")
-    require(page_screenshot.get("type") == "image", "URL stage screenshot must project as image")
-    require(page_screenshot.get("dimensions") == {"width": 1200, "height": 1600}, "URL stage screenshot dimensions drifted")
-    require(isinstance(target_map, dict), "Missing URL stage target map artifact")
-    require(target_map.get("type") == "json", "URL stage target map must project as json")
-    require(target_map.get("kind") == "target_map", "URL stage target map kind drifted")
-    require(target_map.get("facets", {}).get("coordinate_space") == "screenshot", "URL stage target map coordinate space drifted")
-    require(target_map.get("facets", {}).get("target_count") == 1, "URL stage target count drifted")
-    require(isinstance(visible_text, dict), "Missing URL stage visible text artifact")
-    require(visible_text.get("type") == "text", "URL stage visible text must project as text")
+    require(web_snapshot.get("facets", {}).get("target_count") == 1, "URL stage target count drifted")
+    require(web_snapshot.get("facets", {}).get("coordinate_space") == "screenshot", "URL stage coordinate space drifted")
+    require(web_snapshot.get("facets", {}).get("data_artifact_id") == "url-stage-basic:web_snapshot_data", "URL stage data artifact pointer drifted")
+    require(isinstance(web_snapshot_data, dict), "Missing URL stage web snapshot data artifact")
+    require(web_snapshot_data.get("type") == "json", "URL stage web snapshot data must project as json")
+    require(web_snapshot_data.get("kind") == "web_snapshot_data", "URL stage web snapshot data kind drifted")
+    require(web_snapshot_data.get("facets", {}).get("projection_count") == 4, "URL stage projection count drifted")
+    require(web_snapshot_data.get("facets", {}).get("ui_view_ids") == ["snapshot", "text", "structure"], "URL stage UI views drifted")
     require(
         len([resource for resource in resources if resource.get("type") == "url"]) == 1,
         "URL stage URL resources must be deduplicated",
@@ -304,6 +311,28 @@ def assert_url_stage_projection_shape(payload: dict[str, Any]) -> dict[str, Any]
         "adapter": payload.get("source", {}).get("adapter"),
         "web_snapshot_artifact_id": web_snapshot.get("id"),
         "projected_artifact_ids": sorted(expected_artifact_ids),
+    }
+
+
+def assert_url_stage_server_collection(manifest_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    collection = build_collection(manifest_path, payload)
+    artifacts = collection.get("artifacts") or []
+    web_snapshot = next((artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:web_snapshot"), None)
+    web_snapshot_data = next((artifact for artifact in artifacts if artifact.get("id") == "url-stage-basic:web_snapshot_data"), None)
+    require(isinstance(web_snapshot, dict), "URL stage web snapshot missing from server collection")
+    require(isinstance(web_snapshot_data, dict), "URL stage data missing from server collection")
+    require(web_snapshot.get("dimensions") == {"width": 1200, "height": 1600}, "URL stage collection dimensions drifted")
+    require(
+        web_snapshot.get("facets", {}).get("ui_view_ids") == ["snapshot", "text", "structure"],
+        "URL stage collection facets must retain UI view ids",
+    )
+    require(
+        web_snapshot.get("facets", {}).get("data_artifact_id") == "url-stage-basic:web_snapshot_data",
+        "URL stage collection facets must retain data artifact pointer",
+    )
+    return {
+        "status": "passed",
+        "artifact_ids": sorted(artifact.get("id") for artifact in artifacts),
     }
 
 
@@ -566,6 +595,10 @@ def main() -> int:
             "matrix": assert_matrix_projection_shape(matrix_payload),
             "audit_manifest": assert_audit_projection_shape(audit_payload),
             "url_stage": assert_url_stage_projection_shape(autodetected_url_stage_payload),
+            "url_stage_server_collection": assert_url_stage_server_collection(
+                url_stage_path,
+                autodetected_url_stage_payload,
+            ),
             "audit_server_collection": assert_audit_server_collection(audit_path, audit_payload),
         }
         print(json.dumps(result, indent=2, sort_keys=True))

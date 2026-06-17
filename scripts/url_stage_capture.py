@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import re
 import shutil
@@ -132,6 +133,119 @@ def screenshot_rect(document_rect: dict[str, Any], *, scale_x: float, scale_y: f
     }
 
 
+def compact_lines(value: str) -> list[str]:
+    return [line.strip() for line in str(value or "").splitlines() if line.strip()]
+
+
+def source_tree_node_from_element(element: dict[str, Any], index: int) -> dict[str, Any]:
+    rect = element.get("document_rect") if isinstance(element.get("document_rect"), dict) else {}
+    return {
+        "id": f"dom:{element.get('uid') or index}",
+        "capture_id": str(element.get("uid") or f"target-{index}"),
+        "kind": "element",
+        "tag": str(element.get("tag") or ""),
+        "role": str(element.get("role") or ""),
+        "name": str(element.get("accessible_name") or element.get("text") or "")[:180],
+        "text": str(element.get("text") or "")[:240],
+        "target_kind": str(element.get("target_kind") or "element"),
+        "document_rect": {
+            "x": round(float(rect.get("x") or 0)),
+            "y": round(float(rect.get("y") or 0)),
+            "width": max(1, round(float(rect.get("width") or 0))),
+            "height": max(1, round(float(rect.get("height") or 0))),
+        },
+        "selector_candidates": [
+            str(item)
+            for item in element.get("selector_candidates") or []
+            if str(item)
+        ],
+        "children": [],
+    }
+
+
+def build_dom_source_tree(blueprint: dict[str, Any]) -> dict[str, Any]:
+    existing = blueprint.get("dom_tree")
+    if isinstance(existing, dict):
+        result = dict(existing)
+        result.setdefault("schema_version", "web_snapshot_dom_tree.v0")
+        return result
+    children = [
+        source_tree_node_from_element(element, index)
+        for index, element in enumerate(blueprint.get("elements") or [], start=1)
+        if isinstance(element, dict)
+    ]
+    return {
+        "schema_version": "web_snapshot_dom_tree.v0",
+        "source": "normalized_blueprint_elements",
+        "root": {
+            "id": "dom:document",
+            "kind": "document",
+            "tag": "document",
+            "url": str(blueprint.get("url") or ""),
+            "title": str(blueprint.get("title") or ""),
+            "children": children,
+        },
+    }
+
+
+def build_ax_source_tree(blueprint: dict[str, Any], page_snapshot: str = "") -> dict[str, Any]:
+    existing = blueprint.get("ax_tree")
+    if isinstance(existing, dict):
+        result = dict(existing)
+        result.setdefault("schema_version", "web_snapshot_ax_tree.v0")
+        return result
+    return {
+        "schema_version": "web_snapshot_ax_tree.v0",
+        "source": "playwright_snapshot_text",
+        "root": None,
+        "nodes": [],
+        "snapshot_text": str(page_snapshot or "")[:20000],
+    }
+
+
+def flatten_dom_nodes(tree: dict[str, Any]) -> list[dict[str, Any]]:
+    nodes: list[dict[str, Any]] = []
+
+    def visit(node: Any, depth: int) -> None:
+        if not isinstance(node, dict):
+            return
+        nodes.append(
+            {
+                "id": node.get("id"),
+                "depth": depth,
+                "kind": node.get("kind"),
+                "tag": node.get("tag"),
+                "role": node.get("role"),
+                "name": node.get("name"),
+                "target_kind": node.get("target_kind"),
+                "document_rect": node.get("document_rect"),
+            }
+        )
+        for child in node.get("children") or []:
+            visit(child, depth + 1)
+
+    visit(tree.get("root"), 0)
+    return nodes
+
+
+def site_fingerprint_for(blueprint: dict[str, Any], target_map: dict[str, Any]) -> dict[str, Any]:
+    parsed = urlparse(str(blueprint.get("url") or ""))
+    targets = target_map.get("targets") if isinstance(target_map.get("targets"), list) else []
+    target_shape = "|".join(
+        f"{target.get('target_kind')}:{target.get('role')}:{target.get('label')}"
+        for target in targets[:80]
+    )
+    digest = hashlib.sha1(target_shape.encode("utf-8")).hexdigest()[:16] if target_shape else ""
+    return {
+        "origin": parsed.netloc.lower(),
+        "url_pattern": parsed.path or "/",
+        "structural_hashes": {
+            "interactive_targets": digest,
+        },
+        "recurring_component_hints": [],
+    }
+
+
 def build_target_map(
     blueprint: dict[str, Any],
     *,
@@ -183,6 +297,89 @@ def build_target_map(
     }
 
 
+def build_web_snapshot_data(
+    blueprint: dict[str, Any],
+    *,
+    screenshot_dimensions: dict[str, int],
+    screenshot_path: str,
+    visible_text: str = "",
+    page_snapshot: str = "",
+) -> dict[str, Any]:
+    target_map = build_target_map(
+        blueprint,
+        screenshot_dimensions=screenshot_dimensions,
+        screenshot_path=screenshot_path,
+    )
+    dom_tree = build_dom_source_tree(blueprint)
+    ax_tree = build_ax_source_tree(blueprint, page_snapshot)
+    visible_lines = compact_lines(visible_text)
+    structure_nodes = flatten_dom_nodes(dom_tree)
+    return {
+        "schema_version": "web_snapshot.v0",
+        "source_url": str(blueprint.get("url") or ""),
+        "title": str(blueprint.get("title") or ""),
+        "visual": {
+            "coordinate_space": "screenshot",
+            "image": {
+                "path": screenshot_path,
+                "dimensions": screenshot_dimensions,
+            },
+            "viewport": blueprint.get("viewport") or {},
+            "document": blueprint.get("document") or {},
+        },
+        "source_trees": {
+            "dom": dom_tree,
+            "ax": ax_tree,
+        },
+        "links": [],
+        "projection_catalog": {
+            "target_map": {
+                "schema_version": "url_stage_target_map.v0",
+                "coordinate_space": "screenshot",
+                "description": "Hit-testable regions in frozen screenshot coordinates.",
+            },
+            "visible_text": {
+                "schema_version": "web_snapshot_visible_text.v0",
+                "description": "Human-readable visible text lines extracted from the captured page.",
+            },
+            "structure": {
+                "schema_version": "web_snapshot_structure.v0",
+                "description": "Flattened normalized DOM nodes for quick agent and UI traversal.",
+            },
+            "page_snapshot": {
+                "schema_version": "web_snapshot_page_snapshot.v0",
+                "description": "Playwright snapshot text captured for semantic replay hints.",
+            },
+        },
+        "projections": {
+            "target_map": target_map,
+            "visible_text": {
+                "schema_version": "web_snapshot_visible_text.v0",
+                "lines": visible_lines,
+                "text": "\n".join(visible_lines),
+            },
+            "structure": {
+                "schema_version": "web_snapshot_structure.v0",
+                "nodes": structure_nodes,
+            },
+            "page_snapshot": {
+                "schema_version": "web_snapshot_page_snapshot.v0",
+                "text": str(page_snapshot or ""),
+            },
+        },
+        "ui_views": [
+            {"id": "snapshot", "label": "Snapshot", "projection": "target_map", "default": True},
+            {"id": "text", "label": "Text", "projection": "visible_text"},
+            {"id": "structure", "label": "Structure", "projection": "structure"},
+        ],
+        "replay_policy": {
+            "snapshot_replay": "coordinates_authoritative",
+            "live_replay": "semantic_selectors_first_coordinates_advisory",
+        },
+        "site_fingerprint": site_fingerprint_for(blueprint, target_map),
+    }
+
+
 def build_web_snapshot_html(target_map: dict[str, Any]) -> str:
     screenshot = target_map.get("screenshot") if isinstance(target_map.get("screenshot"), dict) else {}
     dimensions = screenshot.get("dimensions") if isinstance(screenshot.get("dimensions"), dict) else {}
@@ -211,9 +408,9 @@ def build_web_snapshot_html(target_map: dict[str, Any]) -> str:
         '<html><head><meta charset="utf-8"><style>\n'
         "html,body{margin:0;background:#0f1115;}\n"
         ".web-snapshot-stage{position:relative;display:block;line-height:0;}\n"
-        ".web-snapshot-stage img{display:block;width:100%;height:auto;}\n"
-        ".web-target{position:absolute;border:0;background:rgba(70,132,255,0.01);padding:0;cursor:crosshair;}\n"
-        ".web-target:hover,.web-target:focus{outline:2px solid #58a6ff;outline-offset:0;background:rgba(88,166,255,0.12);}\n"
+        f".web-snapshot-stage img{{display:block;width:{width}px;height:{height}px;}}\n"
+        ".web-target{position:absolute;border:0;background:transparent;padding:0;cursor:crosshair;}\n"
+        ".web-target:hover,.web-target:focus{outline:0;background:transparent;}\n"
         "</style></head><body>\n"
         f'<div class="web-snapshot-stage" data-web-snapshot-stage="true" style="width:{width}px;height:{height}px">\n'
         f'<img src="{html.escape(image_path)}" width="{width}" height="{height}" alt="Captured web page snapshot">\n'
@@ -221,6 +418,18 @@ def build_web_snapshot_html(target_map: dict[str, Any]) -> str:
         "</div>\n"
         "</body></html>\n"
     )
+
+
+def build_web_snapshot_html_from_data(web_snapshot_data: dict[str, Any]) -> str:
+    projections = (
+        web_snapshot_data.get("projections")
+        if isinstance(web_snapshot_data.get("projections"), dict)
+        else {}
+    )
+    target_map = projections.get("target_map") if isinstance(projections.get("target_map"), dict) else None
+    if not target_map:
+        raise ValueError("web snapshot data is missing projections.target_map")
+    return build_web_snapshot_html(target_map)
 
 
 def write_url_stage_manifest(
@@ -233,6 +442,7 @@ def write_url_stage_manifest(
     paths: dict[str, Path],
     screenshot_dimensions: dict[str, int],
 ) -> Path:
+    artifact_keys = ["web_snapshot", "web_snapshot_data", "page_screenshot", "capture_log"]
     manifest = {
         "schema_version": "url_stage_capture.v0",
         "slug": slug,
@@ -243,8 +453,11 @@ def write_url_stage_manifest(
             "path": repo_relative(paths["page_screenshot"]),
             "dimensions": screenshot_dimensions,
         },
-        "blueprint": {"path": repo_relative(paths["blueprint"])},
-        "artifacts": {key: repo_relative(path) for key, path in sorted(paths.items())},
+        "artifacts": {
+            key: repo_relative(paths[key])
+            for key in artifact_keys
+            if key in paths
+        },
     }
     manifest_path = output_dir / "manifest.json"
     write_json(manifest_path, manifest)
@@ -265,18 +478,11 @@ def capture_url_stage(
     resolved_output.mkdir(parents=True, exist_ok=True)
 
     paths = {
-        "blueprint": resolved_output / "web-blueprint.json",
-        "target_map": resolved_output / "target-map.json",
         "web_snapshot": resolved_output / "web-snapshot.html",
+        "web_snapshot_data": resolved_output / "web-snapshot-data.json",
         "page_screenshot": resolved_output / "page.full-page.png",
-        "visible_text": resolved_output / "visible-text.txt",
-        "page_snapshot": resolved_output / "page-snapshot.txt",
+        "page_snapshot_tmp": resolved_output / ".page-snapshot.tmp.txt",
         "capture_log": resolved_output / "capture.log",
-        "settle_stdout": resolved_output / "settle.stdout.txt",
-        "hide_stdout": resolved_output / "hide-obscuring.stdout.txt",
-        "restore_stdout": resolved_output / "restore-page.stdout.txt",
-        "blueprint_stdout": resolved_output / "web-blueprint.stdout.txt",
-        "visible_text_stdout": resolved_output / "visible-text.stdout.txt",
     }
 
     opened = False
@@ -297,55 +503,52 @@ def capture_url_stage(
             "settle URL stage",
             command_for(session, "run-code", SETTLE_SNIPPET),
             paths["capture_log"],
-            stdout_path=paths["settle_stdout"],
         )
         run_step(
             "hide obscuring elements",
             command_for(session, "run-code", HIDE_SNIPPET),
             paths["capture_log"],
-            stdout_path=paths["hide_stdout"],
         )
         blueprint_result = run_step(
             "extract web blueprint",
             command_for(session, "run-code", BLUEPRINT_SNIPPET),
             paths["capture_log"],
-            stdout_path=paths["blueprint_stdout"],
         )
         blueprint = parse_playwright_cli_result(blueprint_result.stdout)
         if not isinstance(blueprint, dict):
             raise RuntimeError("extract web blueprint did not return an object")
-        write_json(paths["blueprint"], blueprint)
         run_step(
             "write page snapshot",
-            command_for(session, "snapshot", paths["page_snapshot"]),
+            command_for(session, "snapshot", paths["page_snapshot_tmp"]),
             paths["capture_log"],
         )
+        page_snapshot = paths["page_snapshot_tmp"].read_text(encoding="utf-8")
         text_result = run_step(
             "extract visible text",
             command_for(session, "run-code", TEXT_SNIPPET),
             paths["capture_log"],
-            stdout_path=paths["visible_text_stdout"],
         )
         visible_text = parse_playwright_cli_result(text_result.stdout)
-        paths["visible_text"].write_text(str(visible_text or ""), encoding="utf-8")
         run_step(
             "write full-page screenshot",
             command_for(session, "screenshot", paths["page_screenshot"], "--full-page"),
             paths["capture_log"],
         )
         screenshot_dimensions = png_dimensions(paths["page_screenshot"])
-        target_map = build_target_map(
+        web_snapshot_data = build_web_snapshot_data(
             blueprint,
             screenshot_dimensions=screenshot_dimensions,
             screenshot_path=repo_relative(paths["page_screenshot"]),
+            visible_text=str(visible_text or ""),
+            page_snapshot=page_snapshot,
         )
-        write_json(paths["target_map"], target_map)
-        paths["web_snapshot"].write_text(build_web_snapshot_html(target_map), encoding="utf-8")
+        write_json(paths["web_snapshot_data"], web_snapshot_data)
+        paths["web_snapshot"].write_text(build_web_snapshot_html_from_data(web_snapshot_data), encoding="utf-8")
+        paths["page_snapshot_tmp"].unlink(missing_ok=True)
         run_step(
             "restore page",
             command_for(session, "run-code", RESTORE_SNIPPET),
             paths["capture_log"],
-            stdout_path=paths["restore_stdout"],
         )
         return write_url_stage_manifest(
             output_dir=resolved_output,

@@ -21,18 +21,26 @@
       : fallbackIsHtmlArtifact(artifact);
   }
 
-  function stagePlan() {
+  function isWebSnapshotArtifact(artifact = {}) {
+    return String(artifact.kind || artifact.facets?.artifact_kind || "").toLowerCase() === "web_snapshot";
+  }
+
+  function stagePlan(artifact = {}) {
+    const surfaces = {
+      imageWrapHidden: true,
+      markdownWrapHidden: false,
+      ...common.sharedStageSurfaces(),
+      markdownMarkerHidden: true,
+      markdownPreviewHidden: false,
+      markdownSourceHidden: true,
+    };
+    if (isWebSnapshotArtifact(artifact)) {
+      surfaces.webSnapshotBodyClass = true;
+    }
     return {
       renderKind: "html",
       stage: { markdownStage: true, resetScroll: true },
-      surfaces: {
-        imageWrapHidden: true,
-        markdownWrapHidden: false,
-        ...common.sharedStageSurfaces(),
-        markdownMarkerHidden: true,
-        markdownPreviewHidden: false,
-        markdownSourceHidden: true,
-      },
+      surfaces,
     };
   }
 

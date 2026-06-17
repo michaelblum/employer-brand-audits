@@ -756,6 +756,7 @@
       if (typeof surfaces.markdownMarkerHidden === "boolean") $("markdown-marker").hidden = surfaces.markdownMarkerHidden;
       if (typeof surfaces.markdownPreviewHidden === "boolean") $("markdown-preview").hidden = surfaces.markdownPreviewHidden;
       if (typeof surfaces.markdownSourceHidden === "boolean") $("markdown-source").hidden = surfaces.markdownSourceHidden;
+      markdownPreviewBody().classList.toggle("web-snapshot-preview-body", surfaces.webSnapshotBodyClass === true);
       if (surfaces.resetHoverMarker) resetHoverMarker();
       if (typeof surfaces.commentPopoverHidden === "boolean") $("comment-popover").hidden = surfaces.commentPopoverHidden;
     }

@@ -31,10 +31,19 @@
   }
 
   function htmlReadout(artifact = {}, content = "") {
+    if (isWebSnapshotArtifact(artifact)) {
+      const targetCount = Number(artifact.facets?.target_count || 0);
+      const dimensions = artifact.facets?.visual_dimensions || {};
+      const size = artifact.size_bytes ?? artifact.sizeBytes;
+      return [
+        targetCount ? `${targetCount} ${targetCount === 1 ? "target" : "targets"}` : "",
+        dimensions.width && dimensions.height ? `${dimensions.width} x ${dimensions.height} px` : "",
+        size ? `${size} bytes` : "",
+      ].filter(Boolean).join(" · ");
+    }
     const count = htmlElementCount(content);
     const size = artifact.size_bytes ?? artifact.sizeBytes;
     return [
-      "html",
       `${count} ${count === 1 ? "element" : "elements"}`,
       size ? `${size} bytes` : "",
     ].filter(Boolean).join(" · ");
@@ -85,9 +94,48 @@
     schedule();
   }
 
+  function isWebSnapshotArtifact(artifact = {}) {
+    return String(artifact.kind || artifact.facets?.artifact_kind || "").toLowerCase() === "web_snapshot";
+  }
+
+  function webSnapshotDimensions(artifact = {}) {
+    const dimensions = artifact.facets?.visual_dimensions || artifact.dimensions || {};
+    return {
+      width: Math.max(1, Math.round(Number(dimensions.width || 1))),
+      height: Math.max(1, Math.round(Number(dimensions.height || 1))),
+    };
+  }
+
+  function renderWebSnapshotArtifact(artifact = {}, containerEl) {
+    const title = artifact.name || artifact.id || "Web snapshot";
+    const dimensions = webSnapshotDimensions(artifact);
+    containerEl.innerHTML = `
+      <div class="web-snapshot-artifact" data-artifact-renderer="html" data-web-snapshot-root="true">
+        <iframe
+          class="html-artifact-frame web-snapshot-artifact-frame"
+          data-html-frame
+          sandbox="allow-same-origin"
+          scrolling="no"
+          title="${escapeHtml(title)}"
+          style="width:${dimensions.width}px;height:${dimensions.height}px"
+        ></iframe>
+      </div>
+    `;
+    const frame = containerEl.querySelector("[data-html-frame]");
+    if (frame) {
+      frame.setAttribute?.("scrolling", "no");
+      frame.scrolling = "no";
+      frame.srcdoc = String(artifact.content || "");
+    }
+    return { ok: true, state: "complete", errorMessage: "" };
+  }
+
   function renderHtmlArtifact(artifact = {}, containerEl) {
     if (!containerEl) {
       return { ok: false, state: "error", errorMessage: "Missing HTML container" };
+    }
+    if (isWebSnapshotArtifact(artifact)) {
+      return renderWebSnapshotArtifact(artifact, containerEl);
     }
     const title = artifact.name || artifact.id || "HTML artifact";
     containerEl.innerHTML = `

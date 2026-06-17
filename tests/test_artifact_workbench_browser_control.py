@@ -87,6 +87,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "tests/workbench_shell_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "tests/document_renderer_primitive_check.js"],
             validation_commands(),
         )
@@ -1224,6 +1228,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
 
     def test_workbench_asset_health_fetches_manifest_and_registered_assets(self) -> None:
         expected_manifest = gate.build_workbench_asset_manifest()
+        served_manifest = {
+            **expected_manifest,
+            "startup_server_source_fingerprint": expected_manifest["server_source_fingerprint"],
+        }
         requested_urls: list[str] = []
 
         class Response:
@@ -1245,7 +1253,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             url = request.full_url if hasattr(request, "full_url") else str(request)
             requested_urls.append(url)
             if url == "http://127.0.0.1:8765/api/workbench-assets":
-                return Response(json.dumps(expected_manifest).encode("utf-8"))
+                return Response(json.dumps(served_manifest).encode("utf-8"))
             if any(url == f"http://127.0.0.1:8765{asset['url']}" for asset in expected_manifest["assets"]):
                 return Response()
             raise AssertionError(f"unexpected URL: {url}")
@@ -1282,7 +1290,45 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
     def test_workbench_asset_health_rejects_stale_server_source_fingerprint(self) -> None:
         expected_manifest = gate.build_workbench_asset_manifest()
         stale_manifest = dict(expected_manifest)
-        stale_manifest.pop("server_source_fingerprint", None)
+        stale_manifest["startup_server_source_fingerprint"] = "stale-process-source"
+
+        class Response:
+            status = 200
+
+            def __init__(self, body: bytes = b"asset") -> None:
+                self.body = body
+
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return self.body
+
+        def fake_urlopen(request: object, timeout: float = 1.0) -> Response:
+            url = request.full_url if hasattr(request, "full_url") else str(request)
+            if url == "http://127.0.0.1:8765/api/workbench-assets":
+                return Response(json.dumps(stale_manifest).encode("utf-8"))
+            if any(url == f"http://127.0.0.1:8765{asset['url']}" for asset in expected_manifest["assets"]):
+                return Response()
+            raise AssertionError(f"unexpected URL: {url}")
+
+        original_urlopen = gate.urllib.request.urlopen
+        try:
+            gate.urllib.request.urlopen = fake_urlopen  # type: ignore[assignment]
+
+            asset_health = gate.workbench_asset_health("http://127.0.0.1:8765/")
+        finally:
+            gate.urllib.request.urlopen = original_urlopen  # type: ignore[assignment]
+
+        self.assertFalse(asset_health["healthy"])
+        self.assertEqual(asset_health["status"], "server_source_fingerprint_mismatch")
+
+    def test_workbench_asset_health_rejects_old_server_without_startup_source_fingerprint(self) -> None:
+        expected_manifest = gate.build_workbench_asset_manifest()
+        stale_manifest = dict(expected_manifest)
 
         class Response:
             status = 200

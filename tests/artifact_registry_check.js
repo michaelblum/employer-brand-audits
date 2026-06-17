@@ -117,6 +117,24 @@ assert.deepEqual(
   },
 );
 assert.deepEqual(
+  registry.artifactStagePlan({ type: "html", kind: "web_snapshot" }),
+  {
+    renderKind: "html",
+    stage: { markdownStage: true, resetScroll: true },
+    surfaces: {
+      imageWrapHidden: true,
+      markdownWrapHidden: false,
+      selectionHidden: true,
+      markdownMarkerHidden: true,
+      resetHoverMarker: true,
+      commentPopoverHidden: true,
+      markdownPreviewHidden: false,
+      markdownSourceHidden: true,
+      webSnapshotBodyClass: true,
+    },
+  },
+);
+assert.deepEqual(
   registry.artifactStagePlan({ type: "image" }),
   {
     renderKind: "image",
@@ -190,7 +208,7 @@ const htmlToolbar = registry.artifactToolbarPlan({
 });
 assert.equal(htmlToolbar.kind, "html");
 assert.deepEqual(htmlToolbar.readout, [
-  { id: "html-summary", label: "HTML", value: "html · 3 elements · 2048 bytes" },
+  { id: "html-summary", label: "HTML", value: "3 elements · 2048 bytes" },
 ]);
 assert.deepEqual(htmlToolbar.controls, []);
 assert.equal(typeof registry.resolveArtifactComponent({ type: "html" }).bindInspector, "function");
@@ -225,7 +243,24 @@ assert.equal(
     documentContent: "<main><section><a>Apply now</a></section></main>",
     html: window.ArtifactPrimitives.html,
   }),
-  "html · 3 elements · 2048 bytes",
+  "3 elements · 2048 bytes",
+);
+assert.equal(
+  registry.artifactReadout({
+    artifact: {
+      type: "html",
+      kind: "web_snapshot",
+      size_bytes: 15335,
+      facets: {
+        artifact_kind: "web_snapshot",
+        target_count: 19,
+        visual_dimensions: { width: 1365, height: 1228 },
+      },
+    },
+    documentContent: "<main></main>",
+    html: window.ArtifactPrimitives.html,
+  }),
+  "19 targets · 1365 x 1228 px · 15335 bytes",
 );
 assert.equal(
   registry.artifactReadout({

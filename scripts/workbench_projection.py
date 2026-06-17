@@ -110,46 +110,11 @@ URL_STAGE_ARTIFACT_SLOTS = {
         "kind": "web_snapshot",
         "layer": 1,
     },
-    "page_screenshot": {
-        "label": "Page Screenshot",
-        "slot": "web.screenshot",
-        "artifact_type": "image",
-        "kind": "page_screenshot",
-        "layer": 1,
-    },
-    "target_map": {
-        "label": "Target Map",
-        "slot": "web.target_map",
+    "web_snapshot_data": {
+        "label": "Web Snapshot Data",
+        "slot": "web.snapshot.data",
         "artifact_type": "json",
-        "kind": "target_map",
-        "layer": 1,
-    },
-    "blueprint": {
-        "label": "Web Blueprint",
-        "slot": "web.blueprint",
-        "artifact_type": "json",
-        "kind": "web_blueprint",
-        "layer": 1,
-    },
-    "visible_text": {
-        "label": "Visible Text",
-        "slot": "web.visible_text",
-        "artifact_type": "text",
-        "kind": "visible_text",
-        "layer": 1,
-    },
-    "page_snapshot": {
-        "label": "Page Snapshot",
-        "slot": "web.page_snapshot",
-        "artifact_type": "text",
-        "kind": "page_snapshot",
-        "layer": 1,
-    },
-    "capture_log": {
-        "label": "Capture Log",
-        "slot": "debug.log",
-        "artifact_type": "log",
-        "kind": "capture_log",
+        "kind": "web_snapshot_data",
         "layer": 1,
     },
 }
@@ -496,20 +461,36 @@ def url_stage_manifest_context(manifest: dict[str, Any]) -> dict[str, Any]:
     return context
 
 
-def url_stage_target_map_facets(path_value: str, manifest_dir: Path) -> dict[str, Any]:
+def read_url_stage_web_snapshot_data(path_value: str, manifest_dir: Path) -> dict[str, Any]:
     path = url_stage_resolved_path(path_value, manifest_dir)
     if path is None:
         return {}
     try:
-        target_map = read_json(path)
+        data = read_json(path)
     except (OSError, json.JSONDecodeError):
         return {}
-    if not isinstance(target_map, dict):
-        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def url_stage_web_snapshot_data_facets(data: dict[str, Any]) -> dict[str, Any]:
+    projections = data.get("projections") if isinstance(data.get("projections"), dict) else {}
+    target_map = projections.get("target_map") if isinstance(projections.get("target_map"), dict) else {}
     targets = target_map.get("targets") if isinstance(target_map.get("targets"), list) else []
+    visual = data.get("visual") if isinstance(data.get("visual"), dict) else {}
+    image = visual.get("image") if isinstance(visual.get("image"), dict) else {}
+    dimensions = image.get("dimensions") if isinstance(image.get("dimensions"), dict) else {}
+    ui_views = data.get("ui_views") if isinstance(data.get("ui_views"), list) else []
+    projection_catalog = data.get("projection_catalog") if isinstance(data.get("projection_catalog"), dict) else {}
     return {
-        "coordinate_space": str(target_map.get("coordinate_space") or ""),
+        "coordinate_space": str(visual.get("coordinate_space") or target_map.get("coordinate_space") or ""),
         "target_count": len(targets),
+        "projection_count": len(projection_catalog),
+        "ui_view_ids": [
+            str(view.get("id"))
+            for view in ui_views
+            if isinstance(view, dict) and view.get("id")
+        ],
+        "visual_dimensions": dimensions,
     }
 
 
@@ -568,9 +549,16 @@ def project_url_stage_manifest(manifest_path: str | Path) -> dict[str, Any]:
         }
 
     projected_artifact_ids: list[str] = []
+    web_snapshot_data_key = "web_snapshot_data"
+    web_snapshot_data_raw = page_artifacts.get(web_snapshot_data_key)
+    web_snapshot_data = (
+        read_url_stage_web_snapshot_data(str(web_snapshot_data_raw), manifest_dir)
+        if web_snapshot_data_raw
+        else {}
+    )
+    web_snapshot_data_facets = url_stage_web_snapshot_data_facets(web_snapshot_data)
     parent_ids_by_key = {
-        "web_snapshot": ["page_screenshot", "target_map"],
-        "target_map": ["blueprint", "page_screenshot"],
+        "web_snapshot": [web_snapshot_data_key],
     }
     for key, config in URL_STAGE_ARTIFACT_SLOTS.items():
         path_value_raw = page_artifacts.get(key)
@@ -604,12 +592,12 @@ def project_url_stage_manifest(manifest_path: str | Path) -> dict[str, Any]:
             "source_url": url,
         }
         if key == "web_snapshot":
-            facets["screenshot_artifact_id"] = url_stage_artifact_id(slug, "page_screenshot")
-            facets["target_map_artifact_id"] = url_stage_artifact_id(slug, "target_map")
+            facets["data_artifact_id"] = url_stage_artifact_id(slug, web_snapshot_data_key)
+            facets.update(web_snapshot_data_facets)
             facets["intent_spine"] = "annotation_overlays"
             facets["selector_policy"] = "advisory"
-        if key == "target_map":
-            facets.update(url_stage_target_map_facets(path_value, manifest_dir))
+        if key == web_snapshot_data_key:
+            facets.update(web_snapshot_data_facets)
 
         artifact: dict[str, Any] = {
             "id": artifact_id,
@@ -630,8 +618,11 @@ def project_url_stage_manifest(manifest_path: str | Path) -> dict[str, Any]:
         }
         if key == "web_snapshot":
             artifact["mime_type"] = "text/html"
-        if key == "page_screenshot":
-            artifact["dimensions"] = screenshot_dimensions
+            visual_dimensions = web_snapshot_data_facets.get("visual_dimensions")
+            if isinstance(visual_dimensions, dict):
+                artifact["dimensions"] = visual_dimensions
+        if key == web_snapshot_data_key:
+            artifact["mime_type"] = "application/json"
         artifacts.append(artifact)
         edges.extend(
             [

@@ -27,14 +27,14 @@ assert.equal(
     { type: "html", size_bytes: 2048 },
     "<main><section><a>Apply now</a></section></main>",
   ),
-  "html · 3 elements · 2048 bytes",
+  "3 elements · 2048 bytes",
 );
 assert.equal(
   renderer.htmlReadout(
     { type: "html" },
     "<main><br><hr><input></main>",
   ),
-  "html · 4 elements",
+  "4 elements",
 );
 
 const iframe = { srcdoc: "", title: "", setAttribute(name, value) { this[name] = value; } };
@@ -61,6 +61,34 @@ assert.doesNotMatch(container.innerHTML, /allow-scripts/);
 assert.match(container.innerHTML, /Audit &lt;Report&gt;/);
 assert.match(iframe.srcdoc, /<h1>Report<\/h1>/);
 assert.equal(iframe.scrolling, "no");
+
+const webSnapshotIframe = { srcdoc: "", title: "", style: {}, setAttribute(name, value) { this[name] = value; } };
+const webSnapshotContainer = {
+  innerHTML: "",
+  querySelector(selector) {
+    return selector === "[data-html-frame]" ? webSnapshotIframe : null;
+  },
+};
+assert.deepEqual(
+  renderer.renderHtmlArtifact({
+    id: "web-snapshot",
+    name: "Careers web snapshot",
+    type: "html",
+    kind: "web_snapshot",
+    content: "<!doctype html><html><body><div data-web-snapshot-stage=\"true\"></div></body></html>",
+    facets: {
+      visual_dimensions: { width: 1200, height: 1600 },
+    },
+  }, webSnapshotContainer),
+  { ok: true, state: "complete", errorMessage: "" },
+);
+assert.match(webSnapshotContainer.innerHTML, /data-artifact-renderer="html"/);
+assert.match(webSnapshotContainer.innerHTML, /data-web-snapshot-root="true"/);
+assert.doesNotMatch(webSnapshotContainer.innerHTML, /<article class="html-artifact"/);
+assert.doesNotMatch(webSnapshotContainer.innerHTML, /<header>/);
+assert.match(webSnapshotContainer.innerHTML, /width:1200px/);
+assert.match(webSnapshotContainer.innerHTML, /height:1600px/);
+assert.match(webSnapshotIframe.srcdoc, /data-web-snapshot-stage="true"/);
 
 function classList(className) {
   return String(className || "").split(/\s+/).filter(Boolean);

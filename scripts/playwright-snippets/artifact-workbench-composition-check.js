@@ -29,7 +29,7 @@ async (page) => {
   }, model.groupId);
 
   await page.waitForFunction((label) => {
-    const breadcrumb = document.querySelector("#artifact-title .artifact-breadcrumb");
+    const breadcrumb = document.querySelector("#artifact-title .artifact-breadcrumb-rail");
     return breadcrumb && breadcrumb.textContent.includes(label);
   }, model.label, { timeout: 3000 });
 
@@ -52,7 +52,7 @@ async (page) => {
       throw new Error("Composite group appeared as a durable artifact row");
     }
     return {
-      breadcrumb: document.querySelector("#artifact-title .artifact-breadcrumb")?.textContent?.trim(),
+      breadcrumb: document.querySelector("#artifact-title .artifact-breadcrumb-rail")?.textContent?.trim(),
       activeCompositeButton: document.querySelector("[data-filter-kind='composite'].active")?.textContent?.trim(),
       expectedArtifactIds: model.artifactIds,
       visibleRowCount: visibleRows.length,
