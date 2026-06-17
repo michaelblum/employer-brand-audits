@@ -187,6 +187,12 @@
       return { value: String(option ?? ""), label: String(option ?? "") };
     }
 
+    function selectedOptionRecord(options, value) {
+      return options.find((option) => option.value === value)
+        || options[0]
+        || { value, label: value || "Select option" };
+    }
+
     function renderBoundedInputControl(definition) {
       const value = boundedInputValue(definition);
       const commonAttrs = [
@@ -197,14 +203,45 @@
       ].join(" ");
       if (definition.input_type === "select") {
         const options = (definition.options || []).map(optionRecord);
+        const selected = selectedOptionRecord(options, value);
         return `
-          <select ${commonAttrs}>
+          <div class="bounded-input-select" data-bounded-input-select>
+            <button
+              class="bounded-input-select-trigger"
+              type="button"
+              ${commonAttrs}
+              data-bounded-input-select-trigger
+              value="${escapeHtml(selected.value)}"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
+              <span data-bounded-input-select-label>${escapeHtml(selected.label)}</span>
+              <span class="bounded-input-select-caret" aria-hidden="true"></span>
+            </button>
+            <div
+              class="bounded-input-select-menu"
+              data-bounded-input-select-menu
+              data-step-id="${escapeHtml(definition.step_id)}"
+              data-input-id="${escapeHtml(definition.input_id)}"
+              role="listbox"
+              hidden
+            >
             ${options.map((option) => `
-              <option value="${escapeHtml(option.value)}" ${option.value === value ? "selected" : ""}>
+              <button
+                class="bounded-input-select-option"
+                type="button"
+                role="option"
+                data-bounded-input-select-option
+                data-step-id="${escapeHtml(definition.step_id)}"
+                data-input-id="${escapeHtml(definition.input_id)}"
+                data-value="${escapeHtml(option.value)}"
+                aria-selected="${option.value === selected.value ? "true" : "false"}"
+              >
                 ${escapeHtml(option.label)}
-              </option>
+              </button>
             `).join("")}
-          </select>
+            </div>
+          </div>
         `;
       }
       if (definition.input_type === "textarea") {
@@ -247,6 +284,39 @@
       ));
     }
 
+    function closeBoundedSelectMenus(exceptRoot = null) {
+      $("bounded-input-layer").querySelectorAll("[data-bounded-input-select]").forEach((root) => {
+        if (exceptRoot && root === exceptRoot) return;
+        const menu = root.querySelector("[data-bounded-input-select-menu]");
+        const trigger = root.querySelector("[data-bounded-input-select-trigger]");
+        if (menu) menu.hidden = true;
+        if (trigger) trigger.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    function setBoundedSelectValue(root, value, syncControl) {
+      const trigger = root.querySelector("[data-bounded-input-select-trigger]");
+      const label = root.querySelector("[data-bounded-input-select-label]");
+      const options = [...root.querySelectorAll("[data-bounded-input-select-option]")];
+      const selected = options.find((option) => option.dataset.value === value) || options[0];
+      if (!trigger || !selected) return;
+      trigger.value = selected.dataset.value || "";
+      trigger.dataset.value = trigger.value;
+      if (label) label.textContent = selected.textContent.trim();
+      options.forEach((option) => {
+        option.setAttribute("aria-selected", option === selected ? "true" : "false");
+      });
+      syncControl(trigger);
+    }
+
+    function focusBoundedSelectOption(root, delta) {
+      const options = [...root.querySelectorAll("[data-bounded-input-select-option]")];
+      if (!options.length) return;
+      const currentIndex = Math.max(0, options.indexOf(document.activeElement));
+      const nextIndex = (currentIndex + delta + options.length) % options.length;
+      options[nextIndex].focus();
+    }
+
     function bindBoundedInputControls(definitions = []) {
       $("bounded-input-layer").querySelectorAll("[data-bounded-input-control]").forEach((control) => {
         const syncControl = () => {
@@ -259,6 +329,57 @@
           });
           void syncInteractionOverlays();
         };
+        if (control.matches("[data-bounded-input-select-trigger]")) {
+          const root = control.closest("[data-bounded-input-select]");
+          const menu = root?.querySelector("[data-bounded-input-select-menu]");
+          if (!root || !menu) return;
+          const openMenu = () => {
+            closeBoundedSelectMenus(root);
+            menu.hidden = false;
+            control.setAttribute("aria-expanded", "true");
+          };
+          const closeMenu = () => {
+            menu.hidden = true;
+            control.setAttribute("aria-expanded", "false");
+          };
+          control.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (menu.hidden) openMenu();
+            else closeMenu();
+          });
+          control.addEventListener("keydown", (event) => {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              openMenu();
+              focusBoundedSelectOption(root, event.key === "ArrowDown" ? 1 : -1);
+            } else if (event.key === "Escape") {
+              closeMenu();
+            }
+          });
+          root.querySelectorAll("[data-bounded-input-select-option]").forEach((option) => {
+            option.addEventListener("click", (event) => {
+              event.stopPropagation();
+              setBoundedSelectValue(root, option.dataset.value || "", syncControl);
+              closeMenu();
+              control.focus();
+            });
+            option.addEventListener("keydown", (event) => {
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                focusBoundedSelectOption(root, event.key === "ArrowDown" ? 1 : -1);
+              } else if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setBoundedSelectValue(root, option.dataset.value || "", syncControl);
+                closeMenu();
+                control.focus();
+              } else if (event.key === "Escape") {
+                closeMenu();
+                control.focus();
+              }
+            });
+          });
+          return;
+        }
         control.addEventListener("input", syncControl);
         control.addEventListener("change", syncControl);
       });
@@ -605,6 +726,8 @@
             markdownContentById: app.markdownContent,
             markdownDirty: app.markdownDirty,
             markdownMode: app.markdownMode,
+            controlPolicy: app.context?.artifact_control_policy,
+            mermaidSourceVisibility: app.context?.mermaid_source_visibility,
             zoomMode: app.zoomMode,
             zoomPercent: app.zoomPercent,
             documentContentById: app.documentContent,
@@ -881,6 +1004,7 @@
         saveButtonEl: $("markdown-save"),
         themeButtonEl: $("markdown-theme-toggle"),
         theme: app.artifactDocumentTheme,
+        mermaidSourceVisibility: app.context?.mermaid_source_visibility,
       });
       updateArtifactToolbar();
       renderMarkdownHighlights();
@@ -1484,6 +1608,14 @@
       $("toggle-sidebar").addEventListener("click", () => {
         app.sidebarVisible = !app.sidebarVisible;
         renderShell();
+      });
+      document.addEventListener("click", (event) => {
+        if (!event.target.closest("[data-bounded-input-select]")) {
+          closeBoundedSelectMenus();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeBoundedSelectMenus();
       });
       $("copy-artifact").addEventListener("click", () => copyText(JSON.stringify(artifact(), null, 2)));
       $("copy-path").addEventListener("click", () => copyText(artifact().path));

@@ -155,6 +155,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-report-check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/playwright-snippets/artifact-workbench-live-boot-check.js"],
             validation_commands(),
         )
@@ -1271,6 +1275,45 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertFalse(asset_health["healthy"])
         self.assertEqual(asset_health["status"], "asset_manifest_unavailable:404")
 
+    def test_workbench_asset_health_rejects_stale_server_source_fingerprint(self) -> None:
+        expected_manifest = gate.build_workbench_asset_manifest()
+        stale_manifest = dict(expected_manifest)
+        stale_manifest.pop("server_source_fingerprint", None)
+
+        class Response:
+            status = 200
+
+            def __init__(self, body: bytes = b"asset") -> None:
+                self.body = body
+
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return self.body
+
+        def fake_urlopen(request: object, timeout: float = 1.0) -> Response:
+            url = request.full_url if hasattr(request, "full_url") else str(request)
+            if url == "http://127.0.0.1:8765/api/workbench-assets":
+                return Response(json.dumps(stale_manifest).encode("utf-8"))
+            if any(url == f"http://127.0.0.1:8765{asset['url']}" for asset in expected_manifest["assets"]):
+                return Response()
+            raise AssertionError(f"unexpected URL: {url}")
+
+        original_urlopen = gate.urllib.request.urlopen
+        try:
+            gate.urllib.request.urlopen = fake_urlopen  # type: ignore[assignment]
+
+            asset_health = gate.workbench_asset_health("http://127.0.0.1:8765/")
+        finally:
+            gate.urllib.request.urlopen = original_urlopen  # type: ignore[assignment]
+
+        self.assertFalse(asset_health["healthy"])
+        self.assertEqual(asset_health["status"], "server_source_fingerprint_mismatch")
+
     def test_surface_restarts_owned_server_when_asset_health_is_stale(self) -> None:
         (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
@@ -1329,6 +1372,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 gate.status_payload = fake_status  # type: ignore[assignment]
                 gate.command_start = fake_start  # type: ignore[assignment]
                 gate.read_workbench_state = lambda url: {  # type: ignore[assignment]
+                    "context": {
+                        "manifest": manifest_label,
+                        "manifest_fingerprint": gate.manifest_state_fingerprint(manifest),
+                    },
                     "collection": {"artifacts": []},
                     "interaction_overlays": [],
                     "updated_at_epoch": 1,
@@ -1360,6 +1407,117 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             self.assertEqual(len(start_calls), 1)
+
+    def test_surface_restarts_owned_server_when_manifest_state_fingerprint_is_stale(self) -> None:
+        (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest = Path(tmp) / "manifest.json"
+            manifest.write_text('{"steps": [], "artifacts": []}\n', encoding="utf-8")
+            manifest_label = str(manifest.relative_to(REPO_ROOT))
+            log_label = str((Path(tmp) / "workbench-server.log").relative_to(REPO_ROOT))
+            payloads = [
+                {
+                    "url": "http://127.0.0.1:8765/",
+                    "pid": 123,
+                    "alive": True,
+                    "owned": True,
+                    "repo_owned": True,
+                    "health": "200",
+                    "asset_health": {"healthy": True, "status": "ok"},
+                    "manifest": manifest_label,
+                    "active_manifest": manifest_label,
+                    "log": log_label,
+                    "workbench_state_url": "http://127.0.0.1:8765/api/workbench-state",
+                    "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
+                    "browser_session": {"session": "eba-workbench", "alive": True},
+                },
+                {
+                    "url": "http://127.0.0.1:8765/",
+                    "pid": 456,
+                    "alive": True,
+                    "owned": True,
+                    "repo_owned": True,
+                    "health": "200",
+                    "asset_health": {"healthy": True, "status": "ok"},
+                    "manifest": manifest_label,
+                    "active_manifest": manifest_label,
+                    "log": log_label,
+                    "workbench_state_url": "http://127.0.0.1:8765/api/workbench-state",
+                    "workbench_projection_url": "http://127.0.0.1:8765/api/workbench-projection",
+                    "browser_session": {"session": "eba-workbench", "alive": True},
+                },
+            ]
+            states = [
+                {
+                    "context": {
+                        "manifest": manifest_label,
+                        "manifest_fingerprint": "stale",
+                    },
+                    "collection": {"artifacts": []},
+                    "interaction_overlays": [],
+                    "updated_at_epoch": 1,
+                },
+                {
+                    "context": {
+                        "manifest": manifest_label,
+                        "manifest_fingerprint": gate.manifest_state_fingerprint(manifest),
+                    },
+                    "collection": {"artifacts": []},
+                    "interaction_overlays": [],
+                    "updated_at_epoch": 2,
+                },
+            ]
+            start_calls: list[object] = []
+
+            def fake_status(args: object, manifest_path: Path) -> dict[str, object]:
+                self.assertEqual(manifest_path, manifest)
+                return payloads.pop(0)
+
+            def fake_start(args: object) -> int:
+                start_calls.append(args)
+                return 0
+
+            original_status_payload = gate.status_payload
+            original_command_start = gate.command_start
+            original_read_workbench_state = gate.read_workbench_state
+            original_stop_owned_pid = gate.stop_owned_pid
+            original_wait_for_port_release = gate.wait_for_port_release
+            try:
+                gate.status_payload = fake_status  # type: ignore[assignment]
+                gate.command_start = fake_start  # type: ignore[assignment]
+                gate.read_workbench_state = lambda url: states.pop(0)  # type: ignore[assignment]
+                gate.stop_owned_pid = lambda pid, paths: "stopped"  # type: ignore[assignment]
+                gate.wait_for_port_release = lambda host, port: True  # type: ignore[assignment]
+
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    exit_code = gate.command_surface(
+                        type(
+                            "Args",
+                            (),
+                            {
+                                "manifest": manifest,
+                                "host": "127.0.0.1",
+                                "port": 8765,
+                                "timeout": 10.0,
+                                "no_browser": True,
+                                "json": True,
+                            },
+                        )()
+                    )
+            finally:
+                gate.status_payload = original_status_payload  # type: ignore[assignment]
+                gate.command_start = original_command_start  # type: ignore[assignment]
+                gate.read_workbench_state = original_read_workbench_state  # type: ignore[assignment]
+                gate.stop_owned_pid = original_stop_owned_pid  # type: ignore[assignment]
+                gate.wait_for_port_release = original_wait_for_port_release  # type: ignore[assignment]
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(start_calls), 1)
+            self.assertEqual(payloads, [])
+            self.assertEqual(states, [])
+            result = json.loads(stdout.getvalue())
+            self.assertEqual(result["server"]["pid"], 456)
 
     def test_surface_restarts_owned_server_when_workbench_state_endpoint_is_stale(self) -> None:
         (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
@@ -1418,6 +1576,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 if read_calls == 1:
                     raise urllib.error.HTTPError(url, 404, "not found", None, None)
                 return {
+                    "context": {
+                        "manifest": manifest_label,
+                        "manifest_fingerprint": gate.manifest_state_fingerprint(manifest),
+                    },
                     "collection": {"artifacts": []},
                     "interaction_overlays": [],
                     "updated_at_epoch": 1,
@@ -1632,6 +1794,121 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             ],
         )
 
+    def test_eba_demo_without_explicit_target_preserves_active_workbench_manifest(self) -> None:
+        from argparse import Namespace
+        from scripts import eba_cli
+
+        commands: list[list[str]] = []
+        releases: list[Path] = []
+
+        class StatusResult:
+            returncode = 0
+            stdout = '{"active_manifest":"artifacts/easy-audit/latest/manifest.json"}\n'
+            stderr = ""
+
+        class SurfaceResult:
+            returncode = 0
+            stdout = '{"status":"surface"}\n'
+            stderr = ""
+
+        def fake_run(command: list[str], *, capture: bool = True, check: bool = False) -> object:
+            commands.append(command)
+            return StatusResult() if len(commands) == 1 else SurfaceResult()
+
+        original_run = eba_cli.run
+        original_release = eba_cli.release_default_demo_server
+        try:
+            eba_cli.run = fake_run  # type: ignore[assignment]
+            eba_cli.release_default_demo_server = lambda path: releases.append(path)  # type: ignore[assignment]
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = eba_cli.command_demo(
+                    Namespace(
+                        manifest=None,
+                        fixture=None,
+                        no_browser=False,
+                        json=True,
+                    )
+                )
+        finally:
+            eba_cli.run = original_run  # type: ignore[assignment]
+            eba_cli.release_default_demo_server = original_release  # type: ignore[assignment]
+
+        active_manifest = eba_cli.REPO_ROOT / "artifacts/easy-audit/latest/manifest.json"
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(releases, [active_manifest])
+        self.assertEqual(
+            commands,
+            [
+                [
+                    sys.executable,
+                    str(eba_cli.WORKBENCH_GATE),
+                    "status",
+                    str(eba_cli.DEFAULT_MANIFEST),
+                    "--port",
+                    "8765",
+                ],
+                [
+                    sys.executable,
+                    str(eba_cli.WORKBENCH_GATE),
+                    "surface",
+                    str(active_manifest),
+                    "--port",
+                    "8765",
+                    "--timeout",
+                    "10",
+                    "--json",
+                ],
+            ],
+        )
+
+    def test_eba_situation_without_explicit_target_reports_active_workbench_manifest(self) -> None:
+        from argparse import Namespace
+        from scripts import eba_cli
+
+        manifests: list[Path] = []
+        active_manifest = eba_cli.REPO_ROOT / "artifacts/easy-audit/latest/manifest.json"
+
+        def fake_workbench_status(manifest: Path) -> dict[str, object]:
+            manifests.append(manifest)
+            return {
+                "active_manifest": "artifacts/easy-audit/latest/manifest.json",
+                "manifest": str(manifest.relative_to(eba_cli.REPO_ROOT)),
+                "owned": True,
+            }
+
+        original_current_manifest = eba_cli.current_workbench_manifest
+        original_parse_status = eba_cli.parse_status
+        original_parse_ahead_behind = eba_cli.parse_ahead_behind
+        original_workbench_status = eba_cli.workbench_status
+        try:
+            eba_cli.current_workbench_manifest = lambda: active_manifest  # type: ignore[assignment]
+            eba_cli.parse_status = lambda: {"branch_line": "test", "dirty_files": [], "raw": []}  # type: ignore[assignment]
+            eba_cli.parse_ahead_behind = lambda: {"ahead": 0, "behind": 0}  # type: ignore[assignment]
+            eba_cli.workbench_status = fake_workbench_status  # type: ignore[assignment]
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = eba_cli.command_situation(
+                    Namespace(
+                        manifest=None,
+                        fixture=None,
+                        json=True,
+                    )
+                )
+        finally:
+            eba_cli.current_workbench_manifest = original_current_manifest  # type: ignore[assignment]
+            eba_cli.parse_status = original_parse_status  # type: ignore[assignment]
+            eba_cli.parse_ahead_behind = original_parse_ahead_behind  # type: ignore[assignment]
+            eba_cli.workbench_status = original_workbench_status  # type: ignore[assignment]
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(manifests, [active_manifest])
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["artifact_workbench"]["owned"])
+        self.assertEqual(
+            payload["artifact_workbench"]["manifest"],
+            "artifacts/easy-audit/latest/manifest.json",
+        )
+
     def test_eba_workbench_context_dispatches_gate_state(self) -> None:
         from argparse import Namespace
         from scripts import eba_cli
@@ -1826,9 +2103,9 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                     {
                         "id": "l4-final-report",
                         "name": "Final employer brand audit",
-                        "type": "markdown",
+                        "type": "html",
                         "kind": "report",
-                        "path": "artifacts/easy-audit/latest/l4-final-report.md",
+                        "path": "artifacts/easy-audit/latest/l4-final-report.html",
                     },
                 ],
             },
@@ -1969,7 +2246,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 {
                     "id": "overlay-html-demo",
                     "subtype": "annotation",
-                    "subject": {"kind": "artifact", "id": "l4-final-report-html"},
+                    "subject": {"kind": "artifact", "id": "l4-final-report"},
                     "anchor": {
                         "type": "html_element",
                         "coordinate_space": "html_document",
@@ -1991,7 +2268,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                     "created_at_epoch": 1781665745,
                 }
             ],
-            {"l4-final-report-html"},
+            {"l4-final-report"},
         )
 
         self.assertEqual(len(clean), 1)

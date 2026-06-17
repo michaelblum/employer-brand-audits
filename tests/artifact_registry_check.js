@@ -148,6 +148,14 @@ assert.match(imageToolbar.controls[0].html, /id="zoom-in"[\s\S]*id="zoom-out"/);
 assert.doesNotMatch(imageToolbar.controls[0].html, /markdown-controls/);
 assert.equal(typeof registry.resolveArtifactComponent({ type: "image" }).bindControls, "function");
 
+const readOnlyImageToolbar = registry.artifactToolbarPlan({
+  artifact: { id: "image", type: "image", dimensions: { width: 1000, height: 720 } },
+  controlPolicy: "read-only",
+});
+assert.equal(readOnlyImageToolbar.kind, "image");
+assert.deepEqual(readOnlyImageToolbar.readout, imageToolbar.readout);
+assert.deepEqual(readOnlyImageToolbar.controls, []);
+
 const markdownToolbar = registry.artifactToolbarPlan({
   artifact: { id: "md", type: "markdown" },
   markdownContentById: { md: "# Heading\n\nBody words" },
@@ -164,6 +172,16 @@ assert.match(markdownToolbar.controls[0].html, /id="markdown-save"/);
 assert.doesNotMatch(markdownToolbar.controls[0].html, /image-controls/);
 assert.equal(typeof registry.resolveArtifactComponent({ type: "markdown" }).bindControls, "function");
 assert.equal(typeof registry.resolveArtifactComponent({ type: "markdown" }).syncControls, "function");
+
+const readOnlyMarkdownToolbar = registry.artifactToolbarPlan({
+  artifact: { id: "md", type: "markdown" },
+  controlPolicy: "read-only",
+  markdownContentById: { md: "# Heading\n\nBody words" },
+  markdown: window.ArtifactPrimitives.markdown,
+});
+assert.equal(readOnlyMarkdownToolbar.kind, "markdown");
+assert.deepEqual(readOnlyMarkdownToolbar.readout, markdownToolbar.readout);
+assert.deepEqual(readOnlyMarkdownToolbar.controls, []);
 
 const htmlToolbar = registry.artifactToolbarPlan({
   artifact: { id: "html", type: "html", size_bytes: 2048 },

@@ -170,6 +170,15 @@ def resolve_manifest(args: argparse.Namespace) -> Path:
     return manifest or DEFAULT_MANIFEST
 
 
+def resolve_current_workbench_manifest(args: argparse.Namespace) -> Path:
+    if getattr(args, "fixture", None) or getattr(args, "manifest", None) is not None:
+        return resolve_manifest(args)
+    active_manifest = current_workbench_manifest()
+    if active_manifest.exists():
+        return active_manifest
+    return DEFAULT_MANIFEST
+
+
 def workbench_gate_json(command: str, manifest: Path) -> dict[str, Any] | None:
     result = run([
         sys.executable,
@@ -203,7 +212,7 @@ def release_default_demo_server(target_manifest: Path) -> None:
 
 
 def command_situation(args: argparse.Namespace) -> int:
-    manifest = resolve_manifest(args)
+    manifest = resolve_current_workbench_manifest(args)
     status = parse_status()
     payload = {
         "repo": str(REPO_ROOT),
@@ -319,6 +328,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-image-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-layout-regression-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-markdown-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-report-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-live-boot-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-mermaid-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-navigation-check.js"],
@@ -364,7 +374,7 @@ def command_validate(args: argparse.Namespace) -> int:
 
 
 def command_demo(args: argparse.Namespace) -> int:
-    manifest = resolve_manifest(args)
+    manifest = resolve_current_workbench_manifest(args)
     if not manifest.exists():
         print(f"Manifest not found: {manifest}", file=sys.stderr)
         return 1
@@ -393,10 +403,12 @@ def command_demo(args: argparse.Namespace) -> int:
     if not args.json:
         print()
         print("Self-guided demo recipe:")
-        if args.fixture == "easy-audit":
+        if args.fixture == "easy-audit" or manifest.resolve() == (
+            REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"
+        ).resolve():
             print("1. Confirm the artifact summary shows the Acme Robotics audit, not the public-page matrix.")
             print("2. Inspect the projected L0-L4 steps and provenance edges in the sidebar.")
-            print("3. Open the final report and confirm the Mermaid diagram renders from markdown.")
+            print("3. Open the final report and confirm the designed HTML report renders without edit controls.")
             print("4. Open the JSON/text artifacts and confirm they render as inspectable document views.")
         else:
             print("1. Inspect the artifact summary in the right sidebar.")
@@ -741,7 +753,7 @@ def build_parser() -> argparse.ArgumentParser:
     situation = dev_subparsers.add_parser("situation", help="Print current repo and workbench state")
     situation.add_argument("--json", action="store_true")
     situation.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and inspect a named fixture")
-    situation.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
+    situation.add_argument("manifest", nargs="?", type=Path)
     situation.set_defaults(func=command_situation)
 
     validate = dev_subparsers.add_parser("validate", help="Run focused project validation")
@@ -749,7 +761,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.set_defaults(func=command_validate)
 
     demo = dev_subparsers.add_parser("demo", help="Prepare the artifact workbench demo surface")
-    demo.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
+    demo.add_argument("manifest", nargs="?", type=Path)
     demo.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and demo a named fixture")
     demo.add_argument("--no-browser", action="store_true")
     demo.add_argument("--json", action="store_true")
@@ -760,7 +772,7 @@ def build_parser() -> argparse.ArgumentParser:
     workbench_subparsers = workbench.add_subparsers(dest="workbench_action", required=True)
 
     reset = workbench_subparsers.add_parser("reset", help="Start or reuse the managed workbench session")
-    reset.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
+    reset.add_argument("manifest", nargs="?", type=Path)
     reset.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and demo a named fixture")
     reset.add_argument("--json", action="store_true")
     reset.set_defaults(func=command_workbench)

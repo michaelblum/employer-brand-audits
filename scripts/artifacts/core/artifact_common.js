@@ -24,11 +24,15 @@
     };
   }
 
-  function toolbarPlan({ kind, readoutId, readoutLabel, readoutValue, controls = [] }) {
+  function controlsForPolicy(controls = [], { controlPolicy } = {}) {
+    return controlPolicy === "read-only" ? [] : controls;
+  }
+
+  function toolbarPlan({ kind, readoutId, readoutLabel, readoutValue, controls = [], controlPolicy = null }) {
     return {
       kind,
       readout: readoutValue ? [{ id: readoutId, label: readoutLabel, value: readoutValue }] : [],
-      controls,
+      controls: controlsForPolicy(controls, { controlPolicy }),
     };
   }
 
@@ -71,6 +75,7 @@
 
   ROOT.common = {
     closestElement,
+    controlsForPolicy,
     escapeHtml,
     makeAbortScope,
     noopUnbind,

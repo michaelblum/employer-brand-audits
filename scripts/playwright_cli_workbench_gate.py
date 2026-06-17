@@ -23,12 +23,14 @@ try:
         WORKBENCH_ASSET_MANIFEST_PATH,
         WORKBENCH_STATE_PATH,
         build_workbench_asset_manifest,
+        manifest_state_fingerprint,
     )
 except ModuleNotFoundError:
     from scripts.playwright_cli_workbench_server import (
         WORKBENCH_ASSET_MANIFEST_PATH,
         WORKBENCH_STATE_PATH,
         build_workbench_asset_manifest,
+        manifest_state_fingerprint,
     )
 
 
@@ -413,6 +415,16 @@ def workbench_asset_health(url: str, timeout: float = 1.0) -> dict[str, Any]:
             "expected_fingerprint": expected.get("fingerprint"),
             "actual_fingerprint": actual.get("fingerprint"),
         }
+    if actual.get("server_source_fingerprint") != expected.get("server_source_fingerprint"):
+        return {
+            "healthy": False,
+            "status": "server_source_fingerprint_mismatch",
+            "manifest_url": manifest_url,
+            "expected_server_source_fingerprint": expected.get("server_source_fingerprint"),
+            "actual_server_source_fingerprint": actual.get("server_source_fingerprint"),
+            "expected_fingerprint": expected.get("fingerprint"),
+            "actual_fingerprint": actual.get("fingerprint"),
+        }
 
     failed_assets = []
     for asset in expected_assets if isinstance(expected_assets, list) else []:
@@ -439,6 +451,7 @@ def workbench_asset_health(url: str, timeout: float = 1.0) -> dict[str, Any]:
         "manifest_url": manifest_url,
         "asset_count": expected.get("asset_count"),
         "fingerprint": expected.get("fingerprint"),
+        "server_source_fingerprint": expected.get("server_source_fingerprint"),
     }
 
 
@@ -1196,6 +1209,20 @@ def read_workbench_state(url: str) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
+def workbench_state_matches_manifest(state: dict[str, Any], manifest_path: Path) -> bool:
+    context = state.get("context") if isinstance(state, dict) else {}
+    if not isinstance(context, dict):
+        return False
+    try:
+        expected_manifest = str(manifest_path.resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return False
+    return (
+        context.get("manifest") == expected_manifest
+        and context.get("manifest_fingerprint") == manifest_state_fingerprint(manifest_path)
+    )
+
+
 def summarize_workbench_state(state: dict[str, Any]) -> dict[str, Any]:
     collection = state.get("collection", {}) if isinstance(state, dict) else {}
     artifacts = collection.get("artifacts", []) if isinstance(collection, dict) else []
@@ -1616,6 +1643,13 @@ def command_surface(args: argparse.Namespace) -> int:
         if start_result != 0:
             return start_result
         state = read_workbench_state(payload["workbench_state_url"])
+    if not workbench_state_matches_manifest(state, manifest_path):
+        payload, start_result = restart_surface_server(args, manifest_path, payload)
+        if start_result != 0:
+            return start_result
+        state = read_workbench_state(payload["workbench_state_url"])
+        if not workbench_state_matches_manifest(state, manifest_path):
+            raise SystemExit("Artifact workbench state is stale after managed restart")
     result: dict[str, Any] = {
         "url": payload["url"],
         "workbench_state_url": payload["workbench_state_url"],

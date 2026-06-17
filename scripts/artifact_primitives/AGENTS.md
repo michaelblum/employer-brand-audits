@@ -38,6 +38,9 @@ images, documents, HTML, interaction overlays, and reusable target-link effects.
   color, speed, duration, border width, connector width, and radius.
   Artifact/workbench adapters own selectors, target resolution, workflow
   semantics, and visible target choice.
+- Mermaid rendering accepts context source visibility from the workbench shell.
+  `preview-hidden` hides successful raw source in preview presentation while
+  preserving source data and showing source fallback on render errors.
 - Controller code owns effect execution and annotation routing.
 - Vendor code under `vendor/` should stay isolated from project-authored
   primitives.

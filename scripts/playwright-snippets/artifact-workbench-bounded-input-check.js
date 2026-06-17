@@ -193,9 +193,58 @@ async (page) => {
     throw new Error(`Workflow pairing highlight does not enclose the intake node: ${JSON.stringify(pairingVisual)}`);
   }
 
+  const selectVisual = await page.evaluate(() => {
+    const nativeSelect = document.querySelector('select[data-bounded-input-control][data-input-id="workflow_template"]');
+    const trigger = document.querySelector('[data-bounded-input-select-trigger][data-input-id="workflow_template"]');
+    return {
+      hasNativeSelect: Boolean(nativeSelect),
+      hasTrigger: Boolean(trigger),
+      expanded: trigger?.getAttribute("aria-expanded") || "",
+      text: trigger?.textContent?.trim() || "",
+    };
+  });
+  const hasKnownSelectLabel = selectVisual.text.includes("Standard audit")
+    || selectVisual.text.includes("Tech talent audit");
+  if (selectVisual.hasNativeSelect || !selectVisual.hasTrigger || !hasKnownSelectLabel) {
+    throw new Error(`Bounded select must use the workbench-owned listbox trigger, not a native select popup: ${JSON.stringify(selectVisual)}`);
+  }
+  await page.click('[data-bounded-input-select-trigger][data-input-id="workflow_template"]');
+  const openSelectVisual = await page.evaluate(() => {
+    const trigger = document.querySelector('[data-bounded-input-select-trigger][data-input-id="workflow_template"]');
+    const menu = document.querySelector('[data-bounded-input-select-menu][data-input-id="workflow_template"]');
+    const options = [...(menu?.querySelectorAll("[data-bounded-input-select-option]") || [])];
+    const triggerRect = trigger?.getBoundingClientRect();
+    const menuRect = menu?.getBoundingClientRect();
+    const menuStyle = menu ? getComputedStyle(menu) : null;
+    const optionStyle = options[0] ? getComputedStyle(options[0]) : null;
+    return {
+      expanded: trigger?.getAttribute("aria-expanded") || "",
+      menuHidden: menu?.hidden ?? null,
+      optionCount: options.length,
+      triggerRect: triggerRect ? { left: triggerRect.left, top: triggerRect.top, width: triggerRect.width, height: triggerRect.height, bottom: triggerRect.bottom } : null,
+      menuRect: menuRect ? { left: menuRect.left, top: menuRect.top, width: menuRect.width, height: menuRect.height, bottom: menuRect.bottom } : null,
+      menuPosition: menuStyle?.position || "",
+      optionFontSize: Number.parseFloat(optionStyle?.fontSize || "0") || 0,
+    };
+  });
+  if (
+    openSelectVisual.expanded !== "true"
+    || openSelectVisual.menuHidden
+    || openSelectVisual.optionCount !== 2
+    || openSelectVisual.menuPosition !== "absolute"
+    || !openSelectVisual.triggerRect
+    || !openSelectVisual.menuRect
+    || Math.abs(openSelectVisual.menuRect.left - openSelectVisual.triggerRect.left) > 2
+    || Math.abs(openSelectVisual.menuRect.width - openSelectVisual.triggerRect.width) > 2
+    || openSelectVisual.menuRect.top < openSelectVisual.triggerRect.bottom - 1
+    || openSelectVisual.optionFontSize > 14
+  ) {
+    throw new Error(`Bounded select listbox is not compact and trigger-anchored: ${JSON.stringify(openSelectVisual)}`);
+  }
+
   await page.fill('[data-bounded-input-control][data-input-id="company"]', "Northstar Robotics");
   await page.fill('[data-bounded-input-control][data-input-id="domain_hint"]', "northstar.example");
-  await page.selectOption('[data-bounded-input-control][data-input-id="workflow_template"]', "standard-audit");
+  await page.click('[data-bounded-input-select-option][data-input-id="workflow_template"][data-value="tech-talent-audit"]');
   await page.fill('[data-bounded-input-control][data-input-id="talent_segment"]', "Field robotics engineers");
 
   await page.waitForFunction(() => {
@@ -205,7 +254,7 @@ async (page) => {
         const values = state.bounded_inputs?.values || {};
         return values["l0-seed-intake.company"] === "Northstar Robotics"
           && values["l0-seed-intake.domain_hint"] === "northstar.example"
-          && values["l0-seed-intake.workflow_template"] === "standard-audit"
+          && values["l0-seed-intake.workflow_template"] === "tech-talent-audit"
           && values["l0-seed-intake.talent_segment"] === "Field robotics engineers";
       });
   }, null, { timeout: 5000 });
@@ -217,8 +266,12 @@ async (page) => {
       intakeArtifactId,
       boundedInputCount: state.bounded_inputs?.items?.length || 0,
       values: state.bounded_inputs?.values || {},
+      selectedTemplateText: document.querySelector('[data-bounded-input-select-trigger][data-input-id="workflow_template"]')?.textContent?.trim() || "",
     };
   }, model);
+  if (!persistedInputs.selectedTemplateText.includes("Tech talent audit")) {
+    throw new Error(`Bounded select trigger label did not update after option selection: ${JSON.stringify(persistedInputs)}`);
+  }
   return {
     ...persistedInputs,
     diagramVisual,

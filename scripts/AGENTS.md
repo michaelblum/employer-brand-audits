@@ -34,6 +34,10 @@ workbench implementation, and checked-in Playwright snippets.
   `playwright_cli_workbench_gate.py`; keep tab cleanup, focus, maximize, and
   viewport sync as separate operations so tests can guard their side effects.
 - Keep fixture generation separate from generated runtime output.
+- The deterministic easy-audit fixture treats `l4-final-report` as the single
+  L4 report artifact and projects it as HTML. Keep Mermaid/markdown smoke
+  coverage on markdown artifacts such as `l0-intake-flow`, not by restoring a
+  markdown report duplicate.
 
 ## Verification
 

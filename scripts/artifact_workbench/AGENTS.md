@@ -42,6 +42,11 @@ and app shell JavaScript.
   compensate for CSS staying here.
 - Keep shared slot rendering generic in this folder; do not hardcode image,
   markdown, or future artifact-type toolbar controls in the app shell.
+- Active workbench context may set presentation policy such as
+  `artifact_control_policy: read-only` or
+  `mermaid_source_visibility: preview-hidden`. The app shell passes those
+  policies to artifact components and primitives; do not hardcode the behavior
+  to one artifact type or fixture.
 - Workbench assets must remain compatible with the server asset manifest and
   stale-server detection.
 

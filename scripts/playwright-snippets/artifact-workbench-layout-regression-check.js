@@ -19,9 +19,8 @@ async (page) => {
     const tableMarkdownIndex = artifacts.findIndex((artifact) => (
       artifact.type === "markdown" && /kilos|analysis/i.test(`${artifact.kind || ""} ${artifact.path || ""}`)
     ));
-    const finalReportMarkdownIndex = artifacts.findIndex((artifact) => (
-      artifact.type === "markdown"
-        && /final employer brand audit/i.test(`${artifact.name || ""} ${artifact.summary || ""} ${artifact.path || ""}`)
+    const finalReportHtmlIndex = artifacts.findIndex((artifact) => (
+      artifact.id === "l4-final-report" && artifact.type === "html"
     ));
     const markdownIndex = tableMarkdownIndex >= 0
       ? tableMarkdownIndex
@@ -33,7 +32,7 @@ async (page) => {
     return {
       imageIndex,
       markdownIndex,
-      finalReportMarkdownIndex,
+      finalReportHtmlIndex,
       htmlIndex,
       documentIndex,
       expectsMarkdownTable: tableMarkdownIndex >= 0,
@@ -350,101 +349,6 @@ async (page) => {
     throw new Error(`Markdown table scroll should use shared artifact-document table structure: ${JSON.stringify(markdownLayout)}`);
   }
 
-  let finalReportLayout = null;
-  if (model.finalReportMarkdownIndex >= 0) {
-    await page.evaluate((index) => {
-      const row = document.querySelector(`.artifact-row[data-index="${index}"]`);
-      if (!row) throw new Error(`Final report markdown artifact row not found: ${index}`);
-      row.click();
-    }, model.finalReportMarkdownIndex);
-    await page.waitForFunction(() => {
-      const preview = document.querySelector("#markdown-preview");
-      const title = document.querySelector("#artifact-title")?.textContent || "";
-      return preview
-        && !preview.hidden
-        && /Final employer brand audit/i.test(title)
-        && preview.querySelector("h1, h2, h3, p, li, pre, figure, table");
-    }, null, { timeout: 5000 });
-    finalReportLayout = await page.evaluate(() => {
-    const stage = document.querySelector("#stage");
-    const wrap = document.querySelector("#markdown-wrap");
-    const preview = document.querySelector("#markdown-preview");
-    const body = document.querySelector("#markdown-preview-body");
-    preview.scrollTop = preview.scrollHeight;
-    stage.scrollTop = stage.scrollHeight;
-    const renderedBlocks = [...body.querySelectorAll("h1, h2, h3, p, li, pre, figure, table")];
-    const lastBlock = renderedBlocks[renderedBlocks.length - 1];
-    const recommendedHeading = [...body.querySelectorAll("h2")]
-      .find((heading) => /Recommended Edits/i.test(heading.textContent || ""));
-    const recommendedList = recommendedHeading?.nextElementSibling?.tagName === "OL"
-      ? recommendedHeading.nextElementSibling
-      : null;
-    const stageRect = stage.getBoundingClientRect();
-    const wrapRect = wrap.getBoundingClientRect();
-    const previewRect = preview.getBoundingClientRect();
-    const lastRect = lastBlock.getBoundingClientRect();
-    const listRect = recommendedList?.getBoundingClientRect();
-    const listStyle = recommendedList ? getComputedStyle(recommendedList) : null;
-    const itemRects = [...(recommendedList?.querySelectorAll("li") || [])].map((item) => {
-      const rect = item.getBoundingClientRect();
-      const range = document.createRange();
-      range.selectNodeContents(item);
-      const textRect = range.getBoundingClientRect();
-      range.detach();
-      return {
-        text: item.textContent.trim(),
-        rect: rect.toJSON(),
-        textRect: textRect.toJSON(),
-      };
-    });
-    return {
-      stageBottom: stageRect.bottom,
-      wrapBottom: wrapRect.bottom,
-      previewBottom: previewRect.bottom,
-      previewRight: previewRect.right,
-      lastBlockBottom: lastRect.bottom,
-      lastBlockText: lastBlock.textContent.trim().slice(0, 80),
-      lastBlockGapToPreviewBottom: previewRect.bottom - lastRect.bottom,
-      lastBlockGapToStageBottom: stageRect.bottom - lastRect.bottom,
-      recommendedListBottom: listRect?.bottom ?? null,
-      recommendedListMarginBottom: listStyle?.marginBottom ?? null,
-      recommendedListPaddingLeft: listStyle?.paddingLeft ?? null,
-      recommendedItemRects: itemRects,
-      scrollTop: preview.scrollTop,
-      previewClientHeight: preview.clientHeight,
-      previewScrollHeight: preview.scrollHeight,
-      previewOverflowY: getComputedStyle(preview).overflowY,
-      stageClientHeight: stage.clientHeight,
-      stageScrollHeight: stage.scrollHeight,
-      stageScrollTop: stage.scrollTop,
-      nestedDocumentScrollers: window.__ebaNestedDocumentScrollers(),
-    };
-    });
-    if (finalReportLayout.wrapBottom > finalReportLayout.stageBottom + 1) {
-      throw new Error(`Final report markdown card extends below visible stage: ${JSON.stringify(finalReportLayout)}`);
-    }
-    if (finalReportLayout.lastBlockBottom > finalReportLayout.stageBottom + 1) {
-      throw new Error(`Final report bottom remains clipped by the stage: ${JSON.stringify(finalReportLayout)}`);
-    }
-    if (finalReportLayout.previewOverflowY !== "visible" || finalReportLayout.nestedDocumentScrollers.length) {
-      throw new Error(`Final report should use stage scroll instead of nested preview scroll: ${JSON.stringify(finalReportLayout)}`);
-    }
-    if (finalReportLayout.lastBlockGapToStageBottom < 220) {
-      throw new Error(`Final report markdown needs more end-of-document breathing room: ${JSON.stringify(finalReportLayout)}`);
-    }
-    if (!Number.isFinite(finalReportLayout.recommendedListBottom)) {
-      throw new Error(`Final report recommended edits list was not rendered as an ordered list: ${JSON.stringify(finalReportLayout)}`);
-    }
-    if (finalReportLayout.recommendedListBottom > finalReportLayout.stageBottom - 48) {
-      throw new Error(`Final report recommended edits list lacks bottom breathing room: ${JSON.stringify(finalReportLayout)}`);
-    }
-    for (const item of finalReportLayout.recommendedItemRects) {
-      if (item.textRect.right > finalReportLayout.previewRight - 24) {
-        throw new Error(`Final report recommended edits item text is horizontally clipped: ${JSON.stringify(finalReportLayout)}`);
-      }
-    }
-  }
-
   const artifactDocumentTheme = await page.evaluate(() => {
     const toggle = document.querySelector("#markdown-theme-toggle");
     const preview = document.querySelector("#markdown-preview");
@@ -570,8 +474,30 @@ async (page) => {
     return layout;
   };
 
-  const htmlLayout = await documentSurfaceLayout(model.htmlIndex, "HTML");
+  const finalReportLayout = await documentSurfaceLayout(
+    model.finalReportHtmlIndex >= 0 ? model.finalReportHtmlIndex : model.htmlIndex,
+    "Final report HTML",
+  );
+  const reportSurface = await page.evaluate(() => {
+    const frame = document.querySelector("[data-html-frame]");
+    const doc = frame?.contentDocument;
+    return {
+      surface: doc?.querySelector("[data-report-surface]")?.getAttribute("data-report-surface") || "",
+      ledgerRows: doc?.querySelectorAll("#candidate-signal-ledger tbody tr").length || 0,
+      scoreTiles: doc?.querySelectorAll("[data-kilos-score]").length || 0,
+    };
+  });
+  if (
+    reportSurface.surface !== "signal-brief"
+    || reportSurface.ledgerRows < 3
+    || reportSurface.scoreTiles < 5
+  ) {
+    throw new Error(`Final report HTML surface drifted: ${JSON.stringify(reportSurface)}`);
+  }
+  const htmlLayout = model.htmlIndex === model.finalReportHtmlIndex
+    ? finalReportLayout
+    : await documentSurfaceLayout(model.htmlIndex, "HTML");
   const documentLayout = await documentSurfaceLayout(model.documentIndex, "Document");
 
-  return { imageLayout, fitImageLayout, markdownLayout, finalReportLayout, htmlLayout, documentLayout, artifactDocumentTheme, lightArtifactDocumentTheme, restoredArtifactDocumentTheme };
+  return { imageLayout, fitImageLayout, markdownLayout, finalReportLayout, htmlLayout, documentLayout, reportSurface, artifactDocumentTheme, lightArtifactDocumentTheme, restoredArtifactDocumentTheme };
 }

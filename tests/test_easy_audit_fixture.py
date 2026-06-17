@@ -88,6 +88,15 @@ class EasyAuditFixtureTests(unittest.TestCase):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             projection = project_audit_manifest(manifest_path)
 
+            self.assertEqual(
+                manifest["workbench_context"],
+                {
+                    "artifact_control_policy": "read-only",
+                    "mermaid_source_visibility": "preview-hidden",
+                },
+            )
+            self.assertEqual(projection["source"]["workbench_context"], manifest["workbench_context"])
+
             intake_artifact = next(
                 artifact for artifact in manifest["artifacts"] if artifact["id"] == "l0-intake-flow"
             )
@@ -126,6 +135,38 @@ class EasyAuditFixtureTests(unittest.TestCase):
                     'g.node[data-node="true"][data-id="intake"]',
                 ],
             )
+
+    def test_l4_report_is_single_html_artifact(self) -> None:
+        (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest_path = generate_easy_audit_fixture(Path(tmp) / "easy-audit")
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            projection = project_audit_manifest(manifest_path)
+
+            l4_step = next(step for step in manifest["steps"] if step["id"] == "l4-report")
+            self.assertEqual(l4_step["artifact_ids"], ["l4-final-report"])
+
+            artifacts_by_id = {artifact["id"]: artifact for artifact in manifest["artifacts"]}
+            self.assertNotIn("l4-final-report-html", artifacts_by_id)
+            self.assertIn("l4-final-report", artifacts_by_id)
+            self.assertEqual(artifacts_by_id["l4-final-report"]["type"], "report")
+            self.assertEqual(artifacts_by_id["l4-final-report"]["file_path"], "l4-final-report.html")
+            self.assertFalse((manifest_path.parent / "l4-final-report.md").exists())
+
+            report_html = (manifest_path.parent / "l4-final-report.html").read_text(encoding="utf-8")
+            self.assertIn('data-report-surface="signal-brief"', report_html)
+            self.assertIn('id="candidate-signal-ledger"', report_html)
+            self.assertIn("KILOS signal", report_html)
+
+            projected_artifacts = {artifact["id"]: artifact for artifact in projection["artifacts"]}
+            report = projected_artifacts["l4-final-report"]
+            self.assertEqual(report["type"], "html")
+            self.assertEqual(report["kind"], "report")
+            self.assertEqual(report["mime_type"], "text/html")
+            self.assertIn("annotate", report["capabilities"])
+            self.assertNotIn("edit", report["capabilities"])
+            self.assertNotIn("render", report["capabilities"])
+            self.assertNotIn("diagram_kind", report["facets"])
 
     def test_workflow_input_overlays_pass_target_link_config(self) -> None:
         overlay = workflow_input_overlay(

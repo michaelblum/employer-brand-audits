@@ -55,6 +55,7 @@
       readoutLabel: "Markdown",
       readoutValue: readout(options),
       controls: [{ id: "markdown-controls", html: renderControls() }],
+      controlPolicy: options.controlPolicy,
     });
   }
 

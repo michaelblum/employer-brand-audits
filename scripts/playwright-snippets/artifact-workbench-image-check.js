@@ -31,7 +31,7 @@ async (page) => {
       && markdownWrap
       && markdownWrap.hidden
       && !stage?.classList.contains("markdown-stage")
-      && getComputedStyle(imageControls).display === "flex"
+      && imageControls === null
       && markdownControls === null
       && /\d+ x \d+ px/.test(readout);
   }, null, { timeout: 5000 });
@@ -48,7 +48,7 @@ async (page) => {
       imageVisible: !document.querySelector("#image-wrap")?.hidden,
       documentHidden: document.querySelector("#markdown-wrap")?.hidden,
       stageHasMarkdownClass: stage?.classList.contains("markdown-stage"),
-      imageControlsDisplay: getComputedStyle(imageControls).display,
+      imageControlsMounted: Boolean(imageControls),
       markdownControlsMounted: Boolean(markdownControls),
       imageNaturalWidth: image?.naturalWidth,
       imageNaturalHeight: image?.naturalHeight,

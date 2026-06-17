@@ -644,6 +644,9 @@
     .mermaid-source {
       margin: 10px 0 0;
     }
+    .markdown-mermaid.render-state-complete[data-source-visibility="preview-hidden"] .mermaid-source {
+      display: none;
+    }
     .mermaid-source-line {
       display: block;
       min-height: 1.55em;
@@ -898,7 +901,7 @@
       font-weight: 650;
     }
     .bounded-input-field input,
-    .bounded-input-field select,
+    .bounded-input-select-trigger,
     .bounded-input-field textarea {
       width: 100%;
       min-width: 0;
@@ -911,12 +914,83 @@
       font-weight: 500;
       outline: 0;
     }
+    .bounded-input-select {
+      position: relative;
+      width: 100%;
+      min-width: 0;
+    }
+    .bounded-input-select-trigger {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .bounded-input-select-trigger span:first-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bounded-input-select-caret {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg) translateY(-2px);
+      opacity: 0.82;
+    }
+    .bounded-input-select-menu {
+      position: absolute;
+      z-index: 30;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      display: grid;
+      gap: 3px;
+      max-height: 160px;
+      overflow-y: auto;
+      padding: 4px;
+      background: #171a20;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.36);
+    }
+    .bounded-input-select-menu[hidden] {
+      display: none;
+    }
+    .bounded-input-select-option {
+      width: 100%;
+      min-width: 0;
+      min-height: 30px;
+      display: flex;
+      align-items: center;
+      padding: 7px 8px;
+      color: var(--ink);
+      background: transparent;
+      border: 0;
+      border-radius: 6px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 550;
+      text-align: left;
+      cursor: pointer;
+    }
+    .bounded-input-select-option:hover,
+    .bounded-input-select-option:focus,
+    .bounded-input-select-option[aria-selected="true"] {
+      background: rgba(110, 168, 255, 0.16);
+      outline: 0;
+    }
     .bounded-input-field textarea {
       min-height: 72px;
       resize: vertical;
     }
     .bounded-input-field input:focus,
-    .bounded-input-field select:focus,
+    .bounded-input-select-trigger:focus,
     .bounded-input-field textarea:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 2px rgba(110, 168, 255, 0.18);

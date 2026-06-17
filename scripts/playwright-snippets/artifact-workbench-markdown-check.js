@@ -7,10 +7,10 @@ async (page) => {
     const markdownRow = rows.find((row) => {
       const icon = row.querySelector(".artifact-type-icon");
       const title = row.querySelector(".name")?.textContent || "";
-      return icon?.getAttribute("title") === "markdown" && /Final employer brand audit/.test(title);
+      return icon?.getAttribute("title") === "markdown" && /Fixture-backed intake flow/.test(title);
     });
     if (!markdownRow) {
-      throw new Error("No final report markdown artifact row found");
+      throw new Error("No intake-flow markdown artifact row found");
     }
     markdownRow.click();
   });
@@ -25,9 +25,11 @@ async (page) => {
       && !markdownWrap.hidden
       && imageWrap.hidden
       && document.querySelector("#image-controls") === null
-      && document.querySelector("#markdown-controls") !== null
+      && document.querySelector("#markdown-controls") === null
       && /lines/.test(readout)
-      && /Acme Robotics Employer Brand Audit/.test(preview?.textContent || "")
+      && /Employer Brand Audit Intake/.test(preview?.textContent || "")
+      && document.querySelector("[data-artifact-renderer='mermaid'].render-state-complete[data-source-visibility='preview-hidden'] svg")
+      && getComputedStyle(document.querySelector("[data-artifact-renderer='mermaid'].render-state-complete .mermaid-source")).display === "none"
       && document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href")?.includes("artifact-workbench-icons.svg");
   }, null, { timeout: 3000 });
 
@@ -39,6 +41,8 @@ async (page) => {
     const revertButton = document.querySelector("#markdown-revert");
     const saveButton = document.querySelector("#markdown-save");
     const imageControls = document.querySelector("#image-controls");
+    const mermaidFigure = document.querySelector("[data-artifact-renderer='mermaid']");
+    const mermaidSource = mermaidFigure?.querySelector(".mermaid-source");
     return {
       activeArtifactTitle: document.querySelector("#artifact-title")?.textContent?.trim(),
       activeType: markdownIcon?.getAttribute("title"),
@@ -57,6 +61,10 @@ async (page) => {
       revertButtonText: revertButton?.textContent?.trim(),
       saveButtonText: saveButton?.textContent?.trim(),
       imageControlsMounted: Boolean(imageControls),
+      markdownControlsMounted: Boolean(document.querySelector("#markdown-controls")),
+      mermaidSourceVisibility: mermaidFigure?.dataset.sourceVisibility,
+      mermaidSourceDisplay: mermaidSource ? getComputedStyle(mermaidSource).display : null,
+      mermaidStatus: mermaidFigure?.querySelector("[data-mermaid-status]")?.textContent?.trim(),
       readout: document.querySelector("#artifact-readout")?.textContent?.trim(),
       markdownHeading: document.querySelector("#markdown-preview h1")?.textContent?.trim(),
     };

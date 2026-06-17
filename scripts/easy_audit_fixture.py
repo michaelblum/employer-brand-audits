@@ -415,39 +415,6 @@ def write_mock_site(output_dir: Path) -> None:
     )
 
 
-def report_markdown() -> str:
-    return """# Acme Robotics Employer Brand Audit
-
-## Executive Readout
-
-Acme Robotics presents a credible engineering story, but the careers page asks
-candidates to infer too much about team practices, hiring criteria, and growth.
-The strongest next move is to connect technical ambition to concrete employee
-proof.
-
-```mermaid
-flowchart TD
-  intake[Intake inputs] --> urls[L0 URL discovery]
-  urls --> capture[L1 text and screenshot capture]
-  capture --> kilos[L2 KILOS analysis]
-  kilos --> synth[L3 synthesis]
-  synth --> report[L4 report]
-```
-
-## Findings
-
-- The mission is clear, but candidate outcomes are vague.
-- The page has visual proof, yet few proof points from employees.
-- Engineering role copy should expose interview stages and decision criteria.
-
-## Recommended Edits
-
-1. Add one engineering-team proof block near the top of the careers page.
-2. Publish a short interview-process explainer linked from every technical role.
-3. Tie benefits language to robotics-specific working rhythms and learning loops.
-"""
-
-
 def intake_flow_markdown() -> str:
     return """# Employer Brand Audit Intake
 
@@ -486,39 +453,393 @@ def report_html() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Acme Robotics Employer Brand Audit</title>
   <style>
-    body { margin: 0; color: #17202a; background: #f8fafc; font-family: Arial, Helvetica, sans-serif; line-height: 1.5; }
-    main { max-width: 880px; margin: 0 auto; padding: 44px 28px 80px; }
-    header, section { margin-bottom: 24px; padding: 24px; border: 1px solid #cbd5e1; background: #fff; }
-    h1, h2 { margin-top: 0; }
-    .finding-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-    .finding-card { padding: 14px; border: 1px solid #d8e1ea; background: #f1f5f9; }
-    .cta { display: inline-flex; margin-top: 10px; padding: 10px 14px; background: #164f8f; color: #fff; text-decoration: none; font-weight: 700; }
+    * { box-sizing: border-box; }
+    :root {
+      color-scheme: dark;
+      --ink: #f4f7fb;
+      --muted: #aeb8c7;
+      --panel: #111827;
+      --panel-2: #172033;
+      --line: #344154;
+      --blue: #6ea8fe;
+      --green: #62d394;
+      --amber: #f3c969;
+      --coral: #ff8f70;
+      --violet: #b8a4ff;
+      --paper: #eef2f7;
+      --paper-ink: #17202a;
+    }
+    html { background: #0b0f16; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(110, 168, 254, 0.14), transparent 280px),
+        #0b0f16;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 34px 28px 70px;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      max-width: 820px;
+      margin-bottom: 18px;
+      font-size: 44px;
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+    h2 { margin-bottom: 16px; font-size: 24px; }
+    h3 { margin-bottom: 8px; font-size: 16px; }
+    p { color: var(--muted); }
+    a { color: inherit; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+      gap: 24px;
+      align-items: stretch;
+      margin-bottom: 26px;
+    }
+    .hero-copy,
+    .report-card,
+    .proof-strip,
+    .rewrite-plan,
+    .ledger {
+      border: 1px solid var(--line);
+      background: rgba(17, 24, 39, 0.94);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.26);
+    }
+    .hero-copy { padding: 30px; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .eyebrow::before {
+      content: "";
+      width: 26px;
+      height: 2px;
+      background: var(--green);
+    }
+    .dek {
+      max-width: 720px;
+      margin-bottom: 0;
+      color: #d8e0ea;
+      font-size: 18px;
+    }
+    .signal-panel {
+      display: grid;
+      gap: 14px;
+      padding: 22px;
+      border: 1px solid #44536a;
+      background: #0f1724;
+    }
+    .signal-meter {
+      display: grid;
+      gap: 8px;
+    }
+    .meter-track {
+      height: 12px;
+      border: 1px solid #506078;
+      background: #151e2c;
+    }
+    .meter-fill {
+      display: block;
+      width: 61%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--coral), var(--amber), var(--green));
+    }
+    .signal-number {
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      color: var(--ink);
+      font-weight: 800;
+    }
+    .signal-number strong { font-size: 38px; }
+    .callout {
+      padding: 16px;
+      border-left: 4px solid var(--amber);
+      background: #1b2434;
+      color: #f3f7fb;
+    }
+    .kilos-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 26px;
+    }
+    .score-tile {
+      min-height: 132px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .score-tile strong {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--ink);
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+    .score {
+      display: inline-grid;
+      place-items: center;
+      width: 52px;
+      height: 52px;
+      margin-bottom: 12px;
+      border: 2px solid currentColor;
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .score.good { color: var(--green); }
+    .score.mid { color: var(--amber); }
+    .score.low { color: var(--coral); }
+    .report-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      gap: 18px;
+      margin-bottom: 26px;
+    }
+    .report-card,
+    .proof-strip,
+    .rewrite-plan,
+    .ledger {
+      padding: 22px;
+    }
+    .map {
+      display: grid;
+      gap: 10px;
+    }
+    .map-row {
+      display: grid;
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid #2f3a4c;
+      background: #101826;
+    }
+    .map-row b { color: var(--blue); }
+    .map-row:nth-child(2) b { color: var(--amber); }
+    .map-row:nth-child(3) b { color: var(--violet); }
+    .map-row:nth-child(4) b { color: var(--green); }
+    .ledger {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      color: var(--ink);
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #303b4d;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: #d8e0ea;
+      background: #111b2a;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border: 1px solid #4a5870;
+      color: #e8edf5;
+      background: #182235;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.fix { border-color: rgba(98, 211, 148, 0.65); color: #b9f4ce; }
+    .tag.risk { border-color: rgba(255, 143, 112, 0.7); color: #ffd2c6; }
+    .rewrite-plan ol {
+      display: grid;
+      gap: 12px;
+      margin: 0;
+      padding-left: 24px;
+    }
+    .rewrite-plan li {
+      padding-left: 4px;
+      color: #d8e0ea;
+    }
+    .proof-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 26px;
+      background: #121a29;
+    }
+    .proof-strip article {
+      padding: 16px;
+      border: 1px solid #334052;
+      background: #0f1724;
+    }
+    .proof-strip span {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--amber);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .footer-note {
+      color: #8794a8;
+      font-size: 13px;
+    }
+    @media (max-width: 860px) {
+      main { padding: 20px 16px 52px; }
+      h1 { font-size: 34px; }
+      .hero,
+      .report-grid,
+      .proof-strip {
+        grid-template-columns: 1fr;
+      }
+      .kilos-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 520px) {
+      .kilos-grid { grid-template-columns: 1fr; }
+      .map-row { grid-template-columns: 1fr; }
+      th, td { padding: 10px; }
+    }
   </style>
 </head>
 <body>
-  <main>
-    <header id="executive-readout">
-      <p>Employer Brand Audit</p>
-      <h1>Acme Robotics</h1>
-      <p>Acme Robotics presents a credible engineering story, but the careers page asks candidates to infer too much about team practices, hiring criteria, and growth.</p>
-      <a id="apply-context" class="cta primary" role="button" href="https://acme.example/careers">Review careers page CTA</a>
-    </header>
-    <section id="findings">
-      <h2>Findings</h2>
-      <div class="finding-grid">
-        <article class="finding-card" id="mission-signal"><h3>Mission</h3><p>Clear robotics mission and category fit.</p></article>
-        <article class="finding-card" id="process-gap"><h3>Process</h3><p>Interview stages and decision criteria need proof.</p></article>
-        <article class="finding-card" id="employee-proof"><h3>Proof</h3><p>Employee-authored examples would make the story concrete.</p></article>
-      </div>
+  <main data-report-surface="signal-brief">
+    <section class="hero" id="executive-readout">
+      <header class="hero-copy">
+        <span class="eyebrow">Employer brand audit</span>
+        <h1>Acme Robotics has a strong mission signal and a thin candidate proof layer.</h1>
+        <p class="dek">The careers page sells dependable robotics work, but senior engineers still have to infer how the team operates, how interviews are judged, and what growth looks like after the first deployment cycle.</p>
+      </header>
+      <aside class="signal-panel" aria-label="KILOS signal">
+        <div class="signal-meter">
+          <span class="signal-number"><strong>61</strong><span>/100 KILOS signal</span></span>
+          <span class="meter-track" aria-hidden="true"><span class="meter-fill"></span></span>
+        </div>
+        <div class="callout">
+          <strong>Best next move:</strong> Add field-engineering proof near the top of the page, then link every technical role to an explicit interview-plan explainer.
+        </div>
+      </aside>
     </section>
-    <section id="recommended-edits">
-      <h2>Recommended edits</h2>
-      <ol>
-        <li>Add one engineering-team proof block near the top of the careers page.</li>
-        <li>Publish a short interview-process explainer linked from every technical role.</li>
-        <li>Tie benefits language to robotics-specific working rhythms and learning loops.</li>
-      </ol>
+
+    <section class="kilos-grid" aria-label="KILOS scorecard">
+      <article class="score-tile" data-kilos-score="knowledge">
+        <strong>Knowledge</strong>
+        <span class="score mid">3</span>
+        <p>Robotics category is clear; technical practice is implied.</p>
+      </article>
+      <article class="score-tile" data-kilos-score="identity">
+        <strong>Identity</strong>
+        <span class="score good">4</span>
+        <p>Mission and product direction are easy to recognize.</p>
+      </article>
+      <article class="score-tile" data-kilos-score="logistics">
+        <strong>Logistics</strong>
+        <span class="score low">2</span>
+        <p>Interview stages and decision criteria are under-explained.</p>
+      </article>
+      <article class="score-tile" data-kilos-score="opportunity">
+        <strong>Opportunity</strong>
+        <span class="score mid">3</span>
+        <p>Growth promise exists but needs role-level examples.</p>
+      </article>
+      <article class="score-tile" data-kilos-score="social-proof">
+        <strong>Social proof</strong>
+        <span class="score low">2</span>
+        <p>Employee-authored evidence is the biggest credibility gap.</p>
+      </article>
     </section>
+
+    <section class="report-grid">
+      <article class="report-card">
+        <h2>Candidate journey repair map</h2>
+        <div class="map" aria-label="Candidate journey">
+          <div class="map-row"><b>Arrives</b><span>Understands the mission quickly: robots working beside people in real customer environments.</span></div>
+          <div class="map-row"><b>Evaluates</b><span>Wants to know the engineering loop: simulation, lab validation, field feedback, incident learning.</span></div>
+          <div class="map-row"><b>Decides</b><span>Needs interview transparency and proof that senior engineers can do high-leverage systems work.</span></div>
+          <div class="map-row"><b>Commits</b><span>Needs a crisp picture of autonomy ownership, field exposure, and promotion expectations.</span></div>
+        </div>
+      </article>
+      <article class="rewrite-plan">
+        <h2>Rewrite sprint</h2>
+        <ol>
+          <li>Add an engineering proof strip above the role list with one field failure review, one simulation artifact, and one deployment metric.</li>
+          <li>Convert the interview plan into a stable page section and link it from every technical role.</li>
+          <li>Replace generic benefits language with robotics-specific working rhythms: lab days, field rotations, reliability reviews, and deep-work blocks.</li>
+          <li>Give senior candidates one named ownership promise: the systems loop they will own in their first 90 days.</li>
+        </ol>
+      </article>
+    </section>
+
+    <section class="ledger" id="candidate-signal-ledger">
+      <h2>Signal ledger</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Signal</th>
+            <th>Evidence</th>
+            <th>Candidate read</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag fix">Mission</span></td>
+            <td>Build robots that work beside people.</td>
+            <td>Clear category and purpose.</td>
+            <td>Keep the line; attach one concrete deployment story.</td>
+          </tr>
+          <tr>
+            <td><span class="tag risk">Hiring</span></td>
+            <td>Interview process appears only as broad copy.</td>
+            <td>Unclear evaluation bar for senior systems engineers.</td>
+            <td>Publish stages, artifacts reviewed, and decision criteria.</td>
+          </tr>
+          <tr>
+            <td><span class="tag risk">Team proof</span></td>
+            <td>Few employee-authored examples.</td>
+            <td>Culture claims need operational receipts.</td>
+            <td>Add field note excerpts and reliability-review examples.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="proof-strip" aria-label="Recommended proof blocks">
+      <article>
+        <span>Proof block 1</span>
+        <h3>From simulation to site</h3>
+        <p>Show how a planning bug moves from trace, to lab reproduction, to customer deployment fix.</p>
+      </article>
+      <article>
+        <span>Proof block 2</span>
+        <h3>Senior engineering bar</h3>
+        <p>Name the systems judgment expected in the technical discussion and paid work sample.</p>
+      </article>
+      <article>
+        <span>Proof block 3</span>
+        <h3>Growth loop</h3>
+        <p>Explain how engineers progress from owning subsystems to owning fleet reliability outcomes.</p>
+      </article>
+    </section>
+
+    <p class="footer-note">Source lineage: L0 intake, L1 careers text and screenshot, L2 KILOS analysis, and L3 synthesis notes.</p>
   </main>
 </body>
 </html>
@@ -548,6 +869,10 @@ def build_manifest(output_dir: Path) -> dict[str, Any]:
         "talent_segment": "Senior robotics engineers",
         "status": "complete",
         "created_at": "2026-06-13T01:00:00Z",
+        "workbench_context": {
+            "artifact_control_policy": "read-only",
+            "mermaid_source_visibility": "preview-hidden",
+        },
         "required_inputs": [
             {"id": "company", "label": "Company", "value": "Acme Robotics"},
             {"id": "domain_hint", "label": "Domain or inferred-domain hint", "value": "acme.example"},
@@ -678,7 +1003,7 @@ def build_manifest(output_dir: Path) -> dict[str, Any]:
                 "started_at": "2026-06-13T01:07:00Z",
                 "completed_at": "2026-06-13T01:09:00Z",
                 "required_inputs": [],
-                "artifact_ids": ["l4-final-report", "l4-final-report-html"],
+                "artifact_ids": ["l4-final-report"],
                 "parent_step_ids": ["l3-synthesis"],
             },
         ],
@@ -778,21 +1103,9 @@ def build_manifest(output_dir: Path) -> dict[str, Any]:
                 "created_at": "2026-06-13T01:09:00Z",
                 "produced_by_step_id": "l4-report",
                 "parent_ids": ["l3-synthesis-notes", "l1-careers-screenshot"],
-                "file_path": "l4-final-report.md",
-                "params": {"url": "https://acme.example/careers"},
-                "card": {"summary": "Final employer brand audit", "tags": {"layer": "L4"}},
-            },
-            {
-                "id": "l4-final-report-html",
-                "layer": 4,
-                "type": "html",
-                "status": "complete",
-                "created_at": "2026-06-13T01:09:30Z",
-                "produced_by_step_id": "l4-report",
-                "parent_ids": ["l4-final-report", "l3-synthesis-notes"],
                 "file_path": "l4-final-report.html",
                 "params": {"url": "https://acme.example/careers"},
-                "card": {"summary": "Final employer brand audit HTML", "tags": {"layer": "L4"}},
+                "card": {"summary": "Final employer brand audit", "tags": {"layer": "L4"}},
             },
         ],
     }
@@ -830,7 +1143,6 @@ def generate_easy_audit_fixture(output_dir: Path = DEFAULT_OUTPUT_DIR) -> Path:
         output_dir / "l3-synthesis-notes.txt",
         "Strong mission and category clarity. Main gap: candidates need concrete proof of hiring process, team practices, and growth paths.\n",
     )
-    write_text(output_dir / "l4-final-report.md", report_markdown())
     write_text(output_dir / "l4-final-report.html", report_html())
     manifest_path = output_dir / "manifest.json"
     write_json(manifest_path, build_manifest(output_dir))

@@ -50,7 +50,7 @@ const registry = {
         value: `${payload.artifact.id}:${payload.imageNaturalWidth}x${payload.imageNaturalHeight}`,
       },
     ],
-    controls: [],
+    controls: payload.controlPolicy === "read-only" ? [] : [{ id: "editable-control", html: "<button>Edit</button>" }],
   }),
   artifactStagePlan: (artifact) => ({
     renderKind: artifact.type,
@@ -106,6 +106,38 @@ assert.deepEqual(binding.toolbarPlan(), {
       id: "readout",
       label: "Readout",
       value: "image-1:640x480",
+    },
+  ],
+  controls: [{ id: "editable-control", html: "<button>Edit</button>" }],
+});
+
+const readOnlyBinding = bindingModule.createArtifactBinding({
+  getDefaultArtifact: () => ({ id: "md-1", type: "markdown" }),
+  registry: () => registry,
+  toolbar: () => ({
+    mountToolbar: (rootEl, plan) => {
+      mountedPlan = { rootEl, plan };
+    },
+  }),
+  elements: {
+    toolbarRoot: () => toolbarRoot,
+    image: () => imageEl,
+  },
+  documentRenderer: () => ({ kind: "document-renderer" }),
+  markdown: () => ({ kind: "markdown" }),
+  getContext: () => ({
+    controlPolicy: "read-only",
+    markdownContentById: { "md-1": "# Title" },
+  }),
+});
+
+assert.deepEqual(readOnlyBinding.toolbarPlan(), {
+  kind: "markdown",
+  readout: [
+    {
+      id: "readout",
+      label: "Readout",
+      value: "md-1:640x480",
     },
   ],
   controls: [],

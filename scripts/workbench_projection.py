@@ -899,6 +899,9 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
             "manifest_path": source_manifest,
             "adapter": "project_audit_manifest",
             "source_schema_version": manifest.get("schema_version"),
+            "workbench_context": manifest.get("workbench_context")
+            if isinstance(manifest.get("workbench_context"), dict)
+            else {},
         },
         "workflow": {
             "id": workflow_id,

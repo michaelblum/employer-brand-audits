@@ -35,6 +35,10 @@ WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
 WORKBENCH_ASSET_MANIFEST_PATH = "/api/workbench-assets"
 WORKBENCH_STATE_PATH = "/api/workbench-state"
 WORKBENCH_CONTEXT_PATH = "/api/workbench-context"
+SERVER_SOURCE_FILES = [
+    Path(__file__).resolve(),
+    Path(__file__).resolve().parent / "workbench_projection.py",
+]
 WORKBENCH_ASSETS = {
     "/assets/artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
     "/assets/artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
@@ -142,17 +146,62 @@ def workbench_asset_record(url: str, path: Path, content_type: str) -> dict[str,
     return record
 
 
+def source_file_record(path: Path) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "path": repo_relative_path(path),
+        "exists": path.exists(),
+    }
+    if path.exists():
+        data = path.read_bytes()
+        record.update(
+            {
+                "size_bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        )
+    return record
+
+
+def build_server_source_manifest() -> dict[str, Any]:
+    sources = [source_file_record(path) for path in SERVER_SOURCE_FILES]
+    digest = hashlib.sha256()
+    digest.update(json.dumps({"sources": sources}, sort_keys=True).encode("utf-8"))
+    return {
+        "fingerprint": digest.hexdigest(),
+        "sources": sources,
+    }
+
+
+def manifest_state_fingerprint(manifest_path: Path) -> str:
+    path = manifest_path.resolve()
+    digest = hashlib.sha256()
+    digest.update(
+        json.dumps(
+            {
+                "path": repo_relative_path(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "size_bytes": path.stat().st_size,
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+    return digest.hexdigest()
+
+
 def build_workbench_asset_manifest() -> dict[str, Any]:
     index = workbench_asset_record("/", WORKBENCH_INDEX, "text/html")
     assets = [
         workbench_asset_record(url, path, content_type)
         for url, (path, content_type) in sorted(WORKBENCH_ASSETS.items())
     ]
+    server_sources = build_server_source_manifest()
     digest = hashlib.sha256()
     digest.update(json.dumps({"assets": assets, "index": index}, sort_keys=True).encode("utf-8"))
     return {
         "status": "workbench_assets",
         "fingerprint": digest.hexdigest(),
+        "server_source_fingerprint": server_sources["fingerprint"],
+        "server_sources": server_sources["sources"],
         "index": index,
         "asset_count": len(assets),
         "assets": assets,
@@ -528,6 +577,13 @@ def discover_workbench_contexts(active_manifest: Path) -> list[dict[str, Any]]:
         except Exception:
             continue
         label, subtitle = manifest_display_label(manifest_path, projection)
+        workbench_context = (
+            projection.get("source", {}).get("workbench_context")
+            if isinstance(projection.get("source"), dict)
+            else {}
+        )
+        if not isinstance(workbench_context, dict):
+            workbench_context = {}
         contexts.append(
             {
                 "manifest": str(manifest_path.relative_to(REPO_ROOT)),
@@ -539,6 +595,8 @@ def discover_workbench_contexts(active_manifest: Path) -> list[dict[str, Any]]:
                 "status": projection.get("workflow", {}).get("status")
                 if isinstance(projection.get("workflow"), dict)
                 else None,
+                "artifact_control_policy": workbench_context.get("artifact_control_policy"),
+                "mermaid_source_visibility": workbench_context.get("mermaid_source_visibility"),
                 "active": manifest_path.resolve() == active_manifest.resolve(),
             }
         )
@@ -558,6 +616,7 @@ class WorkbenchServer(ThreadingHTTPServer):
 
     def load_manifest(self, manifest_path: Path, *, changed_by: str | None) -> None:
         self.manifest_path = safe_manifest_path(manifest_path)
+        self.manifest_fingerprint = manifest_state_fingerprint(self.manifest_path)
         self.artifact_root = self.manifest_path.parent
         self.workbench_projection = project_workbench_manifest(self.manifest_path)
         self.collection = build_collection(self.manifest_path, self.workbench_projection)
@@ -586,6 +645,13 @@ class WorkbenchServer(ThreadingHTTPServer):
 
     def workbench_state(self) -> dict[str, Any]:
         contexts = discover_workbench_contexts(self.manifest_path)
+        workbench_context = (
+            self.workbench_projection.get("source", {}).get("workbench_context")
+            if isinstance(self.workbench_projection.get("source"), dict)
+            else {}
+        )
+        if not isinstance(workbench_context, dict):
+            workbench_context = {}
         return {
             "status": "workbench_state",
             "collection": self.collection,
@@ -599,9 +665,12 @@ class WorkbenchServer(ThreadingHTTPServer):
             "contexts": contexts,
             "context": {
                 "manifest": str(self.manifest_path.relative_to(REPO_ROOT)),
+                "manifest_fingerprint": self.manifest_fingerprint,
                 "changed_by": self.context_changed_by,
                 "changed_at_epoch": self.context_changed_at_epoch,
                 "previous_manifest": self.previous_manifest,
+                "artifact_control_policy": workbench_context.get("artifact_control_policy"),
+                "mermaid_source_visibility": workbench_context.get("mermaid_source_visibility"),
             },
             "updated_at_epoch": self.updated_at_epoch,
         }

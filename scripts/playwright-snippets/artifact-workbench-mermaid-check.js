@@ -13,7 +13,11 @@ async (page) => {
     if (!mermaidArtifact) throw new Error("No Mermaid-capable markdown artifact in projection");
     const artifactIndex = (state.collection?.artifacts || []).findIndex((artifact) => artifact.id === mermaidArtifact.id);
     if (artifactIndex < 0) throw new Error(`Mermaid artifact not present in collection: ${mermaidArtifact.id}`);
-    return { artifactId: mermaidArtifact.id, artifactIndex };
+    return {
+      artifactId: mermaidArtifact.id,
+      artifactIndex,
+      readOnlyPresentation: state.context?.artifact_control_policy === "read-only",
+    };
   });
 
   await page.waitForSelector(".artifact-row[data-index]", { timeout: 5000 });
@@ -43,6 +47,36 @@ async (page) => {
     return Number(first?.dataset.sourceLine || 0);
   });
   if (!mermaidLine) throw new Error("No Mermaid source line found");
+
+  if (model.readOnlyPresentation) {
+    const result = await page.evaluate(({ validRenderCompleted }) => {
+      const figure = document.querySelector("[data-artifact-renderer='mermaid']");
+      const source = figure?.querySelector(".mermaid-source");
+      return {
+        artifactTitle: document.querySelector("#artifact-title")?.textContent?.trim(),
+        validRenderCompleted,
+        renderer: figure?.dataset.artifactRenderer,
+        renderState: figure?.dataset.renderState,
+        sourceVisibility: figure?.dataset.sourceVisibility,
+        sourceDisplay: source ? getComputedStyle(source).display : null,
+        markdownControlsMounted: Boolean(document.querySelector("#markdown-controls")),
+        status: figure?.querySelector("[data-mermaid-status]")?.textContent?.trim(),
+        activeIconHref: document.querySelector(".artifact-row.active .artifact-type-icon use")?.getAttribute("href"),
+      };
+    }, { validRenderCompleted });
+    if (result.sourceVisibility !== "preview-hidden" || result.sourceDisplay !== "none") {
+      throw new Error(`Read-only Mermaid presentation should hide successful raw source: ${JSON.stringify(result)}`);
+    }
+    if (result.markdownControlsMounted) {
+      throw new Error(`Read-only Mermaid presentation should not mount markdown controls: ${JSON.stringify(result)}`);
+    }
+    if (/Source remains available below/i.test(result.status || "")) {
+      throw new Error(`Read-only Mermaid presentation should not advertise visible source: ${JSON.stringify(result)}`);
+    }
+    await page.reload();
+    await page.waitForSelector(".artifact-row[data-index]", { timeout: 5000 });
+    return result;
+  }
 
   await page.evaluate(async ({ artifactId, line }) => {
     const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
