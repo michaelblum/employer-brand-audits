@@ -19,7 +19,7 @@
 - Test: `tests/test_workbench_bounded_input.py`
 - Update if contract changes: `scripts/AGENTS.md`
 
-- [ ] **Step 1: Write failing projection-contract tests**
+- [x] **Step 1: Write failing projection-contract tests**
 
 Add tests proving:
 
@@ -38,7 +38,7 @@ Expected missing-module failure:
 python3 tests/test_workbench_bounded_input.py
 ```
 
-- [ ] **Step 2: Extract projection definition helpers**
+- [x] **Step 2: Extract projection definition helpers**
 
 Move the current `workflow_input_overlay()` and `workflow_input_overlays_for_step()` behavior behind:
 
@@ -49,7 +49,7 @@ bounded_input_overlay_definitions_for_step(step_id: str, required_inputs: list[A
 
 Keep emitted ids, `workflow_input` anchors, selector candidates, options, default values, and `target_link` passthrough identical.
 
-- [ ] **Step 3: Extract server sanitization helpers**
+- [x] **Step 3: Extract server sanitization helpers**
 
 Move the current bounded-input saved-state behavior behind:
 
@@ -62,7 +62,7 @@ bounded_input_state(definitions: list[dict[str, Any]], overlays: list[dict[str, 
 
 `playwright_cli_workbench_server.py` should delegate to these helpers and keep annotation cleaning local.
 
-- [ ] **Step 4: Verify Task 1**
+- [x] **Step 4: Verify Task 1**
 
 Run:
 
@@ -73,7 +73,7 @@ python3 -m unittest tests.test_artifact_workbench_browser_control.WorkbenchBrows
 python3 -m py_compile scripts/workbench_bounded_input.py scripts/workbench_projection.py scripts/playwright_cli_workbench_server.py
 ```
 
-- [ ] **Step 5: Checkpoint**
+- [x] **Step 5: Checkpoint**
 
 Commit and push with title:
 

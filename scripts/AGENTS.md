@@ -8,7 +8,8 @@ workbench implementation, and checked-in Playwright snippets.
 ## Ownership
 
 - Owns `eba_cli.py`, `eba_control_plane.py`, capture/smoke scripts, projection
-  scripts, workbench server/gate scripts, and child script folders.
+  scripts, bounded-input helpers, workbench server/gate scripts, and child
+  script folders.
 - Does not own MCP imaging internals or repo-level tests.
 
 ## Local Contracts
@@ -35,6 +36,10 @@ workbench implementation, and checked-in Playwright snippets.
 - URL-stage support files such as `page_screenshot` and `capture_log` project as
   file resources for provenance/debugging, not as workbench-visible sidebar
   artifacts.
+- `workbench_bounded_input.py` owns bounded workflow-input projection
+  definitions and saved-state sanitization helpers. Projection code delegates
+  definition creation there; the workbench server delegates bounded-input state
+  cleaning and summaries there while keeping annotation cleaning local.
 
 ## Work Guidance
 

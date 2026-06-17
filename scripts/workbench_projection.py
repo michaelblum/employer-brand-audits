@@ -11,6 +11,17 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+try:
+    from workbench_bounded_input import (
+        bounded_input_overlay_definition as workflow_input_overlay,
+        bounded_input_overlay_definitions_for_step as workflow_input_overlays_for_step,
+    )
+except ModuleNotFoundError:
+    from scripts.workbench_bounded_input import (
+        bounded_input_overlay_definition as workflow_input_overlay,
+        bounded_input_overlay_definitions_for_step as workflow_input_overlays_for_step,
+    )
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MERMAID_FENCE_RE = re.compile(r"^```\s*mermaid\s*$", re.IGNORECASE | re.MULTILINE)
@@ -360,66 +371,6 @@ def add_host_facet(
 
 def normalized_required_inputs(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
-
-
-def workflow_input_overlay(step_id: str, item: Any) -> dict[str, Any] | None:
-    if not isinstance(item, dict):
-        return None
-    input_id = str(item.get("id") or "").strip()
-    item_anchor = item.get("anchor") if isinstance(item.get("anchor"), dict) else {}
-    artifact_id = str(item.get("artifact_id") or item_anchor.get("artifact_id") or "").strip()
-    if not step_id or not input_id or not artifact_id:
-        return None
-    input_type = str(item.get("input_type") or "text").strip() or "text"
-    anchor = {
-        "type": "workflow_input",
-        "coordinate_space": "workflow_graph",
-        "artifact_id": artifact_id,
-        "step_id": step_id,
-        "input_id": input_id,
-    }
-    selector_candidates = item.get("selector_candidates") or item_anchor.get("selector_candidates")
-    if isinstance(selector_candidates, list):
-        anchor["selector_candidates"] = [
-            str(selector).strip()
-            for selector in selector_candidates
-            if str(selector).strip()
-        ]
-    overlay: dict[str, Any] = {
-        "id": f"input:{step_id}:{input_id}",
-        "subtype": "bounded_input",
-        "step_id": step_id,
-        "input_id": input_id,
-        "label": str(item.get("label") or input_id.replace("_", " ").title()),
-        "input_type": input_type,
-        "required": bool(item.get("required", True)),
-        "status": str(item.get("status") or "pending"),
-        "value": item.get("value"),
-        "subject": {"kind": "workflow_step", "id": step_id},
-        "anchor": anchor,
-    }
-    if item.get("placeholder") is not None:
-        overlay["placeholder"] = str(item.get("placeholder") or "")
-    options = item.get("options")
-    if isinstance(options, list):
-        overlay["options"] = [
-            option
-            for option in options
-            if isinstance(option, (str, int, float)) or isinstance(option, dict)
-        ]
-    target_link = item.get("target_link") or item_anchor.get("target_link")
-    if isinstance(target_link, dict):
-        overlay["target_link"] = target_link
-    return overlay
-
-
-def workflow_input_overlays_for_step(step_id: str, required_inputs: list[Any]) -> list[dict[str, Any]]:
-    overlays: list[dict[str, Any]] = []
-    for item in required_inputs:
-        overlay = workflow_input_overlay(step_id, item)
-        if overlay is not None:
-            overlays.append(overlay)
-    return overlays
 
 
 def audit_url_resource_id(url: str) -> str:
