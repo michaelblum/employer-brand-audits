@@ -69,7 +69,7 @@ Run:
 ```bash
 python3 tests/test_workbench_bounded_input.py
 python3 tests/test_easy_audit_fixture.py
-python3 -m unittest tests.test_artifact_workbench_browser_control.WorkbenchBrowserControlTest.test_workbench_state_accepts_bounded_input_overlays_for_projected_inputs
+python3 -m unittest tests.test_artifact_workbench_browser_control.ArtifactWorkbenchBrowserControlTests.test_workbench_state_accepts_bounded_input_overlays_for_projected_inputs
 python3 -m py_compile scripts/workbench_bounded_input.py scripts/workbench_projection.py scripts/playwright_cli_workbench_server.py
 ```
 
@@ -150,7 +150,7 @@ git push
 - Candidate modify: `scripts/artifact_workbench/app.js`
 - Candidate tests: focused tests touched in Tasks 1 and 2
 
-- [ ] **Step 1: Re-measure remaining large-file responsibilities**
+- [x] **Step 1: Re-measure remaining large-file responsibilities**
 
 Run:
 
@@ -159,7 +159,7 @@ wc -l scripts/workbench_projection.py scripts/playwright_cli_workbench_server.py
 rg -n "bounded_input|workflow_input|workflowPairing|targetLinkOptionsForWorkflowDefinition" scripts tests
 ```
 
-- [ ] **Step 2: Split only behavior that now has an owner**
+- [x] **Step 2: Split only behavior that now has an owner**
 
 Allowed splits:
 
@@ -167,7 +167,13 @@ Allowed splits:
 - Move remaining browser pairing selection/helpers into `scripts/artifacts/core/workflow_pairing.js`.
 - Leave unrelated projection, server route, and app-shell orchestration in place.
 
-- [ ] **Step 3: Full branch verification**
+Outcome: the remaining matches in `workbench_projection.py`,
+`playwright_cli_workbench_server.py`, and `artifact_workbench/app.js` are thin
+delegation, state routing, or DOM/effect execution. No further large-file split
+is justified in this branch without crossing into unrelated route, projection,
+or app-shell decomposition.
+
+- [x] **Step 3: Full branch verification**
 
 Run:
 
@@ -177,7 +183,7 @@ Run:
 python3 scripts/playwright_cli_browser.py run-code scripts/playwright-snippets/artifact-workbench-bounded-input-check.js --session eba-workbench
 ```
 
-- [ ] **Step 4: Final checkpoint and PR readiness**
+- [x] **Step 4: Final checkpoint and PR readiness**
 
 Commit, push, and inspect:
 
