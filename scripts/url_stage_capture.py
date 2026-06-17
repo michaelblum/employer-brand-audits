@@ -25,6 +25,14 @@ HIDE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "hide-obscuring-e
 RESTORE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "restore-page.js"
 BLUEPRINT_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "extract-web-blueprint.js"
 
+STAGE_NAME_MAX_LENGTH = 80
+SOURCE_NODE_NAME_MAX_LENGTH = 180
+SOURCE_NODE_TEXT_MAX_LENGTH = 240
+TARGET_LABEL_MAX_LENGTH = 160
+TARGET_TEXT_MAX_LENGTH = 240
+SITE_FINGERPRINT_TARGET_LIMIT = 80
+SITE_FINGERPRINT_HEX_LENGTH = 16
+
 
 def repo_relative(path: Path) -> str:
     resolved = path.resolve()
@@ -40,7 +48,7 @@ def slugify_stage_name(value: str) -> str:
         raw = f"{parsed.netloc}{parsed.path}"
     raw = raw.replace("www.", "")
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", raw).strip("-").lower()
-    return slug[:80].strip("-") or "url-stage"
+    return slug[:STAGE_NAME_MAX_LENGTH].strip("-") or "url-stage"
 
 
 def safe_stage_output_dir(output_dir: Path) -> Path:
@@ -145,8 +153,10 @@ def source_tree_node_from_element(element: dict[str, Any], index: int) -> dict[s
         "kind": "element",
         "tag": str(element.get("tag") or ""),
         "role": str(element.get("role") or ""),
-        "name": str(element.get("accessible_name") or element.get("text") or "")[:180],
-        "text": str(element.get("text") or "")[:240],
+        "name": str(element.get("accessible_name") or element.get("text") or "")[
+            :SOURCE_NODE_NAME_MAX_LENGTH
+        ],
+        "text": str(element.get("text") or "")[:SOURCE_NODE_TEXT_MAX_LENGTH],
         "target_kind": str(element.get("target_kind") or "element"),
         "document_rect": {
             "x": round(float(rect.get("x") or 0)),
@@ -230,9 +240,15 @@ def site_fingerprint_for(blueprint: dict[str, Any], target_map: dict[str, Any]) 
     targets = target_map.get("targets") if isinstance(target_map.get("targets"), list) else []
     target_shape = "|".join(
         f"{target.get('target_kind')}:{target.get('role')}:{target.get('label')}"
-        for target in targets[:80]
+        for target in targets[:SITE_FINGERPRINT_TARGET_LIMIT]
     )
-    digest = hashlib.sha1(target_shape.encode("utf-8")).hexdigest()[:16] if target_shape else ""
+    # Non-security fingerprinting only: this short digest is a stable structural
+    # grouping hint, not an authenticity or collision-resistance boundary.
+    digest = (
+        hashlib.sha1(target_shape.encode("utf-8")).hexdigest()[:SITE_FINGERPRINT_HEX_LENGTH]
+        if target_shape
+        else ""
+    )
     return {
         "origin": parsed.netloc.lower(),
         "url_pattern": parsed.path or "/",
@@ -267,10 +283,10 @@ def build_target_map(
         targets.append(
             {
                 "id": str(element.get("uid") or f"target-{index}"),
-                "label": label[:160],
+                "label": label[:TARGET_LABEL_MAX_LENGTH],
                 "role": str(element.get("role") or ""),
                 "tag": str(element.get("tag") or ""),
-                "text": str(element.get("text") or "")[:240],
+                "text": str(element.get("text") or "")[:TARGET_TEXT_MAX_LENGTH],
                 "target_kind": str(element.get("target_kind") or "element"),
                 "rect": screenshot_rect(element["document_rect"], scale_x=scale_x, scale_y=scale_y),
                 "selector_candidates": [
@@ -328,7 +344,6 @@ def build_web_snapshot_data(
             "document": blueprint.get("document") or {},
         },
         "source_trees": source_trees,
-        "links": [],
         "projection_catalog": {
             "target_map": {
                 "schema_version": "url_stage_target_map.v0",
@@ -386,6 +401,9 @@ def build_web_snapshot_html(target_map: dict[str, Any]) -> str:
     width = int(dimensions.get("width") or 1)
     height = int(dimensions.get("height") or 1)
     target_html = []
+    # .web-target buttons are deliberately transparent proxy hit areas over a
+    # frozen screenshot: the screenshot remains the visual truth, while real DOM
+    # targets give annotation and replay code stable same-origin anchors.
     for target in target_map.get("targets") or []:
         rect = target.get("rect") if isinstance(target.get("rect"), dict) else {}
         style = (

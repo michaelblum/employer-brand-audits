@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MERMAID_FENCE_RE = re.compile(r"^```\s*mermaid\s*$", re.IGNORECASE | re.MULTILINE)
 MERMAID_SCAN_MAX_BYTES = 512 * 1024
+URL_RESOURCE_ID_SLUG_MAX_LENGTH = 80
 
 IMAGE_SLOTS = {
     "viewport": {
@@ -117,6 +118,11 @@ URL_STAGE_ARTIFACT_SLOTS = {
         "kind": "web_snapshot_data",
         "layer": 1,
     },
+}
+
+URL_STAGE_SUPPORT_RESOURCE_SLOTS = {
+    "page_screenshot": "capture.full_page",
+    "capture_log": "debug.log",
 }
 
 
@@ -418,7 +424,8 @@ def workflow_input_overlays_for_step(step_id: str, required_inputs: list[Any]) -
 
 def audit_url_resource_id(url: str) -> str:
     # TODO: include a short hash suffix so distinct long URLs cannot collide after slug truncation.
-    safe = re.sub(r"[^a-zA-Z0-9]+", "-", url).strip("-").lower()[:80] or "url"
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", url).strip("-").lower()
+    safe = slug[:URL_RESOURCE_ID_SLUG_MAX_LENGTH] or "url"
     return f"resource:url:{safe}"
 
 
@@ -459,6 +466,27 @@ def url_stage_manifest_context(manifest: dict[str, Any]) -> dict[str, Any]:
     )
     context.setdefault("artifact_control_policy", "read-only")
     return context
+
+
+def url_stage_support_file_resources(
+    slug: str,
+    page_artifacts: dict[str, Any],
+    manifest_dir: Path,
+) -> list[dict[str, Any]]:
+    resources: list[dict[str, Any]] = []
+    for key, slot in URL_STAGE_SUPPORT_RESOURCE_SLOTS.items():
+        path_value_raw = page_artifacts.get(key)
+        if not path_value_raw:
+            continue
+        resources.append(
+            local_file_resource(
+                slug,
+                key,
+                url_stage_relative_path(str(path_value_raw), manifest_dir),
+                slot,
+            )
+        )
+    return resources
 
 
 def validate_url_stage_web_snapshot_data(data: dict[str, Any], *, path_value: str) -> dict[str, Any]:
@@ -570,6 +598,18 @@ def project_url_stage_manifest(manifest_path: str | Path) -> dict[str, Any]:
             "artifact_ids": [],
         }
 
+    support_resources = url_stage_support_file_resources(slug, page_artifacts, manifest_dir)
+    resources.extend(support_resources)
+    edges.extend(
+        {
+            "id": f"edge:{resource['id']}:{step_id}",
+            "kind": "supports",
+            "from": resource["id"],
+            "to": step_id,
+        }
+        for resource in support_resources
+    )
+
     projected_artifact_ids: list[str] = []
     web_snapshot_data_key = "web_snapshot_data"
     web_snapshot_data_raw = page_artifacts.get(web_snapshot_data_key)
@@ -577,6 +617,9 @@ def project_url_stage_manifest(manifest_path: str | Path) -> dict[str, Any]:
         raise ValueError(f"URL stage manifest is missing required artifact: {web_snapshot_data_key}")
     web_snapshot_data = read_url_stage_web_snapshot_data(str(web_snapshot_data_raw), manifest_dir)
     web_snapshot_data_facets = url_stage_web_snapshot_data_facets(web_snapshot_data)
+    # URL-stage is an adapter at this boundary: below this point it projects
+    # capture-specific files into generic workbench resources, artifacts,
+    # facets, and groups so the browser shell avoids URL-stage registrations.
     parent_ids_by_key = {
         "web_snapshot": [web_snapshot_data_key],
     }

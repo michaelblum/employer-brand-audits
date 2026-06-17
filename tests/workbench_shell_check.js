@@ -10,6 +10,10 @@ const css = fs.readFileSync(
   path.join(__dirname, "../scripts/artifact_workbench/styles.css"),
   "utf-8",
 );
+const app = fs.readFileSync(
+  path.join(__dirname, "../scripts/artifact_workbench/app.js"),
+  "utf-8",
+);
 
 assert.match(html, /<button class="overview-button" id="overview"/);
 assert.match(html, /<div class="toolbar-middle" id="toolbar-middle">/);
@@ -22,3 +26,4 @@ assert.match(html, /id="menu-button"/);
 assert.match(html, /id="toggle-sidebar"/);
 assert.doesNotMatch(html, /<div class="top-spacer"><\/div>/);
 assert.match(css, /\.artifact-subtype-icon\s*\{[\s\S]*cursor:\s*help;/);
+assert.doesNotMatch(app, /web-snapshot-preview-body/);

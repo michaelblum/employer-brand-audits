@@ -35,7 +35,7 @@
       markdownSourceHidden: true,
     };
     if (isWebSnapshotArtifact(artifact)) {
-      surfaces.webSnapshotBodyClass = true;
+      surfaces.markdownPreviewBodyClass = "web-snapshot-preview-body";
     }
     return {
       renderKind: "html",
