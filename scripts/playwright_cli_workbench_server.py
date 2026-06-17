@@ -47,6 +47,7 @@ WORKBENCH_STATE_PATH = "/api/workbench-state"
 WORKBENCH_CONTEXT_PATH = "/api/workbench-context"
 SERVER_SOURCE_FILES = [
     Path(__file__).resolve(),
+    Path(__file__).resolve().parent / "workbench_bounded_input.py",
     Path(__file__).resolve().parent / "workbench_projection.py",
 ]
 WORKBENCH_ASSETS = {

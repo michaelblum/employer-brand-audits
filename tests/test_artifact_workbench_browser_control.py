@@ -1237,6 +1237,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
 
     def test_workbench_asset_health_fetches_manifest_and_registered_assets(self) -> None:
         expected_manifest = gate.build_workbench_asset_manifest()
+        self.assertIn(
+            "scripts/workbench_bounded_input.py",
+            [source["path"] for source in expected_manifest["server_sources"]],
+        )
         served_manifest = {
             **expected_manifest,
             "startup_server_source_fingerprint": expected_manifest["server_source_fingerprint"],
