@@ -1848,12 +1848,20 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         from argparse import Namespace
         from scripts import eba_cli
 
+        artifact_root = eba_cli.REPO_ROOT / "artifacts"
+        artifact_root.mkdir(exist_ok=True)
+        temp_root = tempfile.TemporaryDirectory(prefix=".workbench-active-", dir=artifact_root)
+        self.addCleanup(temp_root.cleanup)
+        active_manifest = Path(temp_root.name) / "manifest.json"
+        active_manifest.write_text('{"artifacts": []}\n', encoding="utf-8")
+        manifest_label = str(active_manifest.relative_to(eba_cli.REPO_ROOT))
+
         commands: list[list[str]] = []
         releases: list[Path] = []
 
         class StatusResult:
             returncode = 0
-            stdout = '{"active_manifest":"artifacts/easy-audit/latest/manifest.json"}\n'
+            stdout = json.dumps({"active_manifest": manifest_label}) + "\n"
             stderr = ""
 
         class SurfaceResult:
@@ -1883,7 +1891,6 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             eba_cli.run = original_run  # type: ignore[assignment]
             eba_cli.release_default_demo_server = original_release  # type: ignore[assignment]
 
-        active_manifest = eba_cli.REPO_ROOT / "artifacts/easy-audit/latest/manifest.json"
         self.assertEqual(exit_code, 0)
         self.assertEqual(releases, [active_manifest])
         self.assertEqual(
@@ -1915,13 +1922,20 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         from argparse import Namespace
         from scripts import eba_cli
 
+        artifact_root = eba_cli.REPO_ROOT / "artifacts"
+        artifact_root.mkdir(exist_ok=True)
+        temp_root = tempfile.TemporaryDirectory(prefix=".workbench-active-", dir=artifact_root)
+        self.addCleanup(temp_root.cleanup)
+        active_manifest = Path(temp_root.name) / "manifest.json"
+        active_manifest.write_text('{"artifacts": []}\n', encoding="utf-8")
+        manifest_label = str(active_manifest.relative_to(eba_cli.REPO_ROOT))
+
         manifests: list[Path] = []
-        active_manifest = eba_cli.REPO_ROOT / "artifacts/easy-audit/latest/manifest.json"
 
         def fake_workbench_status(manifest: Path) -> dict[str, object]:
             manifests.append(manifest)
             return {
-                "active_manifest": "artifacts/easy-audit/latest/manifest.json",
+                "active_manifest": manifest_label,
                 "manifest": str(manifest.relative_to(eba_cli.REPO_ROOT)),
                 "owned": True,
             }
@@ -1956,7 +1970,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertTrue(payload["artifact_workbench"]["owned"])
         self.assertEqual(
             payload["artifact_workbench"]["manifest"],
-            "artifacts/easy-audit/latest/manifest.json",
+            manifest_label,
         )
 
     def test_eba_workbench_context_dispatches_gate_state(self) -> None:
