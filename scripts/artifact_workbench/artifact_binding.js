@@ -42,6 +42,7 @@
         imageNaturalHeight: imageEl.naturalHeight || 0,
         markdownContentById: currentContext.markdownContentById,
         documentContentById: currentContext.documentContentById,
+        controlPolicy: currentContext.controlPolicy,
         markdown: markdown(),
         document: documentRenderer(),
         html: html(),

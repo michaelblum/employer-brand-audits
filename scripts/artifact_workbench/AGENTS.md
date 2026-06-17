@@ -22,12 +22,31 @@ and app shell JavaScript.
 - HTML artifacts use the shared document stage and annotation editor; the shell
   may route saved `html_element` anchors to the marker/popover, but HTML
   identity extraction and inspector binding stay with the HTML type/primitive.
+- Bounded intake fields are rendered as `bounded_input` interaction overlays
+  attached to projected workflow step/input ids. Persist them through the
+  workbench state surface as overlay state plus an agent-readable
+  `bounded_inputs` summary; do not collapse them into annotation comments.
+- Stage-level workflow pairing overlays may visually connect bounded input
+  panels to resolved artifact DOM/SVG targets. Keep those pairings selector- and
+  anchor-driven through projection data or adapter helpers; do not hardcode
+  Mermaid-generated element ids in the app shell. Render the visible chase
+  highlight and connector through the reusable `target_link.js` primitive; the
+  shell may supply per-instance options from projected `target_link` data.
+- The stage is the shared vertical scroll boundary for rendered artifacts.
+  Document-like artifact surfaces fill the stage height and must not introduce
+  nested vertical preview scroll panes. Image artifacts keep zoom behavior and
+  center within the stage only when the zoomed image fits without scrollbars.
 - `styles.css` owns the static workbench stylesheet, including shared toolbar
   and current type-control classes, until a deliberate per-type CSS asset
   boundary exists. Do not add artifact-type behavior to the shell JavaScript to
   compensate for CSS staying here.
 - Keep shared slot rendering generic in this folder; do not hardcode image,
   markdown, or future artifact-type toolbar controls in the app shell.
+- Active workbench context may set presentation policy such as
+  `artifact_control_policy: read-only` or
+  `mermaid_source_visibility: preview-hidden`. The app shell passes those
+  policies to artifact components and primitives; do not hardcode the behavior
+  to one artifact type or fixture.
 - Workbench assets must remain compatible with the server asset manifest and
   stale-server detection.
 

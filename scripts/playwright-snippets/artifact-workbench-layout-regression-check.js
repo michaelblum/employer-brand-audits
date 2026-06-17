@@ -6,30 +6,35 @@ async (page) => {
   const model = await page.evaluate(async () => {
     const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
     const artifacts = state.collection?.artifacts || [];
-    const imageIndex = artifacts.findIndex((artifact) => (
+    const fullPageImageIndex = artifacts.findIndex((artifact) => (
       artifact.type === "image" && /full.page|full page/i.test(`${artifact.name || ""} ${artifact.path || ""}`)
     ));
-    const fitImageIndex = artifacts.findIndex((artifact, index) => (
-      artifact.type === "image" && index !== imageIndex && /viewport/i.test(`${artifact.name || ""} ${artifact.path || ""}`)
+    const imageIndex = fullPageImageIndex >= 0
+      ? fullPageImageIndex
+      : artifacts.findIndex((artifact) => artifact.type === "image");
+    const htmlIndex = artifacts.findIndex((artifact) => artifact.type === "html");
+    const documentIndex = artifacts.findIndex((artifact) => (
+      ["json", "text", "log", "file"].includes(String(artifact.type || "").toLowerCase())
     ));
     const tableMarkdownIndex = artifacts.findIndex((artifact) => (
       artifact.type === "markdown" && /kilos|analysis/i.test(`${artifact.kind || ""} ${artifact.path || ""}`)
     ));
-    const finalReportMarkdownIndex = artifacts.findIndex((artifact) => (
-      artifact.type === "markdown"
-        && /final employer brand audit/i.test(`${artifact.name || ""} ${artifact.summary || ""} ${artifact.path || ""}`)
+    const finalReportHtmlIndex = artifacts.findIndex((artifact) => (
+      artifact.id === "l4-final-report" && artifact.type === "html"
     ));
     const markdownIndex = tableMarkdownIndex >= 0
       ? tableMarkdownIndex
       : artifacts.findIndex((artifact) => artifact.type === "markdown");
     if (imageIndex < 0) throw new Error("No image artifact in collection");
-    if (fitImageIndex < 0) throw new Error("No viewport fit image artifact in collection");
     if (markdownIndex < 0) throw new Error("No markdown artifact in collection");
+    if (htmlIndex < 0) throw new Error("No html artifact in collection");
+    if (documentIndex < 0) throw new Error("No document artifact in collection");
     return {
       imageIndex,
-      fitImageIndex,
       markdownIndex,
-      finalReportMarkdownIndex,
+      finalReportHtmlIndex,
+      htmlIndex,
+      documentIndex,
       expectsMarkdownTable: tableMarkdownIndex >= 0,
     };
   });
@@ -50,11 +55,7 @@ async (page) => {
     const image = document.querySelector("#artifact-image");
     const wrap = document.querySelector("#image-wrap");
     if (!stage || !image || !image.complete || !image.naturalWidth) return false;
-    const stageRect = stage.getBoundingClientRect();
-    const imageRect = image.getBoundingClientRect();
-    return !wrap?.classList.contains("centered")
-      && Math.abs(imageRect.width - stageRect.width) <= 2
-      && imageRect.height > stageRect.height + 1;
+    return Boolean(wrap);
   }, null, { timeout: 3000 });
   const imageLayout = await page.evaluate(() => {
     const shell = document.querySelector("#shell");
@@ -101,6 +102,7 @@ async (page) => {
       stagePadding,
       imageTopDelta: Math.abs(imageRect.top - stageRect.top),
       imageBottomDelta: Math.abs(imageRect.bottom - stageRect.bottom),
+      imageFitsStage: imageRect.width <= stageRect.width + 1 && imageRect.height <= stageRect.height + 1,
       shellRight: shellRect.right,
       shellPosition: shellStyle.position,
       shellTop: shellRect.top,
@@ -116,21 +118,31 @@ async (page) => {
     };
   });
   if (imageLayout.stageHasMarkdownClass) throw new Error("Image stage should not keep markdown-stage class");
-  if (imageLayout.centered) throw new Error(`Scrollable full-page screenshot should not use no-scroll centered alignment: ${JSON.stringify(imageLayout)}`);
-  if (Math.abs(imageLayout.imageWidth - imageLayout.stageWidth) > 2) {
-    throw new Error(`Full-page screenshot should fit the stage width: ${JSON.stringify(imageLayout)}`);
-  }
-  if (imageLayout.imageHeight <= imageLayout.stageHeight + 1 || imageLayout.stageScrollHeight <= imageLayout.stageClientHeight + 1) {
-    throw new Error(`Full-page screenshot should scroll vertically after width fit: ${JSON.stringify(imageLayout)}`);
-  }
-  if (imageLayout.visibleCenterDelta.x > 2) {
-    throw new Error(`Full-page screenshot should stay horizontally centered: ${JSON.stringify(imageLayout)}`);
+  if (imageLayout.imageFitsStage) {
+    if (!imageLayout.centered) throw new Error(`Fit image should use no-scroll centered alignment: ${JSON.stringify(imageLayout)}`);
+    if (imageLayout.stageScrollWidth > imageLayout.stageClientWidth + 1 || imageLayout.stageScrollHeight > imageLayout.stageClientHeight + 1) {
+      throw new Error(`Fit image should not require stage scrollbars: ${JSON.stringify(imageLayout)}`);
+    }
+    if (imageLayout.visibleCenterDelta.x > 2 || imageLayout.visibleCenterDelta.y > 2) {
+      throw new Error(`Fit image should be centered in the stage: ${JSON.stringify(imageLayout)}`);
+    }
+  } else {
+    if (imageLayout.centered) throw new Error(`Scrollable screenshot should not use no-scroll centered alignment: ${JSON.stringify(imageLayout)}`);
+    if (Math.abs(imageLayout.imageWidth - imageLayout.stageWidth) > 2) {
+      throw new Error(`Scrollable screenshot should fit the stage width: ${JSON.stringify(imageLayout)}`);
+    }
+    if (imageLayout.imageHeight <= imageLayout.stageHeight + 1 || imageLayout.stageScrollHeight <= imageLayout.stageClientHeight + 1) {
+      throw new Error(`Scrollable screenshot should scroll vertically after width fit: ${JSON.stringify(imageLayout)}`);
+    }
+    if (imageLayout.visibleCenterDelta.x > 2) {
+      throw new Error(`Scrollable screenshot should stay horizontally centered: ${JSON.stringify(imageLayout)}`);
+    }
+    if (imageLayout.imageTopDelta > 1) {
+      throw new Error(`Scrollable screenshot should start at the top of the scrollable stage: ${JSON.stringify(imageLayout)}`);
+    }
   }
   if (imageLayout.stagePadding.top || imageLayout.stagePadding.right || imageLayout.stagePadding.bottom || imageLayout.stagePadding.left) {
     throw new Error(`Stage should not own projection padding: ${JSON.stringify(imageLayout)}`);
-  }
-  if (imageLayout.imageTopDelta > 1) {
-    throw new Error(`Full-page screenshot should start at the top of the scrollable stage: ${JSON.stringify(imageLayout)}`);
   }
   if (Math.abs(imageLayout.shellRight - imageLayout.viewportWidth) > 1 || Math.abs(imageLayout.sidebarRight - imageLayout.viewportWidth) > 1) {
     throw new Error(`Shell/sidebar should fill to the viewport right edge: ${JSON.stringify(imageLayout)}`);
@@ -151,16 +163,8 @@ async (page) => {
     throw new Error(`Workbench shell should not create horizontal overflow: ${JSON.stringify(imageLayout)}`);
   }
 
-  await page.evaluate((index) => {
-    const row = document.querySelector(`.artifact-row[data-index="${index}"]`);
-    if (!row) throw new Error(`Viewport fit image artifact row not found: ${index}`);
-    row.click();
-  }, model.fitImageIndex);
-  await page.waitForFunction(() => {
-    const image = document.querySelector("#artifact-image");
-    return image?.complete && image.naturalWidth > 0 && !document.querySelector("#image-wrap")?.hidden;
-  }, null, { timeout: 5000 });
-  await page.click("#zoom-fit", { timeout: 3000 });
+  await page.fill("#zoom-input", "10%");
+  await page.dispatchEvent("#zoom-input", "change");
   await page.waitForFunction(
     () => document.querySelector("#image-wrap")?.classList.contains("centered"),
     null,
@@ -203,6 +207,28 @@ async (page) => {
     throw new Error(`Viewport fit image should have balanced stage empty space: ${JSON.stringify(fitImageLayout)}`);
   }
 
+  await page.evaluate(() => {
+    window.__ebaNestedDocumentScrollers = () => {
+      const stage = document.querySelector("#stage");
+      if (!stage) return [];
+      return [...stage.querySelectorAll(".artifact-document, .artifact-document-scroll, .html-artifact-frame-wrap, .html-artifact-frame")]
+        .filter((element) => {
+          if (element.hidden || element.offsetParent === null) return false;
+          const style = getComputedStyle(element);
+          const verticalScrollable = /(auto|scroll)/.test(style.overflowY)
+            && element.scrollHeight > element.clientHeight + 1;
+          return verticalScrollable;
+        })
+        .map((element) => ({
+          id: element.id,
+          className: element.className,
+          overflowY: getComputedStyle(element).overflowY,
+          clientHeight: element.clientHeight,
+          scrollHeight: element.scrollHeight,
+        }));
+    };
+  });
+
   await page.evaluate((index) => {
     const row = document.querySelector(`.artifact-row[data-index="${index}"]`);
     if (!row) throw new Error(`Markdown artifact row not found: ${index}`);
@@ -225,17 +251,31 @@ async (page) => {
     const preview = document.querySelector("#markdown-preview");
     const body = document.querySelector("#markdown-preview-body");
     preview.scrollTop = preview.scrollHeight;
+    const previewScrollTopAfterSet = preview.scrollTop;
+    stage.scrollTop = stage.scrollHeight;
     const renderedBlocks = [...body.querySelectorAll("h1, h2, h3, p, li, pre, figure")];
     const lastBlock = renderedBlocks[renderedBlocks.length - 1];
-    const previewRect = preview.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
     const lastRect = lastBlock.getBoundingClientRect();
+    const stageStyle = getComputedStyle(stage);
     const documentStyle = getComputedStyle(wrap);
     const previewStyle = getComputedStyle(preview);
     const previewAfterStyle = getComputedStyle(preview, "::after");
     const bodyStyle = getComputedStyle(body);
     return {
-      stageOverflow: getComputedStyle(stage).overflow,
+      stageOverflow: stageStyle.overflow,
+      stageOverflowY: stageStyle.overflowY,
+      stageClientHeight: stage.clientHeight,
+      stageScrollHeight: stage.scrollHeight,
+      stageScrollTop: stage.scrollTop,
       wrapHeight: wrap.getBoundingClientRect().height,
+      wrapTop: wrapRect.top,
+      wrapBottom: wrapRect.bottom,
+      stageTop: stageRect.top,
+      stageBottom: stageRect.bottom,
+      wrapOverflowY: documentStyle.overflowY,
+      previewOverflowY: previewStyle.overflowY,
       documentMarginTop: documentStyle.marginTop,
       documentMarginRight: documentStyle.marginRight,
       documentMarginBottom: documentStyle.marginBottom,
@@ -259,17 +299,30 @@ async (page) => {
       artifactDocumentBodyClass: body.classList.contains("artifact-document-body"),
       artifactProjectionClass: body.classList.contains("artifact-projection-markdown"),
       tableScrollBaseClass: Boolean(body.querySelector(".artifact-document-table-scroll")),
-      scrollTop: preview.scrollTop,
+      previewScrollTopAfterSet,
       lastBlockText: lastBlock.textContent.trim().slice(0, 80),
       lastBlockBottom: lastRect.bottom,
-      previewBottom: previewRect.bottom,
+      stageRelativeLastBottom: lastRect.bottom - stageRect.top,
+      nestedDocumentScrollers: window.__ebaNestedDocumentScrollers(),
     };
   });
-  if (markdownLayout.stageOverflow !== "hidden") {
-    throw new Error(`Markdown stage should hide outer scroll: ${JSON.stringify(markdownLayout)}`);
+  if (!/(auto|scroll)/.test(markdownLayout.stageOverflowY)) {
+    throw new Error(`Markdown stage should own document scrolling: ${JSON.stringify(markdownLayout)}`);
   }
-  if (markdownLayout.lastBlockBottom > markdownLayout.previewBottom + 1) {
-    throw new Error(`Markdown preview bottom is clipped: ${JSON.stringify(markdownLayout)}`);
+  if (markdownLayout.previewOverflowY !== "visible" || markdownLayout.wrapOverflowY !== "visible") {
+    throw new Error(`Markdown artifact should not create a nested vertical scroller: ${JSON.stringify(markdownLayout)}`);
+  }
+  if (markdownLayout.nestedDocumentScrollers.length) {
+    throw new Error(`Markdown artifact has nested vertical scroll containers: ${JSON.stringify(markdownLayout)}`);
+  }
+  if (markdownLayout.previewScrollTopAfterSet !== 0) {
+    throw new Error(`Markdown preview should not accept nested scrollTop changes: ${JSON.stringify(markdownLayout)}`);
+  }
+  if (markdownLayout.wrapHeight < markdownLayout.stageClientHeight - 1) {
+    throw new Error(`Markdown artifact should fill at least the stage height: ${JSON.stringify(markdownLayout)}`);
+  }
+  if (markdownLayout.lastBlockBottom > markdownLayout.stageBottom + 1) {
+    throw new Error(`Markdown stage bottom is clipped after stage scroll: ${JSON.stringify(markdownLayout)}`);
   }
   if (/Georgia|Times New Roman/i.test(markdownLayout.previewFontFamily)) {
     throw new Error(`Markdown preview should not use document-serif body text: ${JSON.stringify(markdownLayout)}`);
@@ -294,91 +347,6 @@ async (page) => {
   }
   if (model.expectsMarkdownTable && !markdownLayout.tableScrollBaseClass) {
     throw new Error(`Markdown table scroll should use shared artifact-document table structure: ${JSON.stringify(markdownLayout)}`);
-  }
-
-  let finalReportLayout = null;
-  if (model.finalReportMarkdownIndex >= 0) {
-    await page.evaluate((index) => {
-      const row = document.querySelector(`.artifact-row[data-index="${index}"]`);
-      if (!row) throw new Error(`Final report markdown artifact row not found: ${index}`);
-      row.click();
-    }, model.finalReportMarkdownIndex);
-    await page.waitForFunction(() => {
-      const preview = document.querySelector("#markdown-preview");
-      const title = document.querySelector("#artifact-title")?.textContent || "";
-      return preview
-        && !preview.hidden
-        && /Final employer brand audit/i.test(title)
-        && preview.querySelector("h1, h2, h3, p, li, pre, figure, table");
-    }, null, { timeout: 5000 });
-    finalReportLayout = await page.evaluate(() => {
-    const stage = document.querySelector("#stage");
-    const wrap = document.querySelector("#markdown-wrap");
-    const preview = document.querySelector("#markdown-preview");
-    const body = document.querySelector("#markdown-preview-body");
-    preview.scrollTop = preview.scrollHeight;
-    const renderedBlocks = [...body.querySelectorAll("h1, h2, h3, p, li, pre, figure, table")];
-    const lastBlock = renderedBlocks[renderedBlocks.length - 1];
-    const recommendedHeading = [...body.querySelectorAll("h2")]
-      .find((heading) => /Recommended Edits/i.test(heading.textContent || ""));
-    const recommendedList = recommendedHeading?.nextElementSibling?.tagName === "OL"
-      ? recommendedHeading.nextElementSibling
-      : null;
-    const stageRect = stage.getBoundingClientRect();
-    const wrapRect = wrap.getBoundingClientRect();
-    const previewRect = preview.getBoundingClientRect();
-    const lastRect = lastBlock.getBoundingClientRect();
-    const listRect = recommendedList?.getBoundingClientRect();
-    const listStyle = recommendedList ? getComputedStyle(recommendedList) : null;
-    const itemRects = [...(recommendedList?.querySelectorAll("li") || [])].map((item) => {
-      const rect = item.getBoundingClientRect();
-      const range = document.createRange();
-      range.selectNodeContents(item);
-      const textRect = range.getBoundingClientRect();
-      range.detach();
-      return {
-        text: item.textContent.trim(),
-        rect: rect.toJSON(),
-        textRect: textRect.toJSON(),
-      };
-    });
-    return {
-      stageBottom: stageRect.bottom,
-      wrapBottom: wrapRect.bottom,
-      previewBottom: previewRect.bottom,
-      previewRight: previewRect.right,
-      lastBlockBottom: lastRect.bottom,
-      lastBlockText: lastBlock.textContent.trim().slice(0, 80),
-      lastBlockGapToPreviewBottom: previewRect.bottom - lastRect.bottom,
-      recommendedListBottom: listRect?.bottom ?? null,
-      recommendedListMarginBottom: listStyle?.marginBottom ?? null,
-      recommendedListPaddingLeft: listStyle?.paddingLeft ?? null,
-      recommendedItemRects: itemRects,
-      scrollTop: preview.scrollTop,
-      previewClientHeight: preview.clientHeight,
-      previewScrollHeight: preview.scrollHeight,
-    };
-    });
-    if (finalReportLayout.wrapBottom > finalReportLayout.stageBottom + 1) {
-      throw new Error(`Final report markdown card extends below visible stage: ${JSON.stringify(finalReportLayout)}`);
-    }
-    if (finalReportLayout.lastBlockBottom > finalReportLayout.stageBottom + 1) {
-      throw new Error(`Final report bottom remains clipped by the stage: ${JSON.stringify(finalReportLayout)}`);
-    }
-    if (finalReportLayout.lastBlockGapToPreviewBottom < 220) {
-      throw new Error(`Final report markdown needs more end-of-document breathing room: ${JSON.stringify(finalReportLayout)}`);
-    }
-    if (!Number.isFinite(finalReportLayout.recommendedListBottom)) {
-      throw new Error(`Final report recommended edits list was not rendered as an ordered list: ${JSON.stringify(finalReportLayout)}`);
-    }
-    if (finalReportLayout.recommendedListBottom > finalReportLayout.previewBottom - 48) {
-      throw new Error(`Final report recommended edits list lacks bottom breathing room: ${JSON.stringify(finalReportLayout)}`);
-    }
-    for (const item of finalReportLayout.recommendedItemRects) {
-      if (item.textRect.right > finalReportLayout.previewRight - 24) {
-        throw new Error(`Final report recommended edits item text is horizontally clipped: ${JSON.stringify(finalReportLayout)}`);
-      }
-    }
   }
 
   const artifactDocumentTheme = await page.evaluate(() => {
@@ -435,5 +403,101 @@ async (page) => {
     throw new Error(`Artifact document restored dark mode should not use legacy markdown dataset hooks: ${JSON.stringify(restoredArtifactDocumentTheme)}`);
   }
 
-  return { imageLayout, fitImageLayout, markdownLayout, finalReportLayout, artifactDocumentTheme, lightArtifactDocumentTheme, restoredArtifactDocumentTheme };
+  const documentSurfaceLayout = async (index, label) => {
+    await page.evaluate((targetIndex) => {
+      const row = document.querySelector(`.artifact-row[data-index="${targetIndex}"]`);
+      if (!row) throw new Error(`Artifact row not found: ${targetIndex}`);
+      row.click();
+    }, index);
+    await page.waitForFunction(() => {
+      const stage = document.querySelector("#stage");
+      const wrap = document.querySelector("#markdown-wrap");
+      const preview = document.querySelector("#markdown-preview");
+      const body = document.querySelector("#markdown-preview-body");
+      return stage?.classList.contains("markdown-stage")
+        && wrap
+        && !wrap.hidden
+        && preview
+        && !preview.hidden
+        && body?.querySelector("[data-artifact-renderer]");
+    }, null, { timeout: 5000 });
+    const layout = await page.evaluate((surfaceLabel) => {
+      const stage = document.querySelector("#stage");
+      const wrap = document.querySelector("#markdown-wrap");
+      const preview = document.querySelector("#markdown-preview");
+      const frame = document.querySelector("[data-html-frame]");
+      stage.scrollTop = 0;
+      preview.scrollTop = preview.scrollHeight;
+      const previewScrollTopAfterSet = preview.scrollTop;
+      const stageRect = stage.getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      const frameDoc = frame?.contentDocument || null;
+      const frameDocHeight = frameDoc
+        ? Math.max(
+          frameDoc.body?.scrollHeight || 0,
+          frameDoc.documentElement?.scrollHeight || 0,
+          frameDoc.body?.offsetHeight || 0,
+          frameDoc.documentElement?.offsetHeight || 0,
+        )
+        : null;
+      return {
+        label: surfaceLabel,
+        stageClientHeight: stage.clientHeight,
+        stageScrollHeight: stage.scrollHeight,
+        stageOverflowY: getComputedStyle(stage).overflowY,
+        wrapHeight: wrapRect.height,
+        wrapTopDelta: Math.abs(wrapRect.top - stageRect.top),
+        wrapOverflowY: getComputedStyle(wrap).overflowY,
+        previewOverflowY: getComputedStyle(preview).overflowY,
+        previewScrollTopAfterSet,
+        nestedDocumentScrollers: window.__ebaNestedDocumentScrollers(),
+        frameHeight: frame?.clientHeight ?? null,
+        frameDocHeight,
+        frameScrolling: frame?.getAttribute("scrolling") || null,
+      };
+    }, label);
+    if (!/(auto|scroll)/.test(layout.stageOverflowY)) {
+      throw new Error(`${label} stage should own document scrolling: ${JSON.stringify(layout)}`);
+    }
+    if (layout.wrapHeight < layout.stageClientHeight - 1 || layout.wrapTopDelta > 1) {
+      throw new Error(`${label} artifact should fill the visible stage height from the top: ${JSON.stringify(layout)}`);
+    }
+    if (layout.previewOverflowY !== "visible" || layout.wrapOverflowY !== "visible") {
+      throw new Error(`${label} artifact should not create a nested vertical scroller: ${JSON.stringify(layout)}`);
+    }
+    if (layout.previewScrollTopAfterSet !== 0 || layout.nestedDocumentScrollers.length) {
+      throw new Error(`${label} artifact has nested vertical scrolling: ${JSON.stringify(layout)}`);
+    }
+    if (layout.frameDocHeight !== null && layout.frameHeight + 2 < layout.frameDocHeight) {
+      throw new Error(`${label} iframe should expand to content height: ${JSON.stringify(layout)}`);
+    }
+    return layout;
+  };
+
+  const finalReportLayout = await documentSurfaceLayout(
+    model.finalReportHtmlIndex >= 0 ? model.finalReportHtmlIndex : model.htmlIndex,
+    "Final report HTML",
+  );
+  const reportSurface = await page.evaluate(() => {
+    const frame = document.querySelector("[data-html-frame]");
+    const doc = frame?.contentDocument;
+    return {
+      surface: doc?.querySelector("[data-report-surface]")?.getAttribute("data-report-surface") || "",
+      ledgerRows: doc?.querySelectorAll("#candidate-signal-ledger tbody tr").length || 0,
+      scoreTiles: doc?.querySelectorAll("[data-kilos-score]").length || 0,
+    };
+  });
+  if (
+    reportSurface.surface !== "signal-brief"
+    || reportSurface.ledgerRows < 3
+    || reportSurface.scoreTiles < 5
+  ) {
+    throw new Error(`Final report HTML surface drifted: ${JSON.stringify(reportSurface)}`);
+  }
+  const htmlLayout = model.htmlIndex === model.finalReportHtmlIndex
+    ? finalReportLayout
+    : await documentSurfaceLayout(model.htmlIndex, "HTML");
+  const documentLayout = await documentSurfaceLayout(model.documentIndex, "Document");
+
+  return { imageLayout, fitImageLayout, markdownLayout, finalReportLayout, htmlLayout, documentLayout, reportSurface, artifactDocumentTheme, lightArtifactDocumentTheme, restoredArtifactDocumentTheme };
 }

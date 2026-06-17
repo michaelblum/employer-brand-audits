@@ -6,7 +6,7 @@
   function stagePlan() {
     return {
       renderKind: "markdown",
-      stage: { markdownStage: true, resetScroll: false },
+      stage: { markdownStage: true, resetScroll: true },
       surfaces: {
         imageWrapHidden: true,
         markdownWrapHidden: false,
@@ -55,6 +55,7 @@
       readoutLabel: "Markdown",
       readoutValue: readout(options),
       controls: [{ id: "markdown-controls", html: renderControls() }],
+      controlPolicy: options.controlPolicy,
     });
   }
 

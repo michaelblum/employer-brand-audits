@@ -22,6 +22,16 @@ workbench implementation, and checked-in Playwright snippets.
 - Viewer code owns interaction, centering, and zoom bounds. Artifact processing
   owns image normalization, rendered-height caps, codec policy, and subtype
   overrides.
+- `./eba dev stage-url <url>` captures a live URL through the Playwright CLI
+  boundary into `artifacts/url-stage/<slug>/latest/manifest.json`. It writes a
+  disk screenshot, one canonical `web-snapshot-data.json`, a capture log, and a
+  same-origin synthetic `web-snapshot.html`.
+- URL-stage projection emits the staged page as `type: html`,
+  `kind: web_snapshot` plus one supporting `kind: web_snapshot_data` JSON
+  artifact; the app shell must not need URL-stage-specific component
+  registration. Target-map rects stay in screenshot coordinate space inside the
+  data file. Selector candidates remain advisory replay/mining hints, while
+  annotations and overlays are the natural-language intent spine.
 
 ## Work Guidance
 
@@ -34,15 +44,32 @@ workbench implementation, and checked-in Playwright snippets.
   `playwright_cli_workbench_gate.py`; keep tab cleanup, focus, maximize, and
   viewport sync as separate operations so tests can guard their side effects.
 - Keep fixture generation separate from generated runtime output.
+- The deterministic easy-audit fixture treats `l4-final-report` as the single
+  L4 report artifact and projects it as HTML. Keep Mermaid/markdown smoke
+  coverage on markdown artifacts such as `l0-intake-flow`, not by restoring a
+  markdown report duplicate.
+- Keep URL-stage capture fixtures deterministic and local. Public URLs may be
+  used manually, but validation should rely on the checked-in
+  `scripts/playwright-fixtures/url-stage-basic.html` fixture.
+- URL-stage `web-snapshot-data.json` should carry data and projection
+  descriptors, not executable transformation code. User-facing UI views are a
+  curated subset of machine projections.
 
 ## Verification
 
 - Run focused syntax checks for changed Python or JavaScript files.
 - Run `./eba dev validate` before checkpointing substantive script changes.
+- For workbench shell/toolbar structure changes, run
+  `node tests/workbench_shell_check.js`.
 - Run `./eba dev demo` and relevant Playwright smoke snippets when workbench
   behavior is tangible. For browser-loaded workbench asset or app-shell changes,
   prefer `./eba dev workbench live-smoke --fixture easy-audit --json` as the
   bounded live runtime check.
+- For URL-stage changes, run `python3 tests/test_url_stage_capture.py`,
+  `python3 scripts/workbench_projection_shape_check.py`, `node --check
+  scripts/playwright-snippets/artifact-workbench-web-snapshot-check.js`, and a
+  live smoke of `artifact-workbench-web-snapshot-check.js` against a generated
+  local fixture manifest.
 
 ## Child DOX Index
 

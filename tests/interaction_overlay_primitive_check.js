@@ -13,11 +13,15 @@ const overlay = window.ArtifactPrimitives.interactionOverlay;
   "annotationOverlays",
   "annotationText",
   "beginOverlayDraft",
+  "boundedInputOverlayValues",
+  "boundedInputOverlays",
   "closedEditorSession",
   "commitOverlayEditorIntent",
+  "connectorPathBetweenRects",
   "completeOverlayDraft",
   "completeResolvedOverlayDraft",
   "createEditorSession",
+  "displayRectForDomElementAnchor",
   "displayRectForAnchor",
   "editorLabels",
   "existingOverlayEditorPlan",
@@ -27,6 +31,7 @@ const overlay = window.ArtifactPrimitives.interactionOverlay;
   "secondaryOverlayEditorIntent",
   "supportedOverlaySubtypes",
   "overlaySubtypeModel",
+  "upsertBoundedInputOverlay",
 ].forEach((name) => {
   assert.equal(typeof overlay[name], "function", `${name} should be public`);
 });
@@ -69,6 +74,11 @@ const htmlAnchor = {
   text: "Apply now for robotics roles",
   rect: { x: 20, y: 30, width: 140, height: 44 },
 };
+const domAnchor = {
+  type: "dom_element",
+  coordinate_space: "artifact_dom",
+  selector_candidates: ["[", '[data-id="intake"]'],
+};
 const editingNote = {
   id: "note-1",
   subtype: "annotation",
@@ -87,13 +97,20 @@ const persistedNote = {
 };
 const persistedInteractionOverlays = [persistedNote];
 
-assert.deepEqual(overlay.supportedOverlaySubtypes(), ["annotation"]);
+assert.deepEqual(overlay.supportedOverlaySubtypes(), ["annotation", "bounded_input"]);
 assert.deepEqual(overlay.overlaySubtypeModel("annotation"), {
   subtype: "annotation",
   editorModes: ["create", "edit"],
   anchorTypes: ["image_region", "text_range", "html_element"],
   draftTypes: ["image", "markdown"],
   intentActions: ["append", "update", "delete", "cancel"],
+});
+assert.deepEqual(overlay.overlaySubtypeModel("bounded_input"), {
+  subtype: "bounded_input",
+  editorModes: ["fill"],
+  anchorTypes: ["workflow_input"],
+  draftTypes: [],
+  intentActions: ["set", "clear"],
 });
 assert.equal(overlay.overlaySubtypeModel("unknown"), null);
 
@@ -105,6 +122,58 @@ assert.deepEqual(overlay.editorLabels({ subtype: "annotation", mode: "edit" }), 
   primary: "Update",
   secondary: "Delete",
 });
+assert.deepEqual(overlay.editorLabels({ subtype: "bounded_input", mode: "fill" }), {
+  primary: "Save",
+  secondary: "Clear",
+});
+
+const boundedInputOverlay = overlay.upsertBoundedInputOverlay({
+  interactionOverlays: persistedInteractionOverlays,
+  definition: {
+    id: "input:l0-seed-intake:company",
+    subtype: "bounded_input",
+    step_id: "l0-seed-intake",
+    input_id: "company",
+    label: "Company",
+    input_type: "text",
+    subject: { kind: "workflow_step", id: "l0-seed-intake" },
+    anchor: {
+      type: "workflow_input",
+      coordinate_space: "workflow_graph",
+      artifact_id: "l0-intake-flow",
+      step_id: "l0-seed-intake",
+      input_id: "company",
+    },
+  },
+  value: "Acme Robotics",
+  nowMs: 1781423000456,
+});
+assert.equal(boundedInputOverlay.length, 2);
+assert.deepEqual(boundedInputOverlay[1], {
+  id: "input:l0-seed-intake:company",
+  subtype: "bounded_input",
+  subject: { kind: "workflow_step", id: "l0-seed-intake" },
+  anchor: {
+    type: "workflow_input",
+    coordinate_space: "workflow_graph",
+    artifact_id: "l0-intake-flow",
+    step_id: "l0-seed-intake",
+    input_id: "company",
+  },
+  body: { kind: "input_value", value: "Acme Robotics" },
+  created_at_epoch: 1781423000,
+  updated_at_epoch: null,
+});
+assert.deepEqual(
+  overlay.boundedInputOverlayValues(boundedInputOverlay),
+  {
+    "l0-seed-intake.company": "Acme Robotics",
+  },
+);
+assert.deepEqual(
+  overlay.boundedInputOverlays(boundedInputOverlay, "l0-seed-intake").map((item) => item.id),
+  ["input:l0-seed-intake:company"],
+);
 
 assert.deepEqual(
   overlay.displayRectForAnchor({
@@ -142,7 +211,69 @@ assert.deepEqual(
   }),
   { x: 20, y: 30, width: 140, height: 44, source: "html" },
 );
+const fakeDomElement = {
+  getBoundingClientRect: () => ({
+    left: 35,
+    top: 55,
+    right: 155,
+    bottom: 105,
+    width: 120,
+    height: 50,
+  }),
+};
+const fakeRoot = {
+  querySelector(selector) {
+    if (selector === '[data-id="intake"]') return fakeDomElement;
+    return null;
+  },
+};
+const fakeWrap = {
+  getBoundingClientRect: () => ({
+    left: 10,
+    top: 15,
+    right: 310,
+    bottom: 315,
+    width: 300,
+    height: 300,
+  }),
+};
+assert.deepEqual(
+  overlay.displayRectForDomElementAnchor({
+    anchor: domAnchor,
+    rootEl: fakeRoot,
+    relativeToEl: fakeWrap,
+  }),
+  { x: 25, y: 40, width: 120, height: 50 },
+);
+assert.deepEqual(
+  overlay.displayRectForAnchor({
+    anchor: domAnchor,
+    domElementRect: (resolvedAnchor) => ({ ...resolvedAnchor, source: "dom" }),
+  }),
+  { ...domAnchor, source: "dom" },
+);
+assert.deepEqual(
+  overlay.displayRectForAnchor({
+    anchor: { type: "workflow_step", step_id: "l0-seed-intake" },
+    resolvers: {
+      workflow_step: (anchor) => ({ x: anchor.step_id.length, y: 1, width: 2, height: 3 }),
+    },
+  }),
+  { x: 14, y: 1, width: 2, height: 3 },
+);
 assert.equal(overlay.displayRectForAnchor({ anchor: { type: "unknown" } }), null);
+
+assert.deepEqual(
+  overlay.connectorPathBetweenRects({
+    fromRect: { x: 10, y: 20, width: 100, height: 40 },
+    toRect: { x: 220, y: 60, width: 80, height: 100 },
+  }),
+  {
+    d: "M110 40 C165 40 165 110 220 110",
+    start: { x: 110, y: 40 },
+    end: { x: 220, y: 110 },
+  },
+);
 
 const overlayEl = { style: {}, hidden: true };
 overlay.placeOverlayBox({

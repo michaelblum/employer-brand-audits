@@ -13,7 +13,7 @@ from typing import Any
 REGISTRY_SCHEMA_VERSION = "eba_registry.v1"
 
 ACTIVE_TURN_REQUIRED_COMMANDS = {"validate", "gh"}
-ALLOWED_DEV_COMMANDS = {"situation", "validate", "demo", "workbench", "trace", "gh", "hooks"}
+ALLOWED_DEV_COMMANDS = {"situation", "validate", "stage-url", "demo", "workbench", "trace", "gh", "hooks"}
 DEFAULT_ALLOWED_PATHS = [
     "AGENTS.md",
     "data/",

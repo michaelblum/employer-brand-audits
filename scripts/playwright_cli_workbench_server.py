@@ -35,6 +35,10 @@ WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
 WORKBENCH_ASSET_MANIFEST_PATH = "/api/workbench-assets"
 WORKBENCH_STATE_PATH = "/api/workbench-state"
 WORKBENCH_CONTEXT_PATH = "/api/workbench-context"
+SERVER_SOURCE_FILES = [
+    Path(__file__).resolve(),
+    Path(__file__).resolve().parent / "workbench_projection.py",
+]
 WORKBENCH_ASSETS = {
     "/assets/artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
     "/assets/artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
@@ -101,6 +105,10 @@ WORKBENCH_ASSETS = {
         ARTIFACT_PRIMITIVES_DIR / "interaction_overlay.js",
         "text/javascript",
     ),
+    "/assets/artifact-primitives/target_link.js": (
+        ARTIFACT_PRIMITIVES_DIR / "target_link.js",
+        "text/javascript",
+    ),
     "/assets/artifact-primitives/interaction_overlay_controller.js": (
         ARTIFACT_PRIMITIVES_DIR / "interaction_overlay_controller.js",
         "text/javascript",
@@ -138,17 +146,62 @@ def workbench_asset_record(url: str, path: Path, content_type: str) -> dict[str,
     return record
 
 
+def source_file_record(path: Path) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "path": repo_relative_path(path),
+        "exists": path.exists(),
+    }
+    if path.exists():
+        data = path.read_bytes()
+        record.update(
+            {
+                "size_bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        )
+    return record
+
+
+def build_server_source_manifest() -> dict[str, Any]:
+    sources = [source_file_record(path) for path in SERVER_SOURCE_FILES]
+    digest = hashlib.sha256()
+    digest.update(json.dumps({"sources": sources}, sort_keys=True).encode("utf-8"))
+    return {
+        "fingerprint": digest.hexdigest(),
+        "sources": sources,
+    }
+
+
+def manifest_state_fingerprint(manifest_path: Path) -> str:
+    path = manifest_path.resolve()
+    digest = hashlib.sha256()
+    digest.update(
+        json.dumps(
+            {
+                "path": repo_relative_path(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "size_bytes": path.stat().st_size,
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+    return digest.hexdigest()
+
+
 def build_workbench_asset_manifest() -> dict[str, Any]:
     index = workbench_asset_record("/", WORKBENCH_INDEX, "text/html")
     assets = [
         workbench_asset_record(url, path, content_type)
         for url, (path, content_type) in sorted(WORKBENCH_ASSETS.items())
     ]
+    server_sources = build_server_source_manifest()
     digest = hashlib.sha256()
     digest.update(json.dumps({"assets": assets, "index": index}, sort_keys=True).encode("utf-8"))
     return {
         "status": "workbench_assets",
         "fingerprint": digest.hexdigest(),
+        "server_source_fingerprint": server_sources["fingerprint"],
+        "server_sources": server_sources["sources"],
         "index": index,
         "asset_count": len(assets),
         "assets": assets,
@@ -227,6 +280,7 @@ def collection_artifact(projected: dict[str, Any], artifact_root: Path) -> dict[
         "mime_type": str(projected.get("mime_type") or "application/octet-stream"),
         "capabilities": projected.get("capabilities") if isinstance(projected.get("capabilities"), list) else ["view"],
         "source_page": projected.get("source_page") if isinstance(projected.get("source_page"), dict) else None,
+        "facets": projected.get("facets") if isinstance(projected.get("facets"), dict) else None,
         "dimensions": projected.get("dimensions") if isinstance(projected.get("dimensions"), dict) else None,
         "created_at_epoch": created_at_epoch,
     }
@@ -255,14 +309,31 @@ def build_collection(manifest_path: Path, projection: dict[str, Any] | None = No
     }
 
 
-def clean_interaction_overlays(payload: Any, artifact_ids: set[str]) -> list[dict[str, Any]]:
+def clean_interaction_overlays(
+    payload: Any,
+    artifact_ids: set[str],
+    *,
+    bounded_input_definitions: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     if not isinstance(payload, list):
         return []
+    bounded_input_definitions = bounded_input_definitions or []
+    bounded_input_keys = {
+        (str(definition.get("step_id") or ""), str(definition.get("input_id") or ""))
+        for definition in bounded_input_definitions
+        if isinstance(definition, dict)
+    }
     clean: list[dict[str, Any]] = []
     for overlay in payload:
         if not isinstance(overlay, dict):
             continue
-        if str(overlay.get("subtype") or "") != "annotation":
+        subtype = str(overlay.get("subtype") or "")
+        if subtype == "bounded_input":
+            cleaned = clean_bounded_input_overlay(overlay, artifact_ids, bounded_input_keys)
+            if cleaned is not None:
+                clean.append(cleaned)
+            continue
+        if subtype != "annotation":
             continue
         subject = overlay.get("subject")
         if not isinstance(subject, dict) or str(subject.get("kind") or "") != "artifact":
@@ -295,6 +366,100 @@ def clean_interaction_overlays(payload: Any, artifact_ids: set[str]) -> list[dic
         except (KeyError, TypeError, ValueError):
             continue
     return clean
+
+
+def clean_bounded_input_overlay(
+    overlay: dict[str, Any],
+    artifact_ids: set[str],
+    bounded_input_keys: set[tuple[str, str]],
+) -> dict[str, Any] | None:
+    subject = overlay.get("subject")
+    if not isinstance(subject, dict) or str(subject.get("kind") or "") != "workflow_step":
+        return None
+    anchor = overlay.get("anchor")
+    if not isinstance(anchor, dict) or str(anchor.get("type") or "") != "workflow_input":
+        return None
+    artifact_id_value = str(anchor.get("artifact_id") or "")
+    step_id = str(anchor.get("step_id") or subject.get("id") or "")
+    input_id = str(anchor.get("input_id") or "")
+    if artifact_id_value not in artifact_ids:
+        return None
+    if (step_id, input_id) not in bounded_input_keys:
+        return None
+    body = overlay.get("body")
+    if not isinstance(body, dict) or str(body.get("kind") or "") != "input_value":
+        return None
+    try:
+        created_at_epoch = int(overlay.get("created_at_epoch") or time.time())
+        updated_at_epoch = (
+            int(overlay["updated_at_epoch"])
+            if overlay.get("updated_at_epoch") is not None
+            else None
+        )
+    except (TypeError, ValueError):
+        return None
+    return {
+        "id": str(overlay.get("id") or f"input:{step_id}:{input_id}"),
+        "subtype": "bounded_input",
+        "subject": {"kind": "workflow_step", "id": step_id},
+        "anchor": {
+            "type": "workflow_input",
+            "coordinate_space": "workflow_graph",
+            "artifact_id": artifact_id_value,
+            "step_id": step_id,
+            "input_id": input_id,
+        },
+        "body": {"kind": "input_value", "value": str(body.get("value") or "")[:5000]},
+        "created_at_epoch": created_at_epoch,
+        "updated_at_epoch": updated_at_epoch,
+    }
+
+
+def bounded_input_overlay_key(overlay: dict[str, Any]) -> tuple[str, str]:
+    anchor = overlay.get("anchor") if isinstance(overlay.get("anchor"), dict) else {}
+    return str(anchor.get("step_id") or ""), str(anchor.get("input_id") or "")
+
+
+def bounded_input_value(overlay: dict[str, Any] | None, default: Any = None) -> str:
+    if overlay is None:
+        return "" if default is None else str(default)
+    body = overlay.get("body") if isinstance(overlay.get("body"), dict) else {}
+    return str(body.get("value") or "")
+
+
+def bounded_input_state(
+    definitions: list[dict[str, Any]],
+    overlays: list[dict[str, Any]],
+) -> dict[str, Any]:
+    overlays_by_key = {
+        bounded_input_overlay_key(overlay): overlay
+        for overlay in overlays
+        if isinstance(overlay, dict) and str(overlay.get("subtype") or "") == "bounded_input"
+    }
+    items: list[dict[str, Any]] = []
+    values: dict[str, str] = {}
+    for definition in definitions:
+        if not isinstance(definition, dict):
+            continue
+        step_id = str(definition.get("step_id") or "")
+        input_id = str(definition.get("input_id") or "")
+        if not step_id or not input_id:
+            continue
+        key = (step_id, input_id)
+        value = bounded_input_value(overlays_by_key.get(key), definition.get("value"))
+        value_key = f"{step_id}.{input_id}"
+        values[value_key] = value
+        item = {
+            **definition,
+            "value": value,
+            "status": "filled" if value else "pending",
+        }
+        items.append(item)
+    return {
+        "status": "bounded_inputs",
+        "items": items,
+        "values": values,
+    }
 
 
 def clean_overlay_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
@@ -335,6 +500,84 @@ def clean_overlay_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
             "end": {"line": end_line, "column": end_column},
             "excerpt": str(anchor.get("excerpt", ""))[:1000],
         }
+    if anchor_type == "html_element":
+        selectors = anchor.get("selector_candidates")
+        rect = anchor.get("rect")
+        if not isinstance(selectors, list) or not isinstance(rect, dict):
+            return None
+        selector_candidates = [
+            str(selector).strip()
+            for selector in selectors
+            if str(selector).strip()
+        ][:8]
+        if not selector_candidates:
+            return None
+        try:
+            clean_rect = {
+                "x": int(rect["x"]),
+                "y": int(rect["y"]),
+                "width": int(rect["width"]),
+                "height": int(rect["height"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            return None
+        screenshot_rect = None
+        raw_screenshot_rect = anchor.get("screenshot_rect")
+        if isinstance(raw_screenshot_rect, dict):
+            try:
+                screenshot_rect = {
+                    "x": int(raw_screenshot_rect["x"]),
+                    "y": int(raw_screenshot_rect["y"]),
+                    "width": int(raw_screenshot_rect["width"]),
+                    "height": int(raw_screenshot_rect["height"]),
+                }
+            except (KeyError, TypeError, ValueError):
+                screenshot_rect = None
+        target_map_selector_candidates = [
+            str(selector).strip()
+            for selector in (anchor.get("target_map_selector_candidates") if isinstance(anchor.get("target_map_selector_candidates"), list) else [])
+            if str(selector).strip()
+        ][:8]
+        ancestor_trail = []
+        for item in anchor.get("ancestor_trail") or []:
+            if not isinstance(item, dict):
+                continue
+            classes = item.get("classes") if isinstance(item.get("classes"), list) else []
+            ancestor_trail.append(
+                {
+                    "tag": str(item.get("tag") or "")[:40],
+                    "id": str(item.get("id") or "")[:160],
+                    "classes": [str(value)[:120] for value in classes[:12]],
+                }
+            )
+        clean_anchor = {
+            "type": "html_element",
+            "coordinate_space": "html_document",
+            "selector_candidates": selector_candidates,
+            "tag": str(anchor.get("tag") or "")[:40],
+            "id": str(anchor.get("id") or "")[:160],
+            "classes": [
+                str(value)[:120]
+                for value in (anchor.get("classes") if isinstance(anchor.get("classes"), list) else [])[:12]
+            ],
+            "role": str(anchor.get("role") or "")[:120],
+            "accessible_name": str(anchor.get("accessible_name") or "")[:240],
+            "text": str(anchor.get("text") or "")[:1000],
+            "rect": clean_rect,
+            "ancestor_trail": ancestor_trail[:12],
+            "source_url": str(anchor.get("source_url") or "")[:1000],
+        }
+        web_target_id = str(anchor.get("web_target_id") or "").strip()
+        if web_target_id:
+            clean_anchor["web_target_id"] = web_target_id[:160]
+        target_kind = str(anchor.get("target_kind") or "").strip()
+        if target_kind:
+            clean_anchor["target_kind"] = target_kind[:80]
+        if screenshot_rect:
+            clean_anchor["screenshot_rect"] = screenshot_rect
+        if target_map_selector_candidates:
+            clean_anchor["target_map_selector_candidates"] = target_map_selector_candidates
+        return clean_anchor
     return None
 
 
@@ -363,6 +606,13 @@ def discover_workbench_contexts(active_manifest: Path) -> list[dict[str, Any]]:
         except Exception:
             continue
         label, subtitle = manifest_display_label(manifest_path, projection)
+        workbench_context = (
+            projection.get("source", {}).get("workbench_context")
+            if isinstance(projection.get("source"), dict)
+            else {}
+        )
+        if not isinstance(workbench_context, dict):
+            workbench_context = {}
         contexts.append(
             {
                 "manifest": str(manifest_path.relative_to(REPO_ROOT)),
@@ -374,6 +624,8 @@ def discover_workbench_contexts(active_manifest: Path) -> list[dict[str, Any]]:
                 "status": projection.get("workflow", {}).get("status")
                 if isinstance(projection.get("workflow"), dict)
                 else None,
+                "artifact_control_policy": workbench_context.get("artifact_control_policy"),
+                "mermaid_source_visibility": workbench_context.get("mermaid_source_visibility"),
                 "active": manifest_path.resolve() == active_manifest.resolve(),
             }
         )
@@ -382,6 +634,7 @@ def discover_workbench_contexts(active_manifest: Path) -> list[dict[str, Any]]:
 
 class WorkbenchServer(ThreadingHTTPServer):
     def __init__(self, server_address: tuple[str, int], manifest_path: Path):
+        self.startup_server_source_fingerprint = build_server_source_manifest()["fingerprint"]
         self.interaction_overlays: list[dict[str, Any]] = []
         self.view_state: dict[str, Any] = {}
         self.context_changed_by: str | None = None
@@ -393,6 +646,7 @@ class WorkbenchServer(ThreadingHTTPServer):
 
     def load_manifest(self, manifest_path: Path, *, changed_by: str | None) -> None:
         self.manifest_path = safe_manifest_path(manifest_path)
+        self.manifest_fingerprint = manifest_state_fingerprint(self.manifest_path)
         self.artifact_root = self.manifest_path.parent
         self.workbench_projection = project_workbench_manifest(self.manifest_path)
         self.collection = build_collection(self.manifest_path, self.workbench_projection)
@@ -412,27 +666,52 @@ class WorkbenchServer(ThreadingHTTPServer):
             self.context_changed_by = changed_by
             self.context_changed_at_epoch = int(time.time())
 
+    def bounded_input_definitions(self) -> list[dict[str, Any]]:
+        workflow = self.workbench_projection.get("workflow")
+        if not isinstance(workflow, dict):
+            return []
+        definitions = workflow.get("input_overlays")
+        return definitions if isinstance(definitions, list) else []
+
     def workbench_state(self) -> dict[str, Any]:
         contexts = discover_workbench_contexts(self.manifest_path)
+        workbench_context = (
+            self.workbench_projection.get("source", {}).get("workbench_context")
+            if isinstance(self.workbench_projection.get("source"), dict)
+            else {}
+        )
+        if not isinstance(workbench_context, dict):
+            workbench_context = {}
         return {
             "status": "workbench_state",
             "collection": self.collection,
             "workbench_projection": self.workbench_projection,
             "interaction_overlays": self.interaction_overlays,
+            "bounded_inputs": bounded_input_state(
+                self.bounded_input_definitions(),
+                self.interaction_overlays,
+            ),
             "view": self.view_state,
             "contexts": contexts,
             "context": {
                 "manifest": str(self.manifest_path.relative_to(REPO_ROOT)),
+                "manifest_fingerprint": self.manifest_fingerprint,
                 "changed_by": self.context_changed_by,
                 "changed_at_epoch": self.context_changed_at_epoch,
                 "previous_manifest": self.previous_manifest,
+                "artifact_control_policy": workbench_context.get("artifact_control_policy"),
+                "mermaid_source_visibility": workbench_context.get("mermaid_source_visibility"),
             },
             "updated_at_epoch": self.updated_at_epoch,
         }
 
     def replace_interaction_overlays(self, overlays: Any) -> None:
         artifact_ids = {item["id"] for item in self.collection["artifacts"]}
-        self.interaction_overlays = clean_interaction_overlays(overlays, artifact_ids)
+        self.interaction_overlays = clean_interaction_overlays(
+            overlays,
+            artifact_ids,
+            bounded_input_definitions=self.bounded_input_definitions(),
+        )
         self.updated_at_epoch = int(time.time())
 
     def replace_view_state(self, view: Any) -> None:
@@ -518,7 +797,9 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.OK, self.server.workbench_projection)
             return
         if parsed.path == WORKBENCH_ASSET_MANIFEST_PATH:
-            self.send_json(HTTPStatus.OK, build_workbench_asset_manifest())
+            manifest = build_workbench_asset_manifest()
+            manifest["startup_server_source_fingerprint"] = self.server.startup_server_source_fingerprint
+            self.send_json(HTTPStatus.OK, manifest)
             return
         if parsed.path.startswith("/artifact/"):
             self.serve_artifact(parsed.path.removeprefix("/artifact/"))

@@ -20,6 +20,15 @@
     if (node) node.textContent = message;
   }
 
+  function normalizeSourceVisibility(value) {
+    return value === "preview-hidden" ? "preview-hidden" : "visible";
+  }
+
+  function setSourceVisibility(figure, value) {
+    if (!figure) return;
+    figure.dataset.sourceVisibility = normalizeSourceVisibility(value);
+  }
+
   function sourceFromFigure(figure) {
     const raw = figure?.querySelector(".mermaid-source-raw");
     if (raw?.content) return raw.content.textContent || "";
@@ -45,6 +54,8 @@
 
   async function renderMermaid(source, containerEl, options = {}) {
     const figure = options.figure || containerEl?.closest?.("[data-artifact-renderer='mermaid']");
+    const sourceVisibility = normalizeSourceVisibility(options.sourceVisibility);
+    setSourceVisibility(figure, sourceVisibility);
     setRenderState(figure, "pending");
     setStatus(figure, "Rendering Mermaid preview...");
     try {
@@ -56,10 +67,16 @@
         result.bindFunctions(containerEl);
       }
       setRenderState(figure, "complete");
-      setStatus(figure, "Mermaid preview rendered. Source remains available below.");
+      setStatus(
+        figure,
+        sourceVisibility === "preview-hidden"
+          ? "Mermaid preview rendered."
+          : "Mermaid preview rendered. Source remains available below.",
+      );
       return { ok: true, state: "complete", errorMessage: "" };
     } catch (error) {
       if (containerEl) containerEl.textContent = "";
+      setSourceVisibility(figure, "visible");
       const message = error?.message || String(error || "Mermaid render failed");
       setRenderState(figure, "error");
       setStatus(figure, `Mermaid render error: ${message}`);

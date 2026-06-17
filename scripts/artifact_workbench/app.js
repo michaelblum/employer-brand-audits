@@ -47,6 +47,7 @@
     const artifactBinding = () => window.WorkbenchArtifactBinding;
     const documentRenderer = () => window.ArtifactPrimitives.document;
     const htmlRenderer = () => window.ArtifactPrimitives.html;
+    const targetLink = () => window.ArtifactPrimitives.targetLink;
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
     const textRangeAnchor = (note) => {
@@ -60,7 +61,10 @@
     const iconHref = (name) => `/assets/artifact-workbench-icons.svg#icon-artifact-${name}`;
     const interactionOverlay = () => window.ArtifactPrimitives.interactionOverlay;
     let overlayControllerInstance = null;
+    let workflowTargetLinkEffect = null;
     let unbindHtmlInspector = null;
+    let mooringOverlayFrame = null;
+    let mooringOverlayRetry = null;
     function overlayController() {
       if (!overlayControllerInstance) {
         overlayControllerInstance = window.ArtifactPrimitives.interactionOverlayController
@@ -140,6 +144,14 @@
       }
       return overlayControllerInstance;
     }
+    function workflowTargetLink() {
+      if (!workflowTargetLinkEffect) {
+        workflowTargetLinkEffect = targetLink().createTargetLinkEffect({
+          targetClass: "workflow-paired",
+        });
+      }
+      return workflowTargetLinkEffect;
+    }
     const artifactNavigation = () => window.Artifacts.navigation;
     let artifactBindingInstance = null;
     const artifactNavigationContext = () => artifactNavigation().artifactNavigationContext({
@@ -152,6 +164,226 @@
       iconHref,
       projectionModel: app.artifactProjectionModel,
     });
+
+    function boundedInputDefinitionsForArtifact(item = artifact()) {
+      const definitions = app.artifactProjectionModel?.workbenchProjection?.workflow?.input_overlays || [];
+      return definitions.filter((definition) => definition?.anchor?.artifact_id === item?.id);
+    }
+
+    function boundedInputValue(definition) {
+      const values = interactionOverlay().boundedInputOverlayValues(app.interactionOverlays);
+      const key = `${definition.step_id}.${definition.input_id}`;
+      if (Object.prototype.hasOwnProperty.call(values, key)) return values[key];
+      return definition.value == null ? "" : String(definition.value);
+    }
+
+    function optionRecord(option) {
+      if (option && typeof option === "object") {
+        return {
+          value: String(option.value ?? option.label ?? ""),
+          label: String(option.label ?? option.value ?? ""),
+        };
+      }
+      return { value: String(option ?? ""), label: String(option ?? "") };
+    }
+
+    function selectedOptionRecord(options, value) {
+      return options.find((option) => option.value === value)
+        || options[0]
+        || { value, label: value || "Select option" };
+    }
+
+    function renderBoundedInputControl(definition) {
+      const value = boundedInputValue(definition);
+      const commonAttrs = [
+        "data-bounded-input-control",
+        `data-step-id="${escapeHtml(definition.step_id)}"`,
+        `data-input-id="${escapeHtml(definition.input_id)}"`,
+        `aria-label="${escapeHtml(definition.label || definition.input_id)}"`,
+      ].join(" ");
+      if (definition.input_type === "select") {
+        const options = (definition.options || []).map(optionRecord);
+        const selected = selectedOptionRecord(options, value);
+        return `
+          <div class="bounded-input-select" data-bounded-input-select>
+            <button
+              class="bounded-input-select-trigger"
+              type="button"
+              ${commonAttrs}
+              data-bounded-input-select-trigger
+              value="${escapeHtml(selected.value)}"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
+              <span data-bounded-input-select-label>${escapeHtml(selected.label)}</span>
+              <span class="bounded-input-select-caret" aria-hidden="true"></span>
+            </button>
+            <div
+              class="bounded-input-select-menu"
+              data-bounded-input-select-menu
+              data-step-id="${escapeHtml(definition.step_id)}"
+              data-input-id="${escapeHtml(definition.input_id)}"
+              role="listbox"
+              hidden
+            >
+            ${options.map((option) => `
+              <button
+                class="bounded-input-select-option"
+                type="button"
+                role="option"
+                data-bounded-input-select-option
+                data-step-id="${escapeHtml(definition.step_id)}"
+                data-input-id="${escapeHtml(definition.input_id)}"
+                data-value="${escapeHtml(option.value)}"
+                aria-selected="${option.value === selected.value ? "true" : "false"}"
+              >
+                ${escapeHtml(option.label)}
+              </button>
+            `).join("")}
+            </div>
+          </div>
+        `;
+      }
+      if (definition.input_type === "textarea") {
+        return `<textarea ${commonAttrs} placeholder="${escapeHtml(definition.placeholder || "")}">${escapeHtml(value)}</textarea>`;
+      }
+      return `<input ${commonAttrs} type="text" value="${escapeHtml(value)}" placeholder="${escapeHtml(definition.placeholder || "")}">`;
+    }
+
+    function renderBoundedInputLayer(item = artifact()) {
+      const layer = $("bounded-input-layer");
+      const definitions = boundedInputDefinitionsForArtifact(item);
+      if (!definitions.length) {
+        layer.hidden = true;
+        layer.innerHTML = "";
+        scheduleMooringOverlayUpdate();
+        return;
+      }
+      layer.hidden = false;
+      layer.innerHTML = `
+        <section class="bounded-input-panel" data-bounded-input-panel>
+          <div class="bounded-input-title">Intake inputs</div>
+          <div class="bounded-input-grid">
+            ${definitions.map((definition) => `
+              <label class="bounded-input-field" data-step-id="${escapeHtml(definition.step_id)}" data-input-id="${escapeHtml(definition.input_id)}">
+                <span>${escapeHtml(definition.label || definition.input_id)}</span>
+                ${renderBoundedInputControl(definition)}
+              </label>
+            `).join("")}
+          </div>
+        </section>
+      `;
+      bindBoundedInputControls(definitions);
+      scheduleMooringOverlayUpdate();
+    }
+
+    function boundedInputDefinitionByControl(definitions, control) {
+      return definitions.find((definition) => (
+        definition.step_id === control.dataset.stepId
+        && definition.input_id === control.dataset.inputId
+      ));
+    }
+
+    function closeBoundedSelectMenus(exceptRoot = null) {
+      $("bounded-input-layer").querySelectorAll("[data-bounded-input-select]").forEach((root) => {
+        if (exceptRoot && root === exceptRoot) return;
+        const menu = root.querySelector("[data-bounded-input-select-menu]");
+        const trigger = root.querySelector("[data-bounded-input-select-trigger]");
+        if (menu) menu.hidden = true;
+        if (trigger) trigger.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    function setBoundedSelectValue(root, value, syncControl) {
+      const trigger = root.querySelector("[data-bounded-input-select-trigger]");
+      const label = root.querySelector("[data-bounded-input-select-label]");
+      const options = [...root.querySelectorAll("[data-bounded-input-select-option]")];
+      const selected = options.find((option) => option.dataset.value === value) || options[0];
+      if (!trigger || !selected) return;
+      trigger.value = selected.dataset.value || "";
+      trigger.dataset.value = trigger.value;
+      if (label) label.textContent = selected.textContent.trim();
+      options.forEach((option) => {
+        option.setAttribute("aria-selected", option === selected ? "true" : "false");
+      });
+      syncControl(trigger);
+    }
+
+    function focusBoundedSelectOption(root, delta) {
+      const options = [...root.querySelectorAll("[data-bounded-input-select-option]")];
+      if (!options.length) return;
+      const currentIndex = Math.max(0, options.indexOf(document.activeElement));
+      const nextIndex = (currentIndex + delta + options.length) % options.length;
+      options[nextIndex].focus();
+    }
+
+    function bindBoundedInputControls(definitions = []) {
+      $("bounded-input-layer").querySelectorAll("[data-bounded-input-control]").forEach((control) => {
+        const syncControl = () => {
+          const definition = boundedInputDefinitionByControl(definitions, control);
+          if (!definition) return;
+          app.interactionOverlays = interactionOverlay().upsertBoundedInputOverlay({
+            interactionOverlays: app.interactionOverlays,
+            definition,
+            value: control.value,
+          });
+          void syncInteractionOverlays();
+        };
+        if (control.matches("[data-bounded-input-select-trigger]")) {
+          const root = control.closest("[data-bounded-input-select]");
+          const menu = root?.querySelector("[data-bounded-input-select-menu]");
+          if (!root || !menu) return;
+          const openMenu = () => {
+            closeBoundedSelectMenus(root);
+            menu.hidden = false;
+            control.setAttribute("aria-expanded", "true");
+          };
+          const closeMenu = () => {
+            menu.hidden = true;
+            control.setAttribute("aria-expanded", "false");
+          };
+          control.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (menu.hidden) openMenu();
+            else closeMenu();
+          });
+          control.addEventListener("keydown", (event) => {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              openMenu();
+              focusBoundedSelectOption(root, event.key === "ArrowDown" ? 1 : -1);
+            } else if (event.key === "Escape") {
+              closeMenu();
+            }
+          });
+          root.querySelectorAll("[data-bounded-input-select-option]").forEach((option) => {
+            option.addEventListener("click", (event) => {
+              event.stopPropagation();
+              setBoundedSelectValue(root, option.dataset.value || "", syncControl);
+              closeMenu();
+              control.focus();
+            });
+            option.addEventListener("keydown", (event) => {
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                focusBoundedSelectOption(root, event.key === "ArrowDown" ? 1 : -1);
+              } else if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setBoundedSelectValue(root, option.dataset.value || "", syncControl);
+                closeMenu();
+                control.focus();
+              } else if (event.key === "Escape") {
+                closeMenu();
+                control.focus();
+              }
+            });
+          });
+          return;
+        }
+        control.addEventListener("input", syncControl);
+        control.addEventListener("change", syncControl);
+      });
+    }
 
     async function fetchWorkbenchProjection() {
       try {
@@ -222,7 +454,12 @@
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ interaction_overlays: app.interactionOverlays }),
       });
-      if (!response.ok) showToast("Overlay sync failed");
+      if (!response.ok) {
+        showToast("Overlay sync failed");
+        return;
+      }
+      const payload = await response.json();
+      app.interactionOverlays = payload.interaction_overlays || app.interactionOverlays;
     }
 
     async function syncWorkbenchViewState() {
@@ -238,6 +475,138 @@
           },
         }),
       });
+    }
+
+    function scheduleMooringOverlayUpdate() {
+      if (mooringOverlayFrame !== null) window.cancelAnimationFrame(mooringOverlayFrame);
+      if (mooringOverlayRetry !== null) window.clearTimeout(mooringOverlayRetry);
+      mooringOverlayFrame = window.requestAnimationFrame(() => {
+        mooringOverlayFrame = null;
+        updateMooringOverlays();
+        mooringOverlayRetry = window.setTimeout(() => {
+          mooringOverlayRetry = null;
+          updateMooringOverlays();
+        }, 160);
+      });
+    }
+
+    function selectorCandidatesForWorkflowDefinition(definition = {}) {
+      const selectors = definition.anchor?.selector_candidates;
+      return Array.isArray(selectors) ? selectors.map((item) => String(item || "").trim()).filter(Boolean) : [];
+    }
+
+    function workflowPairingDefinition(item = artifact()) {
+      return boundedInputDefinitionsForArtifact(item).find((definition) => (
+        definition?.step_id
+        && selectorCandidatesForWorkflowDefinition(definition).length > 0
+      )) || null;
+    }
+
+    function elementForSelectorCandidates(rootEl, selectors = []) {
+      if (!rootEl || typeof rootEl.querySelector !== "function") return null;
+      for (const selector of selectors) {
+        try {
+          const match = rootEl.querySelector(selector);
+          if (match) return match;
+        } catch (_error) {
+          // Selector candidates are fallbacks; invalid candidates should not block later selectors.
+        }
+      }
+      return null;
+    }
+
+    function workflowDomAnchorForDefinition(definition) {
+      const selectorCandidates = selectorCandidatesForWorkflowDefinition(definition);
+      if (!selectorCandidates.length) return null;
+      return {
+        type: "dom_element",
+        coordinate_space: "artifact_dom",
+        artifact_id: definition.anchor?.artifact_id || artifact()?.id || "",
+        selector_candidates: selectorCandidates,
+      };
+    }
+
+    function displayRectForDomAnchor(anchor, rootEl = markdownPreviewBody()) {
+      return interactionOverlay().displayRectForAnchor({
+        anchor,
+        rootEl,
+        relativeToEl: $("stage"),
+      });
+    }
+
+    function displayRectForStageSelector(selector) {
+      return displayRectForDomAnchor({
+        type: "dom_element",
+        coordinate_space: "workbench_stage",
+        selector_candidates: [selector],
+      }, $("stage"));
+    }
+
+    function targetLinkOptionsForWorkflowDefinition(definition = {}) {
+      if (definition.target_link && typeof definition.target_link === "object") {
+        return definition.target_link;
+      }
+      if (definition.anchor?.target_link && typeof definition.anchor.target_link === "object") {
+        return definition.anchor.target_link;
+      }
+      return {};
+    }
+
+    function clearWorkflowPairingOverlay() {
+      const panel = $("bounded-input-layer").querySelector("[data-bounded-input-panel]");
+      workflowTargetLink().clear({
+        layerEl: $("target-pairing-layer"),
+        highlightEl: $("target-pairing-highlight"),
+        connectorSvgEl: $("target-pairing-connectors"),
+        connectorPathEl: $("target-pairing-connector-path"),
+        targetEl: panel,
+        datasetKeys: ["workflowStepId"],
+        targetDatasetKeys: ["pairing"],
+      });
+    }
+
+    function updateWorkflowPairingOverlay() {
+      const definition = workflowPairingDefinition();
+      const panel = $("bounded-input-layer").querySelector("[data-bounded-input-panel]");
+      if (!definition || !panel || $("bounded-input-layer").hidden || app.markdownMode !== "preview") {
+        clearWorkflowPairingOverlay();
+        return;
+      }
+      const workflowAnchor = workflowDomAnchorForDefinition(definition);
+      const workflowElement = elementForSelectorCandidates(
+        markdownPreviewBody(),
+        workflowAnchor?.selector_candidates || [],
+      );
+      if (!workflowAnchor || !workflowElement) {
+        clearWorkflowPairingOverlay();
+        return;
+      }
+      workflowElement.dataset.workflowStepId = definition.step_id;
+      const workflowRect = displayRectForDomAnchor(workflowAnchor);
+      const panelRect = displayRectForStageSelector("[data-bounded-input-panel]");
+      if (!workflowRect || !panelRect) {
+        clearWorkflowPairingOverlay();
+        return;
+      }
+      const layer = $("target-pairing-layer");
+      const highlight = $("target-pairing-highlight");
+      const svg = $("target-pairing-connectors");
+      const path = $("target-pairing-connector-path");
+      const result = workflowTargetLink().render({
+        layerEl: layer,
+        highlightEl: highlight,
+        connectorSvgEl: svg,
+        connectorPathEl: path,
+        sourceRect: workflowRect,
+        targetRect: panelRect,
+        targetEl: panel,
+        stageEl: $("stage"),
+        interactionOverlay: interactionOverlay(),
+        options: targetLinkOptionsForWorkflowDefinition(definition),
+        dataset: { workflowStepId: definition.step_id },
+        targetDataset: { pairing: "workflow-step" },
+      });
+      if (result.status !== "rendered") clearWorkflowPairingOverlay();
     }
 
     function imageViewerOptions() {
@@ -277,6 +646,7 @@
         });
         if (markerAnchor) placeMarkerForAnchor(markerAnchor);
       }
+      updateWorkflowPairingOverlay();
     }
 
     function applyZoom(value, mode = "manual") {
@@ -356,6 +726,8 @@
             markdownContentById: app.markdownContent,
             markdownDirty: app.markdownDirty,
             markdownMode: app.markdownMode,
+            controlPolicy: app.context?.artifact_control_policy,
+            mermaidSourceVisibility: app.context?.mermaid_source_visibility,
             zoomMode: app.zoomMode,
             zoomPercent: app.zoomPercent,
             documentContentById: app.documentContent,
@@ -384,6 +756,7 @@
       if (typeof surfaces.markdownMarkerHidden === "boolean") $("markdown-marker").hidden = surfaces.markdownMarkerHidden;
       if (typeof surfaces.markdownPreviewHidden === "boolean") $("markdown-preview").hidden = surfaces.markdownPreviewHidden;
       if (typeof surfaces.markdownSourceHidden === "boolean") $("markdown-source").hidden = surfaces.markdownSourceHidden;
+      markdownPreviewBody().classList.toggle("web-snapshot-preview-body", surfaces.webSnapshotBodyClass === true);
       if (surfaces.resetHoverMarker) resetHoverMarker();
       if (typeof surfaces.commentPopoverHidden === "boolean") $("comment-popover").hidden = surfaces.commentPopoverHidden;
     }
@@ -632,9 +1005,11 @@
         saveButtonEl: $("markdown-save"),
         themeButtonEl: $("markdown-theme-toggle"),
         theme: app.artifactDocumentTheme,
+        mermaidSourceVisibility: app.context?.mermaid_source_visibility,
       });
       updateArtifactToolbar();
       renderMarkdownHighlights();
+      scheduleMooringOverlayUpdate();
     }
 
     function renderMarkdownHighlights() {
@@ -809,6 +1184,7 @@
     function render() {
       renderTitle();
       renderArtifact();
+      renderBoundedInputLayer();
       renderOverview();
       renderSidebar();
       renderShell();
@@ -1233,6 +1609,14 @@
       $("toggle-sidebar").addEventListener("click", () => {
         app.sidebarVisible = !app.sidebarVisible;
         renderShell();
+      });
+      document.addEventListener("click", (event) => {
+        if (!event.target.closest("[data-bounded-input-select]")) {
+          closeBoundedSelectMenus();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeBoundedSelectMenus();
       });
       $("copy-artifact").addEventListener("click", () => copyText(JSON.stringify(artifact(), null, 2)));
       $("copy-path").addEventListener("click", () => copyText(artifact().path));

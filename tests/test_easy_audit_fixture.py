@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from scripts.easy_audit_fixture import generate_easy_audit_fixture
+from scripts.workbench_projection import project_audit_manifest, workflow_input_overlay
 from scripts import easy_audit_site_capture_smoke as capture_smoke
 from scripts.easy_audit_site_capture_smoke import attach_live_capture_artifacts, write_extra_capture_snippet
 
@@ -79,6 +80,117 @@ class EasyAuditFixtureTests(unittest.TestCase):
             self.assertIn("data-capture-sticky", roles)
             self.assertIn('id="sticky-obscured-target"', roles)
             self.assertIn("scroll-margin-top: 0", roles)
+
+    def test_intake_flow_projects_bounded_seed_input_overlays(self) -> None:
+        (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest_path = generate_easy_audit_fixture(Path(tmp) / "easy-audit")
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            projection = project_audit_manifest(manifest_path)
+
+            self.assertEqual(
+                manifest["workbench_context"],
+                {
+                    "artifact_control_policy": "read-only",
+                    "mermaid_source_visibility": "preview-hidden",
+                },
+            )
+            self.assertEqual(projection["source"]["workbench_context"], manifest["workbench_context"])
+
+            intake_artifact = next(
+                artifact for artifact in manifest["artifacts"] if artifact["id"] == "l0-intake-flow"
+            )
+            self.assertEqual(intake_artifact["type"], "intake_flow")
+            self.assertEqual(intake_artifact["produced_by_step_id"], "l0-seed-intake")
+            self.assertTrue((manifest_path.parent / intake_artifact["file_path"]).exists())
+
+            intake_step = next(step for step in projection["workflow"]["steps"] if step["id"] == "l0-seed-intake")
+            self.assertEqual(intake_step["name"], "L0 seed intake")
+            self.assertEqual(intake_step["artifact_ids"], ["l0-intake-flow"])
+            self.assertEqual(
+                [item["id"] for item in intake_step["required_inputs"]],
+                ["company", "domain_hint", "workflow_template", "talent_segment"],
+            )
+
+            input_overlays = projection["workflow"]["input_overlays"]
+            self.assertEqual(
+                [item["id"] for item in input_overlays],
+                [
+                    "input:l0-seed-intake:company",
+                    "input:l0-seed-intake:domain_hint",
+                    "input:l0-seed-intake:workflow_template",
+                    "input:l0-seed-intake:talent_segment",
+                ],
+            )
+            domain_overlay = next(item for item in input_overlays if item["input_id"] == "domain_hint")
+            self.assertEqual(domain_overlay["subtype"], "bounded_input")
+            self.assertEqual(domain_overlay["input_type"], "text")
+            self.assertEqual(domain_overlay["anchor"]["artifact_id"], "l0-intake-flow")
+            self.assertEqual(domain_overlay["anchor"]["step_id"], "l0-seed-intake")
+            self.assertEqual(domain_overlay["anchor"]["input_id"], "domain_hint")
+            self.assertEqual(
+                domain_overlay["anchor"]["selector_candidates"],
+                [
+                    '[data-workflow-step-id="l0-seed-intake"]',
+                    'g.node[data-node="true"][data-id="intake"]',
+                ],
+            )
+
+    def test_l4_report_is_single_html_artifact(self) -> None:
+        (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest_path = generate_easy_audit_fixture(Path(tmp) / "easy-audit")
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            projection = project_audit_manifest(manifest_path)
+
+            l4_step = next(step for step in manifest["steps"] if step["id"] == "l4-report")
+            self.assertEqual(l4_step["artifact_ids"], ["l4-final-report"])
+
+            artifacts_by_id = {artifact["id"]: artifact for artifact in manifest["artifacts"]}
+            self.assertNotIn("l4-final-report-html", artifacts_by_id)
+            self.assertIn("l4-final-report", artifacts_by_id)
+            self.assertEqual(artifacts_by_id["l4-final-report"]["type"], "report")
+            self.assertEqual(artifacts_by_id["l4-final-report"]["file_path"], "l4-final-report.html")
+            self.assertFalse((manifest_path.parent / "l4-final-report.md").exists())
+
+            report_html = (manifest_path.parent / "l4-final-report.html").read_text(encoding="utf-8")
+            self.assertIn('data-report-surface="signal-brief"', report_html)
+            self.assertIn('id="candidate-signal-ledger"', report_html)
+            self.assertIn("KILOS signal", report_html)
+
+            projected_artifacts = {artifact["id"]: artifact for artifact in projection["artifacts"]}
+            report = projected_artifacts["l4-final-report"]
+            self.assertEqual(report["type"], "html")
+            self.assertEqual(report["kind"], "report")
+            self.assertEqual(report["mime_type"], "text/html")
+            self.assertIn("annotate", report["capabilities"])
+            self.assertNotIn("edit", report["capabilities"])
+            self.assertNotIn("render", report["capabilities"])
+            self.assertNotIn("diagram_kind", report["facets"])
+
+    def test_workflow_input_overlays_pass_target_link_config(self) -> None:
+        overlay = workflow_input_overlay(
+            "l0-seed-intake",
+            {
+                "id": "company",
+                "artifact_id": "l0-intake-flow",
+                "target_link": {
+                    "color": "#f97316",
+                    "speed": 0.5,
+                    "geometry": {"highlightInset": 6},
+                },
+            },
+        )
+
+        self.assertIsNotNone(overlay)
+        self.assertEqual(
+            overlay["target_link"],
+            {
+                "color": "#f97316",
+                "speed": 0.5,
+                "geometry": {"highlightInset": 6},
+            },
+        )
 
     def test_capture_smoke_script_is_part_of_validation_surface(self) -> None:
         from scripts.eba_cli import validation_commands

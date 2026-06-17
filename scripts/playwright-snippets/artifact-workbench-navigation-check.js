@@ -31,6 +31,39 @@ async (page) => {
   });
 
   await page.waitForSelector(".artifact-row[data-index]", { timeout: 5000 });
+  const shellState = await page.evaluate(() => {
+    const toolbarMiddle = document.querySelector("#toolbar-middle");
+    const siblingNav = document.querySelector("#sibling-nav");
+    const toolbarRight = document.querySelector(".toolbar-right");
+    const title = document.querySelector("#artifact-title");
+    const rows = [...document.querySelectorAll(".artifact-row[data-index]")];
+    const compactRows = rows.filter((row) => row.classList.contains("artifact-row-compact"));
+    if (!toolbarMiddle || !siblingNav || !toolbarRight || !title) {
+      throw new Error("Primary toolbar bookend/middle structure is missing");
+    }
+    if (!title.querySelector(".artifact-identity-strip") || !title.querySelector(".artifact-heading")) {
+      throw new Error("Artifact title did not render the identity strip");
+    }
+    if (rows.length !== compactRows.length) {
+      throw new Error("Sidebar rendered non-compact artifact rows");
+    }
+    if (rows.some((row) => row.querySelector(".projection-meta"))) {
+      throw new Error("Compact sidebar rows should not render projection-meta blocks");
+    }
+    const nextRect = document.querySelector("#next")?.getBoundingClientRect();
+    const rightRect = toolbarRight.getBoundingClientRect();
+    return {
+      toolbarMiddleWidth: Math.round(toolbarMiddle.getBoundingClientRect().width),
+      siblingNavWidth: Math.round(siblingNav.getBoundingClientRect().width),
+      rowCount: rows.length,
+      nextX: Math.round(nextRect?.x || 0),
+      rightX: Math.round(rightRect.x),
+    };
+  });
+  if (shellState.siblingNavWidth < 70 || shellState.rightX <= shellState.nextX) {
+    throw new Error(`Toolbar middle/right bookends are not laid out correctly: ${JSON.stringify(shellState)}`);
+  }
+
   await page.evaluate((stepId) => {
     const button = document.querySelector(`[data-filter-kind="step"][data-filter-value="${CSS.escape(stepId)}"]`);
     if (!button) throw new Error(`Step filter button not found: ${stepId}`);
@@ -156,6 +189,100 @@ async (page) => {
     activeFilterCount: document.querySelectorAll("[data-filter-kind].active").length,
   }));
 
+  const compositeModel = await page.evaluate(async () => {
+    const [state, projection] = await Promise.all([
+      fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json()),
+      fetch("/api/workbench-projection", { cache: "no-store" }).then((response) => response.json()),
+    ]);
+    const collection = state.collection?.artifacts || [];
+    const collectionIds = new Set(collection.map((artifact) => artifact.id));
+    const projectedStepsById = Object.fromEntries(
+      (projection.workflow?.steps || []).map((step) => [step.id, step])
+    );
+    const group = (projection.artifact_groups || [])
+      .map((item) => ({
+        ...item,
+        visibleArtifactIds: (item.artifact_ids || []).filter((artifactId) => collectionIds.has(artifactId)),
+      }))
+      .find((item) => item.visibleArtifactIds.length > 1);
+    if (!group) throw new Error("No projected composite filter target found");
+    return {
+      selectedComposite: {
+        id: group.id,
+        label: group.label || group.id,
+        kindLabel: String(group.kind || "composite").replace(/[._-]/g, " "),
+        sourceStepName: projectedStepsById[group.source?.step_id]?.name || null,
+        visibleArtifactIds: group.visibleArtifactIds,
+      },
+    };
+  });
+
+  await page.evaluate((compositeId) => {
+    const button = document.querySelector(`[data-filter-kind="composite"][data-filter-value="${CSS.escape(compositeId)}"]`);
+    if (!button) throw new Error(`Composite filter button not found: ${compositeId}`);
+    button.click();
+  }, compositeModel.selectedComposite.id);
+
+  await page.waitForFunction((compositeId) => {
+    const active = document.querySelector(`[data-filter-kind="composite"][data-filter-value="${CSS.escape(compositeId)}"]`);
+    return active?.classList.contains("active") && document.querySelectorAll(".artifact-row[data-index]").length > 0;
+  }, compositeModel.selectedComposite.id, { timeout: 3000 });
+
+  const compositeState = await page.evaluate(async ({ compositeId, expectedIds, label, kindLabel, sourceStepName }) => {
+    const state = await fetch("/api/workbench-state", { cache: "no-store" }).then((response) => response.json());
+    const collection = state.collection?.artifacts || [];
+    const visibleRows = [...document.querySelectorAll(".artifact-row[data-index]")];
+    const visibleIds = visibleRows.map((row) => {
+      const index = Number(row.dataset.index);
+      const artifact = collection[index];
+      if (!artifact) throw new Error(`Composite visible row has no collection artifact at index ${row.dataset.index}`);
+      return artifact.id;
+    });
+    const unexpected = visibleIds.filter((id) => !expectedIds.includes(id));
+    const missing = expectedIds.filter((id) => !visibleIds.includes(id));
+    if (unexpected.length || missing.length) {
+      throw new Error(`Composite filter mismatch: ${JSON.stringify({ compositeId, unexpected, missing, visibleIds, expectedIds })}`);
+    }
+    const title = document.querySelector("#artifact-title")?.textContent?.trim() || "";
+    if (!title.includes(label)) {
+      throw new Error(`Composite breadcrumb missing label: ${JSON.stringify({ label, title })}`);
+    }
+    const readout = [...document.querySelectorAll(".composite-readout")]
+      .find((item) => item.dataset.compositeId === compositeId);
+    if (!readout) {
+      throw new Error(`Composite readout not found: ${compositeId}`);
+    }
+    const readoutText = readout.textContent || "";
+    for (const expectedText of [label, kindLabel, `${expectedIds.length} artifacts`, sourceStepName].filter(Boolean)) {
+      if (!readoutText.includes(expectedText)) {
+        throw new Error(`Composite readout missing text: ${JSON.stringify({ expectedText, readoutText })}`);
+      }
+    }
+    const readoutMemberIds = [...readout.querySelectorAll("[data-composite-member]")].map((item) => {
+      const artifact = collection[Number(item.dataset.compositeMember)];
+      if (!artifact) throw new Error(`Composite readout member has no collection artifact at index ${item.dataset.compositeMember}`);
+      return artifact.id;
+    });
+    const readoutUnexpected = readoutMemberIds.filter((id) => !expectedIds.includes(id));
+    const readoutMissing = expectedIds.filter((id) => !readoutMemberIds.includes(id));
+    if (readoutUnexpected.length || readoutMissing.length) {
+      throw new Error(`Composite readout member mismatch: ${JSON.stringify({ compositeId, readoutUnexpected, readoutMissing, readoutMemberIds, expectedIds })}`);
+    }
+    return {
+      compositeId,
+      label,
+      visibleIds,
+      readoutMemberIds,
+      title,
+    };
+  }, {
+    compositeId: compositeModel.selectedComposite.id,
+    expectedIds: compositeModel.selectedComposite.visibleArtifactIds,
+    label: compositeModel.selectedComposite.label,
+    kindLabel: compositeModel.selectedComposite.kindLabel,
+    sourceStepName: compositeModel.selectedComposite.sourceStepName,
+  });
+
   return {
     selectedStep: model.selectedStep.id,
     filteredRowCount: filteredState.filteredRowCount,
@@ -168,5 +295,11 @@ async (page) => {
     overviewNavigation,
     clearedRowCount: clearedState.rowCount,
     activeFilterCount: clearedState.activeFilterCount,
+    composite: {
+      id: compositeState.compositeId,
+      label: compositeState.label,
+      visibleIds: compositeState.visibleIds,
+      readoutMemberIds: compositeState.readoutMemberIds,
+    },
   };
 }

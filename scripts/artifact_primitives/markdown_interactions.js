@@ -58,10 +58,11 @@
     saveButtonEl,
     themeButtonEl,
     theme,
+    mermaidSourceVisibility,
   }) {
     previewBodyEl.innerHTML = ROOT.markdown.renderMarkdown(content);
     if (ROOT.mermaid && mode === "preview") {
-      void ROOT.mermaid.upgradeMermaidBlocks(previewBodyEl);
+      void ROOT.mermaid.upgradeMermaidBlocks(previewBodyEl, { sourceVisibility: mermaidSourceVisibility });
     }
     sourceEl.value = content;
     previewEl.hidden = mode !== "preview";

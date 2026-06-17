@@ -21,6 +21,34 @@
     return String(value || "").replace(/[._-]/g, " ");
   }
 
+  function normalizedText(value) {
+    return formatSlot(value)
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
+  function uniqueValues(values = []) {
+    const seen = new Set();
+    const result = [];
+    for (const value of values) {
+      const text = String(value ?? "").replace(/\s+/g, " ").trim();
+      const key = normalizedText(text);
+      if (!text || seen.has(key)) continue;
+      seen.add(key);
+      result.push(text);
+    }
+    return result;
+  }
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function flexibleWhitespacePattern(value) {
+    return escapeRegExp(value).replace(/\\ /g, "\\s+");
+  }
+
   function projectionMetaValues(values = []) {
     return values
       .map((value) => String(value ?? "").trim())
@@ -159,6 +187,74 @@
     return `<span class="artifact-type-icon ${escapeHtml(meta.className)}" title="${escapeHtml(type)}" aria-label="${escapeHtml(type)}" role="img"><svg aria-hidden="true"><use href="${escapeHtml(artifactIconHref(context, meta.icon))}"></use></svg></span>`;
   }
 
+  function artifactSubtypeLabel(context, item) {
+    const projected = projectedArtifact(context, item);
+    const slot = projectedSlot(context, item);
+    return String(slot?.label || projected?.slot || projected?.kind || item?.kind || projected?.facets?.artifact_kind || "").trim();
+  }
+
+  function artifactClassLabels(context, item) {
+    const projected = projectedArtifact(context, item);
+    const slot = projectedSlot(context, item);
+    return uniqueValues([
+      artifactSubtypeLabel(context, item),
+      slot?.label,
+      projected?.slot,
+      projected?.facets?.artifact_kind,
+      item?.kind,
+    ].map(formatSlot));
+  }
+
+  function artifactSourceSlug(context, item) {
+    const projected = projectedArtifact(context, item);
+    return String(projected?.source_page?.slug || projected?.facets?.page_slug || "").trim();
+  }
+
+  function artifactDisplayName(context, item) {
+    const original = String(item?.name || item?.id || "Artifact").replace(/\s+/g, " ").trim();
+    const sourceSlug = artifactSourceSlug(context, item);
+    if (!sourceSlug) return original;
+    const classLabels = artifactClassLabels(context, item)
+      .sort((left, right) => normalizedText(right).length - normalizedText(left).length);
+    for (const label of classLabels) {
+      const normalizedLabel = normalizedText(label);
+      if (!normalizedLabel) continue;
+      const sourceClassName = new RegExp(`^${flexibleWhitespacePattern(sourceSlug)}\\s+${flexibleWhitespacePattern(label)}$`, "i");
+      if (sourceClassName.test(original)) return sourceSlug;
+    }
+    return original;
+  }
+
+  function artifactSubtypeIcon(context, item) {
+    const subtype = artifactSubtypeLabel(context, item);
+    if (!subtype) return "";
+    const label = subtype
+      .split(/[._\s-]+/)
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "T";
+    return `<span class="artifact-subtype-icon" title="${escapeHtml(formatSlot(subtype))}" aria-label="${escapeHtml(formatSlot(subtype))}">${escapeHtml(label)}</span>`;
+  }
+
+  function artifactRowTitle(context, item, values = []) {
+    return projectionMetaValues([item?.name, ...values]).join(" · ");
+  }
+
+  function artifactStatusBadge(value) {
+    const status = String(value || "").trim();
+    if (!status) return "";
+    const shortLabel = status === "complete" ? "done" : status;
+    return `<span class="artifact-row-badge status" title="Status: ${escapeHtml(status)}">${escapeHtml(shortLabel)}</span>`;
+  }
+
+  function annotationCountBadge(count = 0) {
+    if (!count) return "";
+    const label = `${count} ${count === 1 ? "note" : "notes"}`;
+    return `<span class="artifact-row-badge note" title="${escapeHtml(label)}">${escapeHtml(String(count))}</span>`;
+  }
+
   function artifactMatchesFilters({ item, filters = {}, projectedArtifactsById = {}, projectedGroupsById = {} }) {
     const projected = projectedArtifactsById[item?.id] || null;
     if (filters.stepId && projected?.produced_by_step_id !== filters.stepId) return false;
@@ -237,19 +333,89 @@
     return `${parts.join(" · ")} · ${item.path}`;
   }
 
+  function compositeKindLabel(group = {}) {
+    return formatSlot(group.kind || "composite");
+  }
+
+  function compositeSourceLabel(context = {}, group = {}) {
+    const source = group.source || {};
+    if (source.kind === "audit_report_step" && source.step_id) {
+      const step = context.projectedStepsById?.[source.step_id] || null;
+      return `Report step: ${step?.name || source.step_id}`;
+    }
+    if (source.kind && source.step_id) return `${formatSlot(source.kind)}: ${source.step_id}`;
+    if (source.kind) return formatSlot(source.kind);
+    return "";
+  }
+
+  function compositeMemberEntries(context = {}, group = activeComposite(context)) {
+    if (!group) return [];
+    return (group.artifact_ids || [])
+      .map((artifactId) => {
+        const index = artifactIndexById(context, artifactId);
+        if (index < 0) return null;
+        return {
+          index,
+          item: (context.artifacts || [])[index],
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function renderCompositeMemberHtml(context, entry) {
+    const item = entry.item || {};
+    return `
+      <div class="composite-member" data-composite-member="${escapeHtml(String(entry.index))}">
+        ${artifactTypeIcon(context, item)}
+        <div class="composite-member-copy">
+          <div class="name">${escapeHtml(artifactDisplayName(context, item))}</div>
+          <div class="small">${escapeHtml(artifactProjectionLine({ ...context, item }))}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderActiveCompositeReadoutHtml(context = {}) {
+    const composite = activeComposite(context);
+    if (!composite) return "";
+    const members = compositeMemberEntries(context, composite);
+    const sourceLabel = compositeSourceLabel(context, composite);
+    const countLabel = `${members.length} ${members.length === 1 ? "artifact" : "artifacts"}`;
+    return `
+      <section class="composite-readout" data-composite-id="${escapeHtml(composite.id)}">
+        <div class="summary-kicker">Composite</div>
+        <div class="composite-readout-title">${escapeHtml(composite.label || composite.id)}</div>
+        <div class="projection-meta">
+          <span>${escapeHtml(compositeKindLabel(composite))}</span>
+          <span>${escapeHtml(countLabel)}</span>
+          ${sourceLabel ? `<span>${escapeHtml(sourceLabel)}</span>` : ""}
+        </div>
+        <div class="composite-members">
+          ${members.map((entry) => renderCompositeMemberHtml(context, entry)).join("")}
+        </div>
+      </section>
+    `;
+  }
+
   function renderArtifactTitleHtml(context = {}) {
     const item = (context.artifacts || [])[context.activeIndex || 0] || {};
-    const projected = projectedArtifact(context, item);
-    const slot = projectedSlot(context, item);
     const workflow = context.workbenchProjection?.workflow;
     const composite = activeComposite(context);
-    const slotLabel = slot?.label || projected?.slot;
-    const slotHtml = slotLabel ? `<span class="slot-pill">${escapeHtml(slotLabel)}</span>` : "";
-    const breadcrumbHtml = composite
-      ? `<span class="artifact-breadcrumb">${escapeHtml(workflow?.name || "Workflow")} -&gt; ${escapeHtml(composite.label || composite.id)}</span>`
+    const breadcrumbSegments = projectionMetaValues([
+      workflow?.name,
+      composite?.label || composite?.id,
+    ]);
+    const breadcrumbHtml = breadcrumbSegments.length
+      ? `<span class="artifact-breadcrumb-rail" title="${escapeHtml(breadcrumbSegments.join(" / "))}">${breadcrumbSegments.map((segment) => (
+        `<span class="artifact-breadcrumb-segment">${escapeHtml(segment)}</span>`
+      )).join('<span class="artifact-breadcrumb-separator" aria-hidden="true">›</span>')}</span>`
       : "";
-    const formatTime = typeof context.formatTime === "function" ? context.formatTime : () => "";
-    return `${breadcrumbHtml}<span class="artifact-heading">${escapeHtml(item.name)} ${slotHtml} <span class="artifact-time">(${escapeHtml(formatTime(item.created_at_epoch))})</span></span>`;
+    return `
+      <div class="artifact-identity-strip" title="${escapeHtml(item.name || "")}">
+        <span class="artifact-heading">${escapeHtml(artifactDisplayName(context, item))}</span>
+        ${breadcrumbHtml}
+      </div>
+    `;
   }
 
   function renderOverviewHtml(context = {}) {
@@ -274,7 +440,7 @@
       const item = artifacts[index] || {};
       return `
         <button class="artifact-option ${index === context.activeIndex ? "active" : ""}" type="button" data-index="${index}">
-          <span>${escapeHtml(item.name)}</span>
+          <span>${escapeHtml(artifactDisplayName(context, item))}</span>
           <span class="small">${escapeHtml(artifactProjectionLine({ ...context, item }))}</span>
         </button>
       `;
@@ -377,6 +543,12 @@
         step?.status || projected.status,
       ])
       : [];
+    const statusValue = projected ? step?.status || projected.status : "";
+    const rowBadges = [
+      artifactStatusBadge(statusValue),
+      annotationCountBadge(notes.length),
+    ].filter(Boolean).join("");
+    const rowTitle = artifactRowTitle(context, item, projectionMeta);
     const annotationHtml = notes.length
       ? notes.map((note) => `
             <div class="annotation" draggable="true" data-artifact-id="${escapeHtml(item.id)}" data-annotation-id="${escapeHtml(note.id)}">
@@ -386,16 +558,13 @@
           `).join("")
       : "";
     return `
-          <div class="artifact-row ${index === context.activeIndex ? "active" : ""}" data-index="${index}">
+          <div class="artifact-row artifact-row-compact ${index === context.activeIndex ? "active" : ""}" data-index="${index}" title="${escapeHtml(rowTitle)}">
             <div class="row-title">
               ${artifactTypeIcon(context, item)}
-              <div class="name">${escapeHtml(item.name)}</div>
+              ${artifactSubtypeIcon(context, item)}
+              <div class="name">${escapeHtml(artifactDisplayName(context, item))}</div>
+              ${rowBadges ? `<div class="artifact-row-badges">${rowBadges}</div>` : ""}
             </div>
-            ${projectionMeta.length ? `
-              <div class="projection-meta">
-                ${projectionMeta.map((value) => `<span>${escapeHtml(value)}</span>`).join("")}
-              </div>
-            ` : ""}
             ${annotationHtml}
           </div>
         `;
@@ -406,6 +575,7 @@
       .map((index) => renderArtifactRow(context, index))
       .join("");
     return renderArtifactNavigationHeader(context)
+      + renderActiveCompositeReadoutHtml(context)
       + (artifactRows || '<div class="empty-filter">No artifacts match the active filters.</div>');
   }
 
@@ -421,6 +591,7 @@
     filterSummaryText,
     formatSlot,
     renderSidebarHtml,
+    renderActiveCompositeReadoutHtml,
     renderArtifactTitleHtml,
     renderOverviewHtml,
     renderArtifactNavigationHeader,

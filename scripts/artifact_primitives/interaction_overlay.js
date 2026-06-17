@@ -1,6 +1,7 @@
 (function () {
   const ROOT = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
   const ANNOTATION_OVERLAY_SUBTYPE = "annotation";
+  const BOUNDED_INPUT_OVERLAY_SUBTYPE = "bounded_input";
   const OVERLAY_SUBTYPE_MODELS = {
     [ANNOTATION_OVERLAY_SUBTYPE]: {
       subtype: ANNOTATION_OVERLAY_SUBTYPE,
@@ -8,6 +9,13 @@
       anchorTypes: ["image_region", "text_range", "html_element"],
       draftTypes: ["image", "markdown"],
       intentActions: ["append", "update", "delete", "cancel"],
+    },
+    [BOUNDED_INPUT_OVERLAY_SUBTYPE]: {
+      subtype: BOUNDED_INPUT_OVERLAY_SUBTYPE,
+      editorModes: ["fill"],
+      anchorTypes: ["workflow_input"],
+      draftTypes: [],
+      intentActions: ["set", "clear"],
     },
   };
 
@@ -49,6 +57,9 @@
     }
     if (model.subtype === ANNOTATION_OVERLAY_SUBTYPE) {
       return annotationEditorLabels({ mode });
+    }
+    if (model.subtype === BOUNDED_INPUT_OVERLAY_SUBTYPE) {
+      return { primary: "Save", secondary: "Clear" };
     }
     return { primary: "Apply", secondary: "Cancel" };
   }
@@ -94,6 +105,35 @@
     ));
   }
 
+  function boundedInputOverlayKey({ stepId, inputId } = {}) {
+    if (!stepId || !inputId) return "";
+    return `${stepId}.${inputId}`;
+  }
+
+  function boundedInputOverlayAnchorKey(overlay = {}) {
+    return boundedInputOverlayKey({
+      stepId: overlay.anchor?.step_id,
+      inputId: overlay.anchor?.input_id,
+    });
+  }
+
+  function boundedInputOverlays(interactionOverlays = [], stepId = null) {
+    return (interactionOverlays || []).filter((overlay) => (
+      overlay?.subtype === BOUNDED_INPUT_OVERLAY_SUBTYPE
+      && overlay.anchor?.type === "workflow_input"
+      && (!stepId || overlay.anchor?.step_id === stepId)
+    ));
+  }
+
+  function boundedInputOverlayValues(interactionOverlays = []) {
+    const values = {};
+    for (const overlay of boundedInputOverlays(interactionOverlays)) {
+      const key = boundedInputOverlayAnchorKey(overlay);
+      if (key) values[key] = String(overlay.body?.value || "");
+    }
+    return values;
+  }
+
   function appendAnnotation({ interactionOverlays = [], note } = {}) {
     return [...copyInteractionOverlays(interactionOverlays), note];
   }
@@ -113,6 +153,60 @@
 
   function deleteAnnotation({ interactionOverlays = [], noteId } = {}) {
     return copyInteractionOverlays(interactionOverlays).filter((note) => note.id !== noteId);
+  }
+
+  function upsertBoundedInputOverlay({
+    interactionOverlays = [],
+    definition,
+    value,
+    nowMs = Date.now(),
+  } = {}) {
+    if (!definition?.step_id || !definition?.input_id || !definition?.anchor?.artifact_id) {
+      return copyInteractionOverlays(interactionOverlays);
+    }
+    const normalized = String(value ?? "").trim();
+    const key = boundedInputOverlayKey({
+      stepId: definition.step_id,
+      inputId: definition.input_id,
+    });
+    const nowEpoch = epochFromMilliseconds(nowMs);
+    const next = [];
+    let replaced = false;
+    for (const overlay of interactionOverlays || []) {
+      if (
+        overlay?.subtype === BOUNDED_INPUT_OVERLAY_SUBTYPE
+        && boundedInputOverlayAnchorKey(overlay) === key
+      ) {
+        replaced = true;
+        if (normalized) {
+          next.push({
+            ...overlay,
+            body: { kind: "input_value", value: normalized },
+            updated_at_epoch: nowEpoch,
+          });
+        }
+        continue;
+      }
+      next.push(overlay);
+    }
+    if (!replaced && normalized) {
+      next.push({
+        id: definition.id || `input:${definition.step_id}:${definition.input_id}`,
+        subtype: BOUNDED_INPUT_OVERLAY_SUBTYPE,
+        subject: definition.subject || { kind: "workflow_step", id: definition.step_id },
+        anchor: {
+          type: "workflow_input",
+          coordinate_space: "workflow_graph",
+          artifact_id: definition.anchor.artifact_id,
+          step_id: definition.step_id,
+          input_id: definition.input_id,
+        },
+        body: { kind: "input_value", value: normalized },
+        created_at_epoch: nowEpoch,
+        updated_at_epoch: null,
+      });
+    }
+    return next;
   }
 
   function annotationReorderPlan({
@@ -146,12 +240,98 @@
     return { artifactId, interactionOverlays: next };
   }
 
+  function selectorCandidatesForAnchor(anchor = {}) {
+    if (Array.isArray(anchor.selector_candidates)) {
+      return anchor.selector_candidates.map((selector) => String(selector || "").trim()).filter(Boolean);
+    }
+    if (anchor.selector) return [String(anchor.selector).trim()].filter(Boolean);
+    return [];
+  }
+
+  function elementForDomElementAnchor({ anchor, rootEl } = {}) {
+    if (!rootEl || typeof rootEl.querySelector !== "function") return null;
+    for (const selector of selectorCandidatesForAnchor(anchor)) {
+      try {
+        const match = rootEl.querySelector(selector);
+        if (match) return match;
+      } catch (_error) {
+        // Selector candidates are fallbacks; invalid candidates should not block later selectors.
+      }
+    }
+    return null;
+  }
+
+  function displayRectForDomElementAnchor({
+    anchor,
+    rootEl,
+    relativeToEl,
+  } = {}) {
+    const element = elementForDomElementAnchor({ anchor, rootEl });
+    if (!element || typeof element.getBoundingClientRect !== "function") return null;
+    const elementRect = element.getBoundingClientRect();
+    const relativeRect = typeof relativeToEl?.getBoundingClientRect === "function"
+      ? relativeToEl.getBoundingClientRect()
+      : { left: 0, top: 0 };
+    const width = Number.isFinite(elementRect.width) ? elementRect.width : elementRect.right - elementRect.left;
+    const height = Number.isFinite(elementRect.height) ? elementRect.height : elementRect.bottom - elementRect.top;
+    return {
+      x: elementRect.left - relativeRect.left,
+      y: elementRect.top - relativeRect.top,
+      width,
+      height,
+    };
+  }
+
+  function numberForPath(value) {
+    const rounded = Math.round(Number(value) * 1000) / 1000;
+    return Number.isFinite(rounded) ? String(rounded).replace(/\.0+$/, "") : "0";
+  }
+
+  function rectCenter(rect = {}) {
+    return {
+      x: Number(rect.x || 0) + (Number(rect.width || 0) / 2),
+      y: Number(rect.y || 0) + (Number(rect.height || 0) / 2),
+    };
+  }
+
+  function connectorPathBetweenRects({ fromRect, toRect } = {}) {
+    if (!fromRect || !toRect) return null;
+    const fromCenter = rectCenter(fromRect);
+    const toCenter = rectCenter(toRect);
+    const leftToRight = fromCenter.x <= toCenter.x;
+    const start = {
+      x: leftToRight ? Number(fromRect.x || 0) + Number(fromRect.width || 0) : Number(fromRect.x || 0),
+      y: fromCenter.y,
+    };
+    const end = {
+      x: leftToRight ? Number(toRect.x || 0) : Number(toRect.x || 0) + Number(toRect.width || 0),
+      y: toCenter.y,
+    };
+    const controlDistance = Math.max(8, Math.abs(end.x - start.x) / 2);
+    const controlSign = leftToRight ? 1 : -1;
+    const c1 = { x: start.x + (controlDistance * controlSign), y: start.y };
+    const c2 = { x: end.x - (controlDistance * controlSign), y: end.y };
+    return {
+      d: `M${numberForPath(start.x)} ${numberForPath(start.y)} C${numberForPath(c1.x)} ${numberForPath(c1.y)} ${numberForPath(c2.x)} ${numberForPath(c2.y)} ${numberForPath(end.x)} ${numberForPath(end.y)}`,
+      start,
+      end,
+    };
+  }
+
   function displayRectForAnchor({
     anchor,
+    resolvers = {},
     htmlElementRect,
     imageRegionRect,
     textRangeRect,
+    domElementRect,
+    rootEl,
+    relativeToEl,
   } = {}) {
+    const customResolver = anchor?.type ? resolvers[anchor.type] : null;
+    if (typeof customResolver === "function") {
+      return customResolver(anchor);
+    }
     if (anchor?.type === "image_region" && anchor.rect && typeof imageRegionRect === "function") {
       return imageRegionRect(anchor.rect);
     }
@@ -160,6 +340,10 @@
     }
     if (anchor?.type === "text_range" && typeof textRangeRect === "function") {
       return textRangeRect(anchor);
+    }
+    if (anchor?.type === "dom_element") {
+      if (typeof domElementRect === "function") return domElementRect(anchor);
+      return displayRectForDomElementAnchor({ anchor, rootEl, relativeToEl });
     }
     return null;
   }
@@ -420,11 +604,15 @@
     annotationOverlays,
     annotationText,
     beginOverlayDraft,
+    boundedInputOverlayValues,
+    boundedInputOverlays,
     closedEditorSession,
+    connectorPathBetweenRects,
     completeOverlayDraft,
     completeResolvedOverlayDraft,
     commitOverlayEditorIntent,
     createEditorSession,
+    displayRectForDomElementAnchor,
     displayRectForAnchor,
     editorLabels,
     existingOverlayEditorPlan,
@@ -434,5 +622,6 @@
     secondaryOverlayEditorIntent,
     supportedOverlaySubtypes,
     overlaySubtypeModel,
+    upsertBoundedInputOverlay,
   };
 }());

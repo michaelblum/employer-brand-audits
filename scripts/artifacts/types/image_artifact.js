@@ -49,6 +49,7 @@
       readoutLabel: "Dimensions",
       readoutValue: readout(options),
       controls: [{ id: "image-zoom", html: renderZoomControls() }],
+      controlPolicy: options.controlPolicy,
     });
   }
 

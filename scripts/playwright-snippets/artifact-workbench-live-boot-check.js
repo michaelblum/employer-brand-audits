@@ -28,6 +28,7 @@ async (page) => {
         artifactCount: artifacts.length,
         imageIndex: artifacts.findIndex((artifact) => artifact.type === "image"),
         markdownIndex: artifacts.findIndex((artifact) => artifact.type === "markdown"),
+        htmlIndex: artifacts.findIndex((artifact) => artifact.id === "l4-final-report" && artifact.type === "html"),
         documentIndex: artifacts.findIndex((artifact) => ["json", "text", "log", "file"].includes(artifact.type)),
       };
     });
@@ -36,6 +37,7 @@ async (page) => {
     if (bootState.artifactCount <= 0) throw new Error("Workbench booted without artifacts");
     if (bootState.imageIndex < 0) throw new Error("No image artifact found for live smoke");
     if (bootState.markdownIndex < 0) throw new Error("No markdown artifact found for live smoke");
+    if (bootState.htmlIndex < 0) throw new Error("No HTML L4 report artifact found for live smoke");
     if (bootState.documentIndex < 0) throw new Error("No document artifact found for live smoke");
 
     async function selectArtifact(index) {
@@ -55,7 +57,7 @@ async (page) => {
         && image.naturalWidth > 0
         && !document.querySelector("#image-wrap")?.hidden
         && document.querySelector("#markdown-wrap")?.hidden
-        && document.querySelector("#image-controls") !== null
+        && document.querySelector("#image-controls") === null
         && document.querySelector("#markdown-controls") === null
         && /\d+ x \d+ px/.test(readout);
     }, null, { timeout: 5000 });
@@ -66,8 +68,21 @@ async (page) => {
       return document.querySelector("#image-wrap")?.hidden
         && !document.querySelector("#markdown-wrap")?.hidden
         && document.querySelector("#image-controls") === null
-        && document.querySelector("#markdown-controls") !== null
+        && document.querySelector("#markdown-controls") === null
         && /lines/.test(readout);
+    }, null, { timeout: 5000 });
+
+    await selectArtifact(bootState.htmlIndex);
+    await page.waitForFunction(() => {
+      const readout = document.querySelector("#artifact-readout")?.textContent || "";
+      const frame = document.querySelector("[data-html-frame]");
+      return document.querySelector("#image-wrap")?.hidden
+        && !document.querySelector("#markdown-wrap")?.hidden
+        && document.querySelector("[data-artifact-renderer='html']") !== null
+        && document.querySelector("#image-controls") === null
+        && document.querySelector("#markdown-controls") === null
+        && frame?.contentDocument?.querySelector('[data-report-surface="signal-brief"]')
+        && /html/.test(readout);
     }, null, { timeout: 5000 });
 
     await selectArtifact(bootState.documentIndex);

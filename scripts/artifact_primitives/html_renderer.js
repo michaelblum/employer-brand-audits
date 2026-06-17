@@ -31,10 +31,19 @@
   }
 
   function htmlReadout(artifact = {}, content = "") {
+    if (isWebSnapshotArtifact(artifact)) {
+      const targetCount = Number(artifact.facets?.target_count || 0);
+      const dimensions = artifact.facets?.visual_dimensions || {};
+      const size = artifact.size_bytes ?? artifact.sizeBytes;
+      return [
+        targetCount ? `${targetCount} ${targetCount === 1 ? "target" : "targets"}` : "",
+        dimensions.width && dimensions.height ? `${dimensions.width} x ${dimensions.height} px` : "",
+        size ? `${size} bytes` : "",
+      ].filter(Boolean).join(" · ");
+    }
     const count = htmlElementCount(content);
     const size = artifact.size_bytes ?? artifact.sizeBytes;
     return [
-      "html",
       `${count} ${count === 1 ? "element" : "elements"}`,
       size ? `${size} bytes` : "",
     ].filter(Boolean).join(" · ");
@@ -50,9 +59,83 @@
     return `<div class="html-artifact-meta">${metadata.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`;
   }
 
+  function htmlDocumentHeight(doc) {
+    if (!doc) return 0;
+    return Math.max(
+      doc.body?.scrollHeight || 0,
+      doc.body?.offsetHeight || 0,
+      doc.documentElement?.scrollHeight || 0,
+      doc.documentElement?.offsetHeight || 0,
+      doc.documentElement?.clientHeight || 0,
+    );
+  }
+
+  function syncHtmlFrameHeight(frame) {
+    const doc = frame?.contentDocument;
+    if (!doc) return;
+    if (doc.documentElement?.style) doc.documentElement.style.overflow = "hidden";
+    if (doc.body?.style) doc.body.style.overflow = "hidden";
+    const height = Math.max(560, htmlDocumentHeight(doc));
+    if (frame.style) frame.style.height = `${height}px`;
+  }
+
+  function scheduleHtmlFrameHeightSync(frame) {
+    if (!frame) return;
+    frame.setAttribute?.("scrolling", "no");
+    frame.scrolling = "no";
+    const schedule = () => {
+      const requestFrame = typeof window.requestAnimationFrame === "function"
+        ? window.requestAnimationFrame.bind(window)
+        : (callback) => callback();
+      requestFrame(() => syncHtmlFrameHeight(frame));
+      requestFrame(() => requestFrame(() => syncHtmlFrameHeight(frame)));
+    };
+    frame.addEventListener?.("load", schedule);
+    schedule();
+  }
+
+  function isWebSnapshotArtifact(artifact = {}) {
+    return String(artifact.kind || artifact.facets?.artifact_kind || "").toLowerCase() === "web_snapshot";
+  }
+
+  function webSnapshotDimensions(artifact = {}) {
+    const dimensions = artifact.facets?.visual_dimensions || artifact.dimensions || {};
+    return {
+      width: Math.max(1, Math.round(Number(dimensions.width || 1))),
+      height: Math.max(1, Math.round(Number(dimensions.height || 1))),
+    };
+  }
+
+  function renderWebSnapshotArtifact(artifact = {}, containerEl) {
+    const title = artifact.name || artifact.id || "Web snapshot";
+    const dimensions = webSnapshotDimensions(artifact);
+    containerEl.innerHTML = `
+      <div class="web-snapshot-artifact" data-artifact-renderer="html" data-web-snapshot-root="true">
+        <iframe
+          class="html-artifact-frame web-snapshot-artifact-frame"
+          data-html-frame
+          sandbox="allow-same-origin"
+          scrolling="no"
+          title="${escapeHtml(title)}"
+          style="width:${dimensions.width}px;height:${dimensions.height}px"
+        ></iframe>
+      </div>
+    `;
+    const frame = containerEl.querySelector("[data-html-frame]");
+    if (frame) {
+      frame.setAttribute?.("scrolling", "no");
+      frame.scrolling = "no";
+      frame.srcdoc = String(artifact.content || "");
+    }
+    return { ok: true, state: "complete", errorMessage: "" };
+  }
+
   function renderHtmlArtifact(artifact = {}, containerEl) {
     if (!containerEl) {
       return { ok: false, state: "error", errorMessage: "Missing HTML container" };
+    }
+    if (isWebSnapshotArtifact(artifact)) {
+      return renderWebSnapshotArtifact(artifact, containerEl);
     }
     const title = artifact.name || artifact.id || "HTML artifact";
     containerEl.innerHTML = `
@@ -62,12 +145,15 @@
           ${renderMetadata(artifact)}
         </header>
         <div class="html-artifact-frame-wrap">
-          <iframe class="html-artifact-frame" data-html-frame sandbox="allow-same-origin" title="${escapeHtml(title)}"></iframe>
+          <iframe class="html-artifact-frame" data-html-frame sandbox="allow-same-origin" scrolling="no" title="${escapeHtml(title)}"></iframe>
         </div>
       </article>
     `;
     const frame = containerEl.querySelector("[data-html-frame]");
-    if (frame) frame.srcdoc = String(artifact.content || "");
+    if (frame) {
+      scheduleHtmlFrameHeightSync(frame);
+      frame.srcdoc = String(artifact.content || "");
+    }
     return { ok: true, state: "complete", errorMessage: "" };
   }
 
@@ -85,12 +171,49 @@
     return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
   }
 
+  function cssStringEscape(value) {
+    return String(value ?? "").replace(/["\\\n\r\f]/g, (char) => ({
+      '"': '\\"',
+      "\\": "\\\\",
+      "\n": "\\a ",
+      "\r": "\\d ",
+      "\f": "\\c ",
+    }[char]));
+  }
+
+  function cleanRect(value) {
+    if (!value || typeof value !== "object") return null;
+    return {
+      x: Math.round(Number(value.x || 0)),
+      y: Math.round(Number(value.y || 0)),
+      width: Math.max(1, Math.round(Number(value.width || 0))),
+      height: Math.max(1, Math.round(Number(value.height || 0))),
+    };
+  }
+
+  function webTargetMetadata(element) {
+    const raw = element?.getAttribute?.("data-web-target");
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function selectorCandidates(element) {
     const tag = String(element?.tagName || "").toLowerCase();
     const id = element?.id || element?.getAttribute?.("id") || "";
     const classes = elementClasses(element);
     const classSelector = classes.map((item) => `.${cssEscape(item)}`).join("");
     const candidates = [];
+    const webTargetId = element?.getAttribute?.("data-web-target-id") || "";
+    if (webTargetId) {
+      const escapedWebTargetId = cssStringEscape(webTargetId);
+      candidates.push(`[data-web-target-id="${escapedWebTargetId}"]`);
+      if (tag) candidates.push(`${tag}[data-web-target-id="${escapedWebTargetId}"]`);
+    }
     if (id) candidates.push(`#${cssEscape(id)}`);
     if (tag && (id || classSelector)) candidates.push(`${tag}${id ? `#${cssEscape(id)}` : ""}${classSelector}`);
     if (tag && classSelector) candidates.push(`${tag}${classSelector}`);
@@ -139,7 +262,12 @@
 
   function htmlElementAnchorForElement(element, { sourceUrl = "" } = {}) {
     const tag = String(element?.tagName || "").toLowerCase();
-    return {
+    const metadata = webTargetMetadata(element);
+    const webTargetId = element?.getAttribute?.("data-web-target-id") || metadata?.id || "";
+    const targetMapSelectors = Array.isArray(metadata?.selector_candidates)
+      ? metadata.selector_candidates.map((item) => String(item)).filter(Boolean)
+      : [];
+    const anchor = {
       type: "html_element",
       coordinate_space: "html_document",
       selector_candidates: selectorCandidates(element),
@@ -153,6 +281,12 @@
       ancestor_trail: ancestorTrail(element),
       source_url: sourceUrl,
     };
+    if (webTargetId) anchor.web_target_id = String(webTargetId);
+    if (metadata?.target_kind) anchor.target_kind = String(metadata.target_kind);
+    const screenshotRect = cleanRect(metadata?.rect);
+    if (screenshotRect) anchor.screenshot_rect = screenshotRect;
+    if (targetMapSelectors.length) anchor.target_map_selector_candidates = targetMapSelectors;
+    return anchor;
   }
 
   function displayRectForHtmlElementAnchor({ anchor, frameEl, wrapEl } = {}) {
