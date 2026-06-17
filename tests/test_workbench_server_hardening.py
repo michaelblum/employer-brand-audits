@@ -18,12 +18,12 @@ sys.path.insert(0, str(REPO_ROOT))
 from scripts.playwright_cli_workbench_server import WorkbenchServer
 
 
-EASY_AUDIT_MANIFEST = REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"
+HARDENING_MANIFEST = REPO_ROOT / "tests" / "fixtures" / "workbench-hardening" / "manifest.json"
 
 
 class RunningWorkbenchServer:
     def __init__(self) -> None:
-        self.server = WorkbenchServer(("127.0.0.1", 0), EASY_AUDIT_MANIFEST)
+        self.server = WorkbenchServer(("127.0.0.1", 0), HARDENING_MANIFEST)
         self.host, self.port = self.server.server_address
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 

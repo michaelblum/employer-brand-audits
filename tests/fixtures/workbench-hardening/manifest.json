@@ -1,0 +1,54 @@
+{
+  "artifacts": [
+    {
+      "file_path": "l0-intake-flow.md",
+      "id": "l0-intake-flow",
+      "layer": 0,
+      "produced_by_step_id": "l0-seed-intake",
+      "status": "complete",
+      "type": "intake_flow"
+    },
+    {
+      "file_path": "l1-careers-text.txt",
+      "id": "l1-careers-text",
+      "layer": 1,
+      "parent_ids": [
+        "l0-intake-flow"
+      ],
+      "produced_by_step_id": "l1-capture",
+      "status": "complete",
+      "type": "text"
+    }
+  ],
+  "audit_id": "workbench-hardening",
+  "company": "Hardening Fixture Co",
+  "domain": "example.test",
+  "schema_version": "audit_manifest.v0",
+  "status": "complete",
+  "steps": [
+    {
+      "artifact_ids": [
+        "l0-intake-flow"
+      ],
+      "id": "l0-seed-intake",
+      "name": "L0 seed intake",
+      "required_inputs": [],
+      "status": "complete"
+    },
+    {
+      "artifact_ids": [
+        "l1-careers-text"
+      ],
+      "id": "l1-capture",
+      "name": "L1 capture",
+      "parent_step_ids": [
+        "l0-seed-intake"
+      ],
+      "status": "complete"
+    }
+  ],
+  "workbench_context": {
+    "artifact_control_policy": "read-only",
+    "mermaid_source_visibility": "preview-hidden"
+  }
+}
