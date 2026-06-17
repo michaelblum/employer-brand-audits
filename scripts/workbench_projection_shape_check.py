@@ -284,6 +284,24 @@ def assert_url_stage_projection_shape(payload: dict[str, Any]) -> dict[str, Any]
         len([resource for resource in resources if resource.get("type") == "url"]) == 1,
         "URL stage URL resources must be deduplicated",
     )
+    resource_slots = {
+        resource.get("id"): resource.get("slot")
+        for resource in resources
+    }
+    expected_support_resource_slots = {
+        "resource:file:url-stage-basic:page_screenshot": "capture.full_page",
+        "resource:file:url-stage-basic:capture_log": "debug.log",
+    }
+    for resource_id, slot in expected_support_resource_slots.items():
+        require(resource_slots.get(resource_id) == slot, f"URL stage support resource drifted: {resource_id}")
+        require(
+            any(
+                edge.get("id") == f"edge:{resource_id}:step:url-stage:url-stage-basic"
+                and edge.get("kind") == "supports"
+                for edge in edges
+            ),
+            f"Missing URL stage support edge for {resource_id}",
+        )
     group = next((item for item in groups if item.get("id") == "composite:url-stage:url-stage-basic"), None)
     require(isinstance(group, dict), "Missing URL stage composite group")
     require(group.get("kind") == "web_snapshot_bundle", "URL stage composite kind drifted")

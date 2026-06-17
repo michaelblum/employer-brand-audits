@@ -32,6 +32,9 @@ workbench implementation, and checked-in Playwright snippets.
   registration. Target-map rects stay in screenshot coordinate space inside the
   data file. Selector candidates remain advisory replay/mining hints, while
   annotations and overlays are the natural-language intent spine.
+- URL-stage support files such as `page_screenshot` and `capture_log` project as
+  file resources for provenance/debugging, not as workbench-visible sidebar
+  artifacts.
 
 ## Work Guidance
 

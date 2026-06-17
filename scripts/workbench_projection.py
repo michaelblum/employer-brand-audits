@@ -120,6 +120,11 @@ URL_STAGE_ARTIFACT_SLOTS = {
     },
 }
 
+URL_STAGE_SUPPORT_RESOURCE_SLOTS = {
+    "page_screenshot": "capture.full_page",
+    "capture_log": "debug.log",
+}
+
 
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -463,6 +468,27 @@ def url_stage_manifest_context(manifest: dict[str, Any]) -> dict[str, Any]:
     return context
 
 
+def url_stage_support_file_resources(
+    slug: str,
+    page_artifacts: dict[str, Any],
+    manifest_dir: Path,
+) -> list[dict[str, Any]]:
+    resources: list[dict[str, Any]] = []
+    for key, slot in URL_STAGE_SUPPORT_RESOURCE_SLOTS.items():
+        path_value_raw = page_artifacts.get(key)
+        if not path_value_raw:
+            continue
+        resources.append(
+            local_file_resource(
+                slug,
+                key,
+                url_stage_relative_path(str(path_value_raw), manifest_dir),
+                slot,
+            )
+        )
+    return resources
+
+
 def validate_url_stage_web_snapshot_data(data: dict[str, Any], *, path_value: str) -> dict[str, Any]:
     if data.get("schema_version") != "web_snapshot.v0":
         raise ValueError(f"URL stage web_snapshot_data has invalid schema_version: {path_value}")
@@ -571,6 +597,18 @@ def project_url_stage_manifest(manifest_path: str | Path) -> dict[str, Any]:
             "page_slugs": [slug],
             "artifact_ids": [],
         }
+
+    support_resources = url_stage_support_file_resources(slug, page_artifacts, manifest_dir)
+    resources.extend(support_resources)
+    edges.extend(
+        {
+            "id": f"edge:{resource['id']}:{step_id}",
+            "kind": "supports",
+            "from": resource["id"],
+            "to": step_id,
+        }
+        for resource in support_resources
+    )
 
     projected_artifact_ids: list[str] = []
     web_snapshot_data_key = "web_snapshot_data"

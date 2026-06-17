@@ -344,7 +344,6 @@ def build_web_snapshot_data(
             "document": blueprint.get("document") or {},
         },
         "source_trees": source_trees,
-        "links": [],
         "projection_catalog": {
             "target_map": {
                 "schema_version": "url_stage_target_map.v0",
