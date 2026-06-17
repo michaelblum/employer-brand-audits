@@ -24,6 +24,7 @@
       documentContent: {},
       artifactDocumentTheme: "dark",
       artifactProjectionModel: null,
+      markdownPreviewBodyClass: "",
       filters: {
         stepId: null,
         slot: null,
@@ -746,6 +747,18 @@
       return workbenchArtifactBinding().stagePlan(item);
     }
 
+    function applyMarkdownPreviewBodyClass(className) {
+      const nextClass = typeof className === "string" ? className.trim() : "";
+      const previewBody = markdownPreviewBody();
+      if (app.markdownPreviewBodyClass && app.markdownPreviewBodyClass !== nextClass) {
+        previewBody.classList.remove(app.markdownPreviewBodyClass);
+      }
+      if (nextClass && app.markdownPreviewBodyClass !== nextClass) {
+        previewBody.classList.add(nextClass);
+      }
+      app.markdownPreviewBodyClass = nextClass;
+    }
+
     function applyArtifactStagePlan(plan) {
       const { stage = {}, surfaces = {} } = plan || {};
       $("stage").classList.toggle("markdown-stage", Boolean(stage.markdownStage));
@@ -756,7 +769,7 @@
       if (typeof surfaces.markdownMarkerHidden === "boolean") $("markdown-marker").hidden = surfaces.markdownMarkerHidden;
       if (typeof surfaces.markdownPreviewHidden === "boolean") $("markdown-preview").hidden = surfaces.markdownPreviewHidden;
       if (typeof surfaces.markdownSourceHidden === "boolean") $("markdown-source").hidden = surfaces.markdownSourceHidden;
-      markdownPreviewBody().classList.toggle("web-snapshot-preview-body", surfaces.webSnapshotBodyClass === true);
+      applyMarkdownPreviewBodyClass(surfaces.markdownPreviewBodyClass);
       if (surfaces.resetHoverMarker) resetHoverMarker();
       if (typeof surfaces.commentPopoverHidden === "boolean") $("comment-popover").hidden = surfaces.commentPopoverHidden;
     }

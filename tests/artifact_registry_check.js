@@ -130,7 +130,7 @@ assert.deepEqual(
       commentPopoverHidden: true,
       markdownPreviewHidden: false,
       markdownSourceHidden: true,
-      webSnapshotBodyClass: true,
+      markdownPreviewBodyClass: "web-snapshot-preview-body",
     },
   },
 );
