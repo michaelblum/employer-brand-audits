@@ -154,6 +154,7 @@
       return workflowTargetLinkEffect;
     }
     const artifactNavigation = () => window.Artifacts.navigation;
+    const workflowPairing = () => window.Artifacts.workflowPairing;
     let artifactBindingInstance = null;
     const artifactNavigationContext = () => artifactNavigation().artifactNavigationContext({
       artifacts: app.collection.artifacts,
@@ -491,16 +492,8 @@
       });
     }
 
-    function selectorCandidatesForWorkflowDefinition(definition = {}) {
-      const selectors = definition.anchor?.selector_candidates;
-      return Array.isArray(selectors) ? selectors.map((item) => String(item || "").trim()).filter(Boolean) : [];
-    }
-
     function workflowPairingDefinition(item = artifact()) {
-      return boundedInputDefinitionsForArtifact(item).find((definition) => (
-        definition?.step_id
-        && selectorCandidatesForWorkflowDefinition(definition).length > 0
-      )) || null;
+      return workflowPairing().definitionForArtifact(boundedInputDefinitionsForArtifact(item), item);
     }
 
     function elementForSelectorCandidates(rootEl, selectors = []) {
@@ -517,14 +510,7 @@
     }
 
     function workflowDomAnchorForDefinition(definition) {
-      const selectorCandidates = selectorCandidatesForWorkflowDefinition(definition);
-      if (!selectorCandidates.length) return null;
-      return {
-        type: "dom_element",
-        coordinate_space: "artifact_dom",
-        artifact_id: definition.anchor?.artifact_id || artifact()?.id || "",
-        selector_candidates: selectorCandidates,
-      };
+      return workflowPairing().domAnchorForDefinition(definition, { artifactId: artifact()?.id || "" });
     }
 
     function displayRectForDomAnchor(anchor, rootEl = markdownPreviewBody()) {
@@ -541,16 +527,6 @@
         coordinate_space: "workbench_stage",
         selector_candidates: [selector],
       }, $("stage"));
-    }
-
-    function targetLinkOptionsForWorkflowDefinition(definition = {}) {
-      if (definition.target_link && typeof definition.target_link === "object") {
-        return definition.target_link;
-      }
-      if (definition.anchor?.target_link && typeof definition.anchor.target_link === "object") {
-        return definition.anchor.target_link;
-      }
-      return {};
     }
 
     function clearWorkflowPairingOverlay() {
@@ -603,7 +579,7 @@
         targetEl: panel,
         stageEl: $("stage"),
         interactionOverlay: interactionOverlay(),
-        options: targetLinkOptionsForWorkflowDefinition(definition),
+        options: workflowPairing().targetLinkOptionsForDefinition(definition),
         dataset: { workflowStepId: definition.step_id },
         targetDataset: { pairing: "workflow-step" },
       });

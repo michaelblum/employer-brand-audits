@@ -83,6 +83,10 @@ WORKBENCH_ASSETS = {
         ARTIFACTS_DIR / "core" / "artifact_common.js",
         "text/javascript",
     ),
+    "/assets/artifacts/core/workflow_pairing.js": (
+        ARTIFACTS_DIR / "core" / "workflow_pairing.js",
+        "text/javascript",
+    ),
     "/assets/artifacts/types/image_artifact.js": (
         ARTIFACTS_DIR / "types" / "image_artifact.js",
         "text/javascript",

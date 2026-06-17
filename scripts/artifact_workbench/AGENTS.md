@@ -28,10 +28,11 @@ and app shell JavaScript.
   `bounded_inputs` summary; do not collapse them into annotation comments.
 - Stage-level workflow pairing overlays may visually connect bounded input
   panels to resolved artifact DOM/SVG targets. Keep those pairings selector- and
-  anchor-driven through projection data or adapter helpers; do not hardcode
-  Mermaid-generated element ids in the app shell. Render the visible chase
-  highlight and connector through the reusable `target_link.js` primitive; the
-  shell may supply per-instance options from projected `target_link` data.
+  anchor-driven through projection data and `scripts/artifacts/core/workflow_pairing.js`;
+  do not hardcode Mermaid-generated element ids in the app shell. Render the
+  visible chase highlight and connector through the reusable `target_link.js`
+  primitive; the shell may execute DOM queries and supply per-instance options
+  from projected `target_link` data.
 - The stage is the shared vertical scroll boundary for rendered artifacts.
   Document-like artifact surfaces fill the stage height and must not introduce
   nested vertical preview scroll panes. Image artifacts keep zoom behavior and

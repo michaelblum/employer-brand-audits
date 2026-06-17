@@ -15,6 +15,10 @@ artifact type components, artifact navigation, and the artifact registry.
 
 - `core/` owns shared artifact helpers that are not specific to one artifact
   type.
+- `core/workflow_pairing.js` owns pure workflow-pairing selection helpers:
+  bounded-input definition selection, selector normalization, DOM-anchor
+  shaping, and target-link option selection. The workbench app shell still owns
+  DOM queries, lifecycle scheduling, and effect execution.
 - `types/` owns artifact type components such as image, markdown, HTML,
   document, and future variants.
 - `navigation/` owns artifact list/tree/filter/navigation planning for the

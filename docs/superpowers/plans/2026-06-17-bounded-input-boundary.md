@@ -91,7 +91,7 @@ git push -u origin workbench/bounded-input-boundary
 - Test: `tests/workflow_pairing_check.js`
 - Update if asset boundary changes: `scripts/AGENTS.md` or `scripts/artifacts/AGENTS.md`
 
-- [ ] **Step 1: Write failing browser primitive test**
+- [x] **Step 1: Write failing browser primitive test**
 
 The test should require `scripts/artifacts/core/workflow_pairing.js` and prove it can:
 
@@ -108,11 +108,11 @@ Expected missing-module failure:
 node tests/workflow_pairing_check.js
 ```
 
-- [ ] **Step 2: Extract pure pairing helpers from `app.js`**
+- [x] **Step 2: Extract pure pairing helpers from `app.js`**
 
 Move selector normalization, definition selection, anchor creation, and target-link option selection out of the app shell. Keep DOM rendering, effect execution, persistence, and lifecycle scheduling in `app.js`.
 
-- [ ] **Step 3: Verify Task 2**
+- [x] **Step 3: Verify Task 2**
 
 Run:
 
@@ -124,7 +124,7 @@ node tests/workbench_shell_check.js
 node tests/artifact_registry_check.js
 ```
 
-- [ ] **Step 4: Live smoke**
+- [x] **Step 4: Live smoke**
 
 Run:
 
@@ -133,7 +133,7 @@ Run:
 python3 scripts/playwright_cli_browser.py run-code scripts/playwright-snippets/artifact-workbench-bounded-input-check.js --session eba-workbench
 ```
 
-- [ ] **Step 5: Checkpoint**
+- [x] **Step 5: Checkpoint**
 
 Commit and push with title:
 
