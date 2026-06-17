@@ -40,6 +40,9 @@ workbench implementation, and checked-in Playwright snippets.
   definitions and saved-state sanitization helpers. Projection code delegates
   definition creation there; the workbench server delegates bounded-input state
   cleaning and summaries there while keeping annotation cleaning local.
+- The workbench server's mutating local HTTP endpoints must reject browser
+  cross-origin writes, bound request bodies, return clean JSON client errors,
+  and send `X-Content-Type-Options: nosniff` on typed responses.
 
 ## Work Guidance
 
@@ -67,6 +70,8 @@ workbench implementation, and checked-in Playwright snippets.
 
 - Run focused syntax checks for changed Python or JavaScript files.
 - Run `./eba dev validate` before checkpointing substantive script changes.
+- For workbench server hardening changes, run
+  `python3 tests/test_workbench_server_hardening.py`.
 - For workbench shell/toolbar structure changes, run
   `node tests/workbench_shell_check.js`.
 - Run `./eba dev demo` and relevant Playwright smoke snippets when workbench
