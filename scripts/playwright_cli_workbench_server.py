@@ -85,6 +85,10 @@ WORKBENCH_ASSETS = {
         ARTIFACTS_DIR / "core" / "artifact_common.js",
         "text/javascript",
     ),
+    "/assets/artifacts/core/bounded_input_controls.js": (
+        ARTIFACTS_DIR / "core" / "bounded_input_controls.js",
+        "text/javascript",
+    ),
     "/assets/artifacts/core/workflow_pairing.js": (
         ARTIFACTS_DIR / "core" / "workflow_pairing.js",
         "text/javascript",

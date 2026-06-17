@@ -47,6 +47,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "--check", "scripts/artifacts/core/bounded_input_controls.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/artifacts/core/workflow_pairing.js"],
             validation_commands(),
         )
@@ -88,6 +92,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn(
             ["node", "tests/artifact_navigator_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "tests/bounded_input_controls_check.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -193,6 +201,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/html_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/core/artifact_common.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/core/bounded_input_controls.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/core/workflow_pairing.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/image_artifact.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/markdown_artifact.js", WORKBENCH_ASSETS)

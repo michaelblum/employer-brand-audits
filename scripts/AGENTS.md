@@ -40,6 +40,10 @@ workbench implementation, and checked-in Playwright snippets.
   definitions and saved-state sanitization helpers. Projection code delegates
   definition creation there; the workbench server delegates bounded-input state
   cleaning and summaries there while keeping annotation cleaning local.
+- `scripts/artifacts/core/bounded_input_controls.js` owns browser-side bounded
+  input control value resolution, HTML rendering, and control event wiring.
+  The workbench app shell still owns overlay persistence, sync calls, and
+  lifecycle scheduling.
 - The workbench server's mutating local HTTP endpoints must reject browser
   cross-origin writes, bound request bodies, return clean JSON client errors,
   and send `X-Content-Type-Options: nosniff` on typed responses.
