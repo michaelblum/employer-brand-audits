@@ -15,6 +15,9 @@ artifact type components, artifact navigation, and the artifact registry.
 
 - `core/` owns shared artifact helpers that are not specific to one artifact
   type.
+- `core/bounded_input_controls.js` owns browser-side bounded-input control
+  rendering, select-menu behavior, and control value extraction. The app shell
+  still owns persisted overlay state and network sync.
 - `core/workflow_pairing.js` owns pure workflow-pairing selection helpers:
   bounded-input definition selection, selector normalization, DOM-anchor
   shaping, and target-link option selection. The workbench app shell still owns

@@ -82,7 +82,7 @@ async (page) => {
         && document.querySelector("#image-controls") === null
         && document.querySelector("#markdown-controls") === null
         && frame?.contentDocument?.querySelector('[data-report-surface="signal-brief"]')
-        && /html/.test(readout);
+        && /elements|bytes/.test(readout);
     }, null, { timeout: 5000 });
 
     await selectArtifact(bootState.documentIndex);

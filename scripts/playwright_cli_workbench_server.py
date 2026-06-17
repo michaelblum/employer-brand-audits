@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import mimetypes
 import posixpath
@@ -45,6 +46,7 @@ WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
 WORKBENCH_ASSET_MANIFEST_PATH = "/api/workbench-assets"
 WORKBENCH_STATE_PATH = "/api/workbench-state"
 WORKBENCH_CONTEXT_PATH = "/api/workbench-context"
+MAX_MUTATION_BODY_BYTES = 1024 * 1024
 SERVER_SOURCE_FILES = [
     Path(__file__).resolve(),
     Path(__file__).resolve().parent / "workbench_bounded_input.py",
@@ -82,6 +84,10 @@ WORKBENCH_ASSETS = {
     ),
     "/assets/artifacts/core/artifact_common.js": (
         ARTIFACTS_DIR / "core" / "artifact_common.js",
+        "text/javascript",
+    ),
+    "/assets/artifacts/core/bounded_input_controls.js": (
+        ARTIFACTS_DIR / "core" / "bounded_input_controls.js",
         "text/javascript",
     ),
     "/assets/artifacts/core/workflow_pairing.js": (
@@ -133,6 +139,35 @@ WORKBENCH_ASSETS = {
         "text/javascript",
     ),
 }
+
+
+def loopback_origin_netloc(host: str, port: int) -> str | None:
+    normalized_host = str(host or "").strip().strip("[]").lower()
+    if not normalized_host:
+        return None
+    if normalized_host == "localhost":
+        return f"localhost:{port}"
+    try:
+        address = ipaddress.ip_address(normalized_host)
+    except ValueError:
+        return None
+    if not address.is_loopback:
+        return None
+    if address.version == 6:
+        return f"[{address.compressed}]:{port}"
+    return f"{address.compressed}:{port}"
+
+
+def allowed_loopback_origin_netlocs(bind_host: str, bind_port: int) -> set[str]:
+    allowed = {
+        f"127.0.0.1:{bind_port}",
+        f"localhost:{bind_port}",
+        f"[::1]:{bind_port}",
+    }
+    bound_netloc = loopback_origin_netloc(bind_host, bind_port)
+    if bound_netloc:
+        allowed.add(bound_netloc)
+    return allowed
 
 
 def repo_relative_path(path: Path) -> str:
@@ -681,12 +716,16 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         print("[artifact-viewer] " + format % args, file=sys.stderr)
 
+    def send_common_headers(self) -> None:
+        self.send_header("cache-control", "no-store")
+        self.send_header("x-content-type-options", "nosniff")
+
     def send_text(self, status: HTTPStatus, content: str, content_type: str = "text/plain") -> None:
         data = content.encode("utf-8")
         self.send_response(status)
         self.send_header("content-type", f"{content_type}; charset=utf-8")
         self.send_header("content-length", str(len(data)))
-        self.send_header("cache-control", "no-store")
+        self.send_common_headers()
         self.end_headers()
         self.wfile.write(data)
 
@@ -695,9 +734,46 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("content-type", "application/json; charset=utf-8")
         self.send_header("content-length", str(len(data)))
-        self.send_header("cache-control", "no-store")
+        self.send_common_headers()
         self.end_headers()
         self.wfile.write(data)
+
+    def mutation_origin_allowed(self) -> bool:
+        origin = str(self.headers.get("origin") or "").strip()
+        if not origin:
+            return True
+        parsed_origin = urlparse(origin)
+        if parsed_origin.scheme != "http" or not parsed_origin.netloc:
+            return False
+        bind_host, bind_port = self.server.server_address[:2]
+        return parsed_origin.netloc.lower() in allowed_loopback_origin_netlocs(bind_host, bind_port)
+
+    def reject_disallowed_mutation_origin(self) -> bool:
+        if self.mutation_origin_allowed():
+            return False
+        self.send_json(HTTPStatus.FORBIDDEN, {"error": "Cross-origin mutation rejected"})
+        return True
+
+    def read_mutation_body(self) -> bytes | None:
+        try:
+            length = int(self.headers.get("content-length", "0"))
+        except ValueError:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid Content-Length"})
+            return None
+        if length < 0:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid Content-Length"})
+            return None
+        if length > MAX_MUTATION_BODY_BYTES:
+            self.send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Request body too large"})
+            return None
+        return self.rfile.read(length)
+
+    def decode_mutation_body(self, body: bytes) -> str | None:
+        try:
+            return body.decode("utf-8")
+        except UnicodeDecodeError:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid UTF-8 request body"})
+            return None
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -735,13 +811,20 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         self.send_text(HTTPStatus.OK, path.read_text(encoding="utf-8"), content_type)
 
     def do_POST(self) -> None:
+        if self.reject_disallowed_mutation_origin():
+            return
         parsed = urlparse(self.path)
         if parsed.path not in {WORKBENCH_STATE_PATH, WORKBENCH_CONTEXT_PATH}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        length = int(self.headers.get("content-length", "0"))
+        body = self.read_mutation_body()
+        if body is None:
+            return
+        body_text = self.decode_mutation_body(body)
+        if body_text is None:
+            return
         try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            payload = json.loads(body_text)
         except json.JSONDecodeError:
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid JSON"})
             return
@@ -760,13 +843,19 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         self.send_json(HTTPStatus.OK, self.server.workbench_state())
 
     def do_PUT(self) -> None:
+        if self.reject_disallowed_mutation_origin():
+            return
         parsed = urlparse(self.path)
         if not parsed.path.startswith("/api/artifact-content/"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         artifact_id_value = unquote(parsed.path.removeprefix("/api/artifact-content/"))
-        length = int(self.headers.get("content-length", "0"))
-        content = self.rfile.read(length).decode("utf-8")
+        body = self.read_mutation_body()
+        if body is None:
+            return
+        content = self.decode_mutation_body(body)
+        if content is None:
+            return
         artifact = self.server.write_markdown_artifact(artifact_id_value, content)
         if artifact is None:
             self.send_json(HTTPStatus.NOT_FOUND, {"error": "Markdown artifact not found"})
@@ -786,6 +875,7 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("content-type", content_type)
         self.send_header("content-length", str(artifact_path.stat().st_size))
+        self.send_common_headers()
         self.end_headers()
         with artifact_path.open("rb") as handle:
             shutil.copyfileobj(handle, self.wfile)
