@@ -24,11 +24,16 @@ artifact type components, artifact navigation, and the artifact registry.
   DOM queries, lifecycle scheduling, and effect execution.
 - `types/` owns artifact type components such as image, markdown, HTML,
   document, and future variants.
+- `types/manifest.json` owns deterministic browser load order for artifact
+  type modules.
 - `navigation/` owns artifact list/tree/filter/navigation planning for the
   workbench.
-- `artifact_registry.js` composes registered artifact types; keep it small.
+- `artifact_registry.js` owns `registerType` and resolves registered artifact
+  types; keep it small and free of concrete artifact type lists.
 - Add type-specific workspace, stage, readout, toolbar, and control-binding
   behavior to the owning type module, not to the app shell or registry.
+- Type modules self-register with ordering and fallback metadata while keeping
+  compatibility aliases on `window.Artifacts.types`.
 - Type modules may emit class hooks for controls, but the static stylesheet
   currently stays in `scripts/artifact_workbench/styles.css`; do not duplicate
   per-type CSS here until a CSS asset boundary is deliberately introduced.
@@ -46,6 +51,8 @@ artifact type components, artifact navigation, and the artifact registry.
   artifact types plus registry behavior, split it before it grows.
 - Preserve compatibility with the workbench asset manifest when adding browser
   modules.
+- Add new artifact type scripts to `types/manifest.json` so server assets,
+  rendered HTML, and validation stay in sync.
 
 ## Verification
 

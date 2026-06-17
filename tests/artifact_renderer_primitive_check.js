@@ -7,11 +7,11 @@ require(path.join(__dirname, "../scripts/artifact_primitives/document_renderer.j
 require(path.join(__dirname, "../scripts/artifact_primitives/html_renderer.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_renderer.js"));
 require(path.join(__dirname, "../scripts/artifacts/core/artifact_common.js"));
+require(path.join(__dirname, "../scripts/artifacts/artifact_registry.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/image_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/markdown_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/html_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/document_artifact.js"));
-require(path.join(__dirname, "../scripts/artifacts/artifact_registry.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/artifact_renderer.js"));
 
 const renderer = window.ArtifactPrimitives.artifactRenderer;

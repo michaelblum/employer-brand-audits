@@ -220,9 +220,41 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertIn("/assets/artifact-binding.js", WORKBENCH_ASSETS)
 
     def test_workbench_index_references_served_assets_and_icons(self) -> None:
-        from scripts.playwright_cli_workbench_server import WORKBENCH_ASSETS, WORKBENCH_INDEX
+        from scripts.artifact_type_manifest import (
+            ARTIFACT_TYPE_MANIFEST,
+            artifact_type_asset_urls,
+            artifact_type_script_paths,
+        )
+        from scripts.eba_cli import validation_commands
+        from scripts.playwright_cli_workbench_server import (
+            WORKBENCH_ASSETS,
+            WORKBENCH_INDEX,
+            read_workbench_html,
+        )
 
-        html = WORKBENCH_INDEX.read_text(encoding="utf-8")
+        type_asset_urls = artifact_type_asset_urls()
+        self.assertGreaterEqual(len(type_asset_urls), 4)
+        self.assertIn("/assets/artifacts/types/manifest.json", WORKBENCH_ASSETS)
+        self.assertEqual(
+            [
+                "/assets/artifacts/types/image_artifact.js",
+                "/assets/artifacts/types/markdown_artifact.js",
+                "/assets/artifacts/types/html_artifact.js",
+                "/assets/artifacts/types/document_artifact.js",
+            ],
+            type_asset_urls,
+        )
+        for url in type_asset_urls:
+            self.assertIn(url, WORKBENCH_ASSETS)
+            self.assertIn(f'<script src="{url}" defer></script>', read_workbench_html())
+        for script_path in artifact_type_script_paths():
+            self.assertIn(["node", "--check", script_path], validation_commands())
+
+        raw_html = WORKBENCH_INDEX.read_text(encoding="utf-8")
+        self.assertNotIn("/assets/artifacts/types/image_artifact.js", raw_html)
+        self.assertTrue(ARTIFACT_TYPE_MANIFEST.exists())
+
+        html = read_workbench_html()
         refs = set(re.findall(r"""(?:src|href)=["']([^"']+)["']""", html))
         asset_refs = {ref.split("#", 1)[0] for ref in refs if ref.startswith("/assets/")}
         self.assertGreater(len(asset_refs), 0)

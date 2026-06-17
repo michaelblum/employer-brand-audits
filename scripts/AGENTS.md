@@ -44,6 +44,9 @@ workbench implementation, and checked-in Playwright snippets.
   input control value resolution, HTML rendering, and control event wiring.
   The workbench app shell still owns overlay persistence, sync calls, and
   lifecycle scheduling.
+- Artifact type modules load through `scripts/artifacts/types/manifest.json`.
+  Server assets, rendered workbench HTML, and validation commands should read
+  that manifest instead of hard-coding concrete type script files.
 - The workbench server's mutating local HTTP endpoints must reject browser
   cross-origin writes, bound request bodies, return clean JSON client errors,
   and send `X-Content-Type-Options: nosniff` on typed responses.

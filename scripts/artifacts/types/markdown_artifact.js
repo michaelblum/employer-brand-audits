@@ -89,7 +89,7 @@
     }
   }
 
-  ROOT.types.markdown = {
+  const component = {
     bindControls,
     capabilities: {
       markdownEditing: true,
@@ -97,9 +97,11 @@
     },
     kind: "markdown",
     matches: (artifact = {}) => String(artifact.type || "").toLowerCase() === "markdown",
+    order: 10,
     readout,
     stagePlan,
     syncControls,
     toolbarPlan,
   };
+  ROOT.types.markdown = typeof ROOT.registerType === "function" ? ROOT.registerType(component) : component;
 }());

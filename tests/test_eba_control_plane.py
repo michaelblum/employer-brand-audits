@@ -26,17 +26,22 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def copy_repo(tmp_path: Path) -> Path:
     target = tmp_path / "repo"
-    ignore = shutil.ignore_patterns(
-        ".git",
-        ".eba",
-        ".playwright-cli",
-        "__pycache__",
-        ".pytest_cache",
-        "artifacts",
-        "node_modules",
-        ".venv",
-        "chrome-profile",
-    )
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        ignored = {
+            ".git",
+            ".eba",
+            ".playwright-cli",
+            "__pycache__",
+            ".pytest_cache",
+            "node_modules",
+            ".venv",
+            "chrome-profile",
+        } & set(names)
+        if Path(directory).resolve() == REPO_ROOT and "artifacts" in names:
+            ignored.add("artifacts")
+        return ignored
+
     shutil.copytree(REPO_ROOT, target, ignore=ignore)
     subprocess.run(["git", "init"], cwd=target, check=True, capture_output=True, text=True)
     subprocess.run(["git", "add", "."], cwd=target, check=True, capture_output=True, text=True)

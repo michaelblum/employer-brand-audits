@@ -23,6 +23,9 @@ workbench browser control, and JavaScript primitive behavior.
 - Use the MCP venv Python for pytest if the shell Python lacks pytest:
   `mcp-server/.venv/bin/python -m pytest`.
 - Keep Node checks runnable without network access.
+- Repo-copy fixtures should ignore generated root runtime directories without
+  excluding durable source directories that share names, such as
+  `scripts/artifacts/`.
 
 ## Verification
 
