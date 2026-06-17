@@ -300,6 +300,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/artifact_primitives/interaction_overlay.js"],
         ["node", "--check", "scripts/artifact_primitives/target_link.js"],
         ["node", "--check", "scripts/artifact_primitives/interaction_overlay_controller.js"],
+        ["node", "tests/markdown_renderer_primitive_check.js"],
         ["node", "tests/document_renderer_primitive_check.js"],
         ["node", "tests/html_renderer_primitive_check.js"],
         ["node", "tests/artifact_registry_check.js"],

@@ -32,6 +32,10 @@ and app shell JavaScript.
   Mermaid-generated element ids in the app shell. Render the visible chase
   highlight and connector through the reusable `target_link.js` primitive; the
   shell may supply per-instance options from projected `target_link` data.
+- The stage is the shared vertical scroll boundary for rendered artifacts.
+  Document-like artifact surfaces fill the stage height and must not introduce
+  nested vertical preview scroll panes. Image artifacts keep zoom behavior and
+  center within the stage only when the zoomed image fits without scrollbars.
 - `styles.css` owns the static workbench stylesheet, including shared toolbar
   and current type-control classes, until a deliberate per-type CSS asset
   boundary exists. Do not add artifact-type behavior to the shell JavaScript to

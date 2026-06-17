@@ -450,6 +450,56 @@ def clean_overlay_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
             "end": {"line": end_line, "column": end_column},
             "excerpt": str(anchor.get("excerpt", ""))[:1000],
         }
+    if anchor_type == "html_element":
+        selectors = anchor.get("selector_candidates")
+        rect = anchor.get("rect")
+        if not isinstance(selectors, list) or not isinstance(rect, dict):
+            return None
+        selector_candidates = [
+            str(selector).strip()
+            for selector in selectors
+            if str(selector).strip()
+        ][:8]
+        if not selector_candidates:
+            return None
+        try:
+            clean_rect = {
+                "x": int(rect["x"]),
+                "y": int(rect["y"]),
+                "width": int(rect["width"]),
+                "height": int(rect["height"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            return None
+        ancestor_trail = []
+        for item in anchor.get("ancestor_trail") or []:
+            if not isinstance(item, dict):
+                continue
+            classes = item.get("classes") if isinstance(item.get("classes"), list) else []
+            ancestor_trail.append(
+                {
+                    "tag": str(item.get("tag") or "")[:40],
+                    "id": str(item.get("id") or "")[:160],
+                    "classes": [str(value)[:120] for value in classes[:12]],
+                }
+            )
+        return {
+            "type": "html_element",
+            "coordinate_space": "html_document",
+            "selector_candidates": selector_candidates,
+            "tag": str(anchor.get("tag") or "")[:40],
+            "id": str(anchor.get("id") or "")[:160],
+            "classes": [
+                str(value)[:120]
+                for value in (anchor.get("classes") if isinstance(anchor.get("classes"), list) else [])[:12]
+            ],
+            "role": str(anchor.get("role") or "")[:120],
+            "accessible_name": str(anchor.get("accessible_name") or "")[:240],
+            "text": str(anchor.get("text") or "")[:1000],
+            "rect": clean_rect,
+            "ancestor_trail": ancestor_trail[:12],
+            "source_url": str(anchor.get("source_url") or "")[:1000],
+        }
     return None
 
 

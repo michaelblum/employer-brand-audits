@@ -50,6 +50,41 @@
     return `<div class="html-artifact-meta">${metadata.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`;
   }
 
+  function htmlDocumentHeight(doc) {
+    if (!doc) return 0;
+    return Math.max(
+      doc.body?.scrollHeight || 0,
+      doc.body?.offsetHeight || 0,
+      doc.documentElement?.scrollHeight || 0,
+      doc.documentElement?.offsetHeight || 0,
+      doc.documentElement?.clientHeight || 0,
+    );
+  }
+
+  function syncHtmlFrameHeight(frame) {
+    const doc = frame?.contentDocument;
+    if (!doc) return;
+    if (doc.documentElement?.style) doc.documentElement.style.overflow = "hidden";
+    if (doc.body?.style) doc.body.style.overflow = "hidden";
+    const height = Math.max(560, htmlDocumentHeight(doc));
+    if (frame.style) frame.style.height = `${height}px`;
+  }
+
+  function scheduleHtmlFrameHeightSync(frame) {
+    if (!frame) return;
+    frame.setAttribute?.("scrolling", "no");
+    frame.scrolling = "no";
+    const schedule = () => {
+      const requestFrame = typeof window.requestAnimationFrame === "function"
+        ? window.requestAnimationFrame.bind(window)
+        : (callback) => callback();
+      requestFrame(() => syncHtmlFrameHeight(frame));
+      requestFrame(() => requestFrame(() => syncHtmlFrameHeight(frame)));
+    };
+    frame.addEventListener?.("load", schedule);
+    schedule();
+  }
+
   function renderHtmlArtifact(artifact = {}, containerEl) {
     if (!containerEl) {
       return { ok: false, state: "error", errorMessage: "Missing HTML container" };
@@ -62,12 +97,15 @@
           ${renderMetadata(artifact)}
         </header>
         <div class="html-artifact-frame-wrap">
-          <iframe class="html-artifact-frame" data-html-frame sandbox="allow-same-origin" title="${escapeHtml(title)}"></iframe>
+          <iframe class="html-artifact-frame" data-html-frame sandbox="allow-same-origin" scrolling="no" title="${escapeHtml(title)}"></iframe>
         </div>
       </article>
     `;
     const frame = containerEl.querySelector("[data-html-frame]");
-    if (frame) frame.srcdoc = String(artifact.content || "");
+    if (frame) {
+      scheduleHtmlFrameHeightSync(frame);
+      frame.srcdoc = String(artifact.content || "");
+    }
     return { ok: true, state: "complete", errorMessage: "" };
   }
 

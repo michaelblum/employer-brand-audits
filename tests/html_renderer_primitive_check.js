@@ -56,9 +56,11 @@ assert.deepEqual(
 );
 assert.match(container.innerHTML, /data-artifact-renderer="html"/);
 assert.match(container.innerHTML, /sandbox="allow-same-origin"/);
+assert.match(container.innerHTML, /scrolling="no"/);
 assert.doesNotMatch(container.innerHTML, /allow-scripts/);
 assert.match(container.innerHTML, /Audit &lt;Report&gt;/);
 assert.match(iframe.srcdoc, /<h1>Report<\/h1>/);
+assert.equal(iframe.scrolling, "no");
 
 function classList(className) {
   return String(className || "").split(/\s+/).filter(Boolean);

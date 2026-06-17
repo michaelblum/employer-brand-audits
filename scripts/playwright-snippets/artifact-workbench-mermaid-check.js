@@ -31,6 +31,13 @@ async (page) => {
   }, null, { timeout: 5000 });
   const validRenderCompleted = true;
 
+  const captionText = await page.evaluate(() => (
+    document.querySelector("[data-artifact-renderer='mermaid'] figcaption")?.textContent?.trim() || ""
+  ));
+  if (/Mermaid diagram/i.test(captionText)) {
+    throw new Error(`Mermaid renderer should not show a generic diagram caption: ${captionText}`);
+  }
+
   const mermaidLine = await page.evaluate(() => {
     const first = document.querySelector(".mermaid-source-line[data-source-line]");
     return Number(first?.dataset.sourceLine || 0);

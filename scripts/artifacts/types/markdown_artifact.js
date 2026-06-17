@@ -6,7 +6,7 @@
   function stagePlan() {
     return {
       renderKind: "markdown",
-      stage: { markdownStage: true, resetScroll: false },
+      stage: { markdownStage: true, resetScroll: true },
       surfaces: {
         imageWrapHidden: true,
         markdownWrapHidden: false,

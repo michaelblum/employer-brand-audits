@@ -58,7 +58,6 @@
     const firstSourceLine = fenceStart + 1;
     return (
       `<figure${sourceLineAttribute(fenceStart)} class="markdown-mermaid render-state-source" data-markdown-diagram="mermaid" data-artifact-renderer="mermaid" data-render-state="source">`
-        + "<figcaption>Mermaid diagram</figcaption>"
         + '<div class="mermaid-render-target" data-mermaid-target aria-label="Mermaid preview"></div>'
         + '<div class="mermaid-render-status" data-mermaid-status role="status">Mermaid source is preserved for deterministic preview rendering.</div>'
         + `<pre class="mermaid-source"><code>${renderMermaidSourceLines(source, firstSourceLine)}</code></pre>`

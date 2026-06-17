@@ -69,7 +69,7 @@ assert.deepEqual(
   registry.artifactStagePlan({ type: "markdown" }),
   {
     renderKind: "markdown",
-    stage: { markdownStage: true, resetScroll: false },
+    stage: { markdownStage: true, resetScroll: true },
     surfaces: {
       imageWrapHidden: true,
       markdownWrapHidden: false,

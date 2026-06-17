@@ -289,8 +289,8 @@
       background: #101012;
     }
     .stage.markdown-stage {
-      overflow: hidden;
-      place-items: stretch center;
+      display: block;
+      overflow: auto;
     }
     .artifact-toolbar {
       width: 100%;
@@ -401,26 +401,26 @@
     }
     .artifact-document {
       position: relative;
-      width: min(var(--artifact-document-max-width), 100%);
+      width: 100%;
+      min-height: 100%;
       height: 100%;
-      max-height: 100%;
+      max-height: none;
       margin: 0;
-      min-height: 0;
-      align-self: stretch;
-      justify-self: center;
+      align-self: start;
+      justify-self: stretch;
       display: grid;
-      grid-template-rows: minmax(0, 1fr);
+      grid-template-rows: minmax(100%, auto);
       color: var(--artifact-document-ink);
       background: var(--artifact-document-panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
-      overflow: hidden;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      overflow: visible;
     }
     .artifact-document[hidden] { display: none; }
     .artifact-document-scroll {
-      min-height: 0;
-      overflow: auto;
+      min-height: 100%;
+      overflow: visible;
       padding: 0;
       background: var(--artifact-document-bg);
       color: var(--artifact-document-ink);
@@ -569,7 +569,7 @@
     }
     .html-artifact-frame-wrap {
       min-height: 560px;
-      overflow: hidden;
+      overflow: visible;
       border: 1px solid var(--artifact-document-line);
       border-radius: 8px;
       background: #fff;
@@ -598,13 +598,6 @@
       border: 1px solid var(--artifact-document-line);
       border-radius: 10px;
       background: var(--artifact-document-panel);
-    }
-    .markdown-mermaid figcaption {
-      margin-bottom: 10px;
-      color: var(--artifact-document-muted);
-      font: 750 11px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
     }
     .mermaid-render-target {
       min-height: 120px;

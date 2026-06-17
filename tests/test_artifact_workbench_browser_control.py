@@ -123,6 +123,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "tests/markdown_renderer_primitive_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/artifact_primitives/markdown_renderer.js"],
             validation_commands(),
         )
@@ -1956,6 +1960,45 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 }
             ],
         )
+
+    def test_workbench_state_accepts_html_element_annotation_anchors(self) -> None:
+        from scripts.playwright_cli_workbench_server import clean_interaction_overlays
+
+        clean = clean_interaction_overlays(
+            [
+                {
+                    "id": "overlay-html-demo",
+                    "subtype": "annotation",
+                    "subject": {"kind": "artifact", "id": "l4-final-report-html"},
+                    "anchor": {
+                        "type": "html_element",
+                        "coordinate_space": "html_document",
+                        "selector_candidates": ["h1", "#executive-readout h1"],
+                        "tag": "h1",
+                        "id": "",
+                        "classes": ["hero-title"],
+                        "role": "",
+                        "accessible_name": "Acme Robotics",
+                        "text": "Acme Robotics",
+                        "rect": {"x": 53, "y": 125, "width": 782, "height": 48},
+                        "ancestor_trail": [
+                            {"tag": "header", "id": "executive-readout", "classes": []},
+                            {"tag": "main", "id": "", "classes": []},
+                        ],
+                        "source_url": "artifacts/easy-audit/latest/l4-final-report.html",
+                    },
+                    "body": {"kind": "comment", "text": "HTML annotation demo"},
+                    "created_at_epoch": 1781665745,
+                }
+            ],
+            {"l4-final-report-html"},
+        )
+
+        self.assertEqual(len(clean), 1)
+        self.assertEqual(clean[0]["anchor"]["type"], "html_element")
+        self.assertEqual(clean[0]["anchor"]["selector_candidates"], ["h1", "#executive-readout h1"])
+        self.assertEqual(clean[0]["anchor"]["rect"], {"x": 53, "y": 125, "width": 782, "height": 48})
+        self.assertEqual(clean[0]["body"]["text"], "HTML annotation demo")
 
 
 if __name__ == "__main__":
