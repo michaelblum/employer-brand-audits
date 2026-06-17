@@ -47,6 +47,7 @@
     const artifactBinding = () => window.WorkbenchArtifactBinding;
     const documentRenderer = () => window.ArtifactPrimitives.document;
     const htmlRenderer = () => window.ArtifactPrimitives.html;
+    const targetLink = () => window.ArtifactPrimitives.targetLink;
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
     const textRangeAnchor = (note) => {
@@ -60,7 +61,10 @@
     const iconHref = (name) => `/assets/artifact-workbench-icons.svg#icon-artifact-${name}`;
     const interactionOverlay = () => window.ArtifactPrimitives.interactionOverlay;
     let overlayControllerInstance = null;
+    let workflowTargetLinkEffect = null;
     let unbindHtmlInspector = null;
+    let mooringOverlayFrame = null;
+    let mooringOverlayRetry = null;
     function overlayController() {
       if (!overlayControllerInstance) {
         overlayControllerInstance = window.ArtifactPrimitives.interactionOverlayController
@@ -140,6 +144,14 @@
       }
       return overlayControllerInstance;
     }
+    function workflowTargetLink() {
+      if (!workflowTargetLinkEffect) {
+        workflowTargetLinkEffect = targetLink().createTargetLinkEffect({
+          targetClass: "workflow-paired",
+        });
+      }
+      return workflowTargetLinkEffect;
+    }
     const artifactNavigation = () => window.Artifacts.navigation;
     let artifactBindingInstance = null;
     const artifactNavigationContext = () => artifactNavigation().artifactNavigationContext({
@@ -152,6 +164,105 @@
       iconHref,
       projectionModel: app.artifactProjectionModel,
     });
+
+    function boundedInputDefinitionsForArtifact(item = artifact()) {
+      const definitions = app.artifactProjectionModel?.workbenchProjection?.workflow?.input_overlays || [];
+      return definitions.filter((definition) => definition?.anchor?.artifact_id === item?.id);
+    }
+
+    function boundedInputValue(definition) {
+      const values = interactionOverlay().boundedInputOverlayValues(app.interactionOverlays);
+      const key = `${definition.step_id}.${definition.input_id}`;
+      if (Object.prototype.hasOwnProperty.call(values, key)) return values[key];
+      return definition.value == null ? "" : String(definition.value);
+    }
+
+    function optionRecord(option) {
+      if (option && typeof option === "object") {
+        return {
+          value: String(option.value ?? option.label ?? ""),
+          label: String(option.label ?? option.value ?? ""),
+        };
+      }
+      return { value: String(option ?? ""), label: String(option ?? "") };
+    }
+
+    function renderBoundedInputControl(definition) {
+      const value = boundedInputValue(definition);
+      const commonAttrs = [
+        "data-bounded-input-control",
+        `data-step-id="${escapeHtml(definition.step_id)}"`,
+        `data-input-id="${escapeHtml(definition.input_id)}"`,
+        `aria-label="${escapeHtml(definition.label || definition.input_id)}"`,
+      ].join(" ");
+      if (definition.input_type === "select") {
+        const options = (definition.options || []).map(optionRecord);
+        return `
+          <select ${commonAttrs}>
+            ${options.map((option) => `
+              <option value="${escapeHtml(option.value)}" ${option.value === value ? "selected" : ""}>
+                ${escapeHtml(option.label)}
+              </option>
+            `).join("")}
+          </select>
+        `;
+      }
+      if (definition.input_type === "textarea") {
+        return `<textarea ${commonAttrs} placeholder="${escapeHtml(definition.placeholder || "")}">${escapeHtml(value)}</textarea>`;
+      }
+      return `<input ${commonAttrs} type="text" value="${escapeHtml(value)}" placeholder="${escapeHtml(definition.placeholder || "")}">`;
+    }
+
+    function renderBoundedInputLayer(item = artifact()) {
+      const layer = $("bounded-input-layer");
+      const definitions = boundedInputDefinitionsForArtifact(item);
+      if (!definitions.length) {
+        layer.hidden = true;
+        layer.innerHTML = "";
+        scheduleMooringOverlayUpdate();
+        return;
+      }
+      layer.hidden = false;
+      layer.innerHTML = `
+        <section class="bounded-input-panel" data-bounded-input-panel>
+          <div class="bounded-input-title">Intake inputs</div>
+          <div class="bounded-input-grid">
+            ${definitions.map((definition) => `
+              <label class="bounded-input-field" data-step-id="${escapeHtml(definition.step_id)}" data-input-id="${escapeHtml(definition.input_id)}">
+                <span>${escapeHtml(definition.label || definition.input_id)}</span>
+                ${renderBoundedInputControl(definition)}
+              </label>
+            `).join("")}
+          </div>
+        </section>
+      `;
+      bindBoundedInputControls(definitions);
+      scheduleMooringOverlayUpdate();
+    }
+
+    function boundedInputDefinitionByControl(definitions, control) {
+      return definitions.find((definition) => (
+        definition.step_id === control.dataset.stepId
+        && definition.input_id === control.dataset.inputId
+      ));
+    }
+
+    function bindBoundedInputControls(definitions = []) {
+      $("bounded-input-layer").querySelectorAll("[data-bounded-input-control]").forEach((control) => {
+        const syncControl = () => {
+          const definition = boundedInputDefinitionByControl(definitions, control);
+          if (!definition) return;
+          app.interactionOverlays = interactionOverlay().upsertBoundedInputOverlay({
+            interactionOverlays: app.interactionOverlays,
+            definition,
+            value: control.value,
+          });
+          void syncInteractionOverlays();
+        };
+        control.addEventListener("input", syncControl);
+        control.addEventListener("change", syncControl);
+      });
+    }
 
     async function fetchWorkbenchProjection() {
       try {
@@ -222,7 +333,12 @@
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ interaction_overlays: app.interactionOverlays }),
       });
-      if (!response.ok) showToast("Overlay sync failed");
+      if (!response.ok) {
+        showToast("Overlay sync failed");
+        return;
+      }
+      const payload = await response.json();
+      app.interactionOverlays = payload.interaction_overlays || app.interactionOverlays;
     }
 
     async function syncWorkbenchViewState() {
@@ -238,6 +354,138 @@
           },
         }),
       });
+    }
+
+    function scheduleMooringOverlayUpdate() {
+      if (mooringOverlayFrame !== null) window.cancelAnimationFrame(mooringOverlayFrame);
+      if (mooringOverlayRetry !== null) window.clearTimeout(mooringOverlayRetry);
+      mooringOverlayFrame = window.requestAnimationFrame(() => {
+        mooringOverlayFrame = null;
+        updateMooringOverlays();
+        mooringOverlayRetry = window.setTimeout(() => {
+          mooringOverlayRetry = null;
+          updateMooringOverlays();
+        }, 160);
+      });
+    }
+
+    function selectorCandidatesForWorkflowDefinition(definition = {}) {
+      const selectors = definition.anchor?.selector_candidates;
+      return Array.isArray(selectors) ? selectors.map((item) => String(item || "").trim()).filter(Boolean) : [];
+    }
+
+    function workflowPairingDefinition(item = artifact()) {
+      return boundedInputDefinitionsForArtifact(item).find((definition) => (
+        definition?.step_id
+        && selectorCandidatesForWorkflowDefinition(definition).length > 0
+      )) || null;
+    }
+
+    function elementForSelectorCandidates(rootEl, selectors = []) {
+      if (!rootEl || typeof rootEl.querySelector !== "function") return null;
+      for (const selector of selectors) {
+        try {
+          const match = rootEl.querySelector(selector);
+          if (match) return match;
+        } catch (_error) {
+          // Selector candidates are fallbacks; invalid candidates should not block later selectors.
+        }
+      }
+      return null;
+    }
+
+    function workflowDomAnchorForDefinition(definition) {
+      const selectorCandidates = selectorCandidatesForWorkflowDefinition(definition);
+      if (!selectorCandidates.length) return null;
+      return {
+        type: "dom_element",
+        coordinate_space: "artifact_dom",
+        artifact_id: definition.anchor?.artifact_id || artifact()?.id || "",
+        selector_candidates: selectorCandidates,
+      };
+    }
+
+    function displayRectForDomAnchor(anchor, rootEl = markdownPreviewBody()) {
+      return interactionOverlay().displayRectForAnchor({
+        anchor,
+        rootEl,
+        relativeToEl: $("stage"),
+      });
+    }
+
+    function displayRectForStageSelector(selector) {
+      return displayRectForDomAnchor({
+        type: "dom_element",
+        coordinate_space: "workbench_stage",
+        selector_candidates: [selector],
+      }, $("stage"));
+    }
+
+    function targetLinkOptionsForWorkflowDefinition(definition = {}) {
+      if (definition.target_link && typeof definition.target_link === "object") {
+        return definition.target_link;
+      }
+      if (definition.anchor?.target_link && typeof definition.anchor.target_link === "object") {
+        return definition.anchor.target_link;
+      }
+      return {};
+    }
+
+    function clearWorkflowPairingOverlay() {
+      const panel = $("bounded-input-layer").querySelector("[data-bounded-input-panel]");
+      workflowTargetLink().clear({
+        layerEl: $("target-pairing-layer"),
+        highlightEl: $("target-pairing-highlight"),
+        connectorSvgEl: $("target-pairing-connectors"),
+        connectorPathEl: $("target-pairing-connector-path"),
+        targetEl: panel,
+        datasetKeys: ["workflowStepId"],
+        targetDatasetKeys: ["pairing"],
+      });
+    }
+
+    function updateWorkflowPairingOverlay() {
+      const definition = workflowPairingDefinition();
+      const panel = $("bounded-input-layer").querySelector("[data-bounded-input-panel]");
+      if (!definition || !panel || $("bounded-input-layer").hidden || app.markdownMode !== "preview") {
+        clearWorkflowPairingOverlay();
+        return;
+      }
+      const workflowAnchor = workflowDomAnchorForDefinition(definition);
+      const workflowElement = elementForSelectorCandidates(
+        markdownPreviewBody(),
+        workflowAnchor?.selector_candidates || [],
+      );
+      if (!workflowAnchor || !workflowElement) {
+        clearWorkflowPairingOverlay();
+        return;
+      }
+      workflowElement.dataset.workflowStepId = definition.step_id;
+      const workflowRect = displayRectForDomAnchor(workflowAnchor);
+      const panelRect = displayRectForStageSelector("[data-bounded-input-panel]");
+      if (!workflowRect || !panelRect) {
+        clearWorkflowPairingOverlay();
+        return;
+      }
+      const layer = $("target-pairing-layer");
+      const highlight = $("target-pairing-highlight");
+      const svg = $("target-pairing-connectors");
+      const path = $("target-pairing-connector-path");
+      const result = workflowTargetLink().render({
+        layerEl: layer,
+        highlightEl: highlight,
+        connectorSvgEl: svg,
+        connectorPathEl: path,
+        sourceRect: workflowRect,
+        targetRect: panelRect,
+        targetEl: panel,
+        stageEl: $("stage"),
+        interactionOverlay: interactionOverlay(),
+        options: targetLinkOptionsForWorkflowDefinition(definition),
+        dataset: { workflowStepId: definition.step_id },
+        targetDataset: { pairing: "workflow-step" },
+      });
+      if (result.status !== "rendered") clearWorkflowPairingOverlay();
     }
 
     function imageViewerOptions() {
@@ -277,6 +525,7 @@
         });
         if (markerAnchor) placeMarkerForAnchor(markerAnchor);
       }
+      updateWorkflowPairingOverlay();
     }
 
     function applyZoom(value, mode = "manual") {
@@ -635,6 +884,7 @@
       });
       updateArtifactToolbar();
       renderMarkdownHighlights();
+      scheduleMooringOverlayUpdate();
     }
 
     function renderMarkdownHighlights() {
@@ -809,6 +1059,7 @@
     function render() {
       renderTitle();
       renderArtifact();
+      renderBoundedInputLayer();
       renderOverview();
       renderSidebar();
       renderShell();

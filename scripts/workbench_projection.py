@@ -204,6 +204,10 @@ def audit_workbench_type(artifact_type: str, path_value: str) -> str:
 
 
 def audit_artifact_slot(artifact: dict[str, Any]) -> str:
+    params = artifact.get("params") if isinstance(artifact.get("params"), dict) else {}
+    slot = str(params.get("slot") or "").strip()
+    if slot:
+        return slot
     artifact_type = str(artifact.get("type") or "artifact")
     layer = artifact.get("layer")
     if isinstance(layer, int):
@@ -329,6 +333,70 @@ def add_host_facet(
     )
     if artifact_id:
         host_index[host]["artifact_ids"].append(artifact_id)
+
+
+def normalized_required_inputs(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def workflow_input_overlay(step_id: str, item: Any) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    input_id = str(item.get("id") or "").strip()
+    item_anchor = item.get("anchor") if isinstance(item.get("anchor"), dict) else {}
+    artifact_id = str(item.get("artifact_id") or item_anchor.get("artifact_id") or "").strip()
+    if not step_id or not input_id or not artifact_id:
+        return None
+    input_type = str(item.get("input_type") or "text").strip() or "text"
+    anchor = {
+        "type": "workflow_input",
+        "coordinate_space": "workflow_graph",
+        "artifact_id": artifact_id,
+        "step_id": step_id,
+        "input_id": input_id,
+    }
+    selector_candidates = item.get("selector_candidates") or item_anchor.get("selector_candidates")
+    if isinstance(selector_candidates, list):
+        anchor["selector_candidates"] = [
+            str(selector).strip()
+            for selector in selector_candidates
+            if str(selector).strip()
+        ]
+    overlay: dict[str, Any] = {
+        "id": f"input:{step_id}:{input_id}",
+        "subtype": "bounded_input",
+        "step_id": step_id,
+        "input_id": input_id,
+        "label": str(item.get("label") or input_id.replace("_", " ").title()),
+        "input_type": input_type,
+        "required": bool(item.get("required", True)),
+        "status": str(item.get("status") or "pending"),
+        "value": item.get("value"),
+        "subject": {"kind": "workflow_step", "id": step_id},
+        "anchor": anchor,
+    }
+    if item.get("placeholder") is not None:
+        overlay["placeholder"] = str(item.get("placeholder") or "")
+    options = item.get("options")
+    if isinstance(options, list):
+        overlay["options"] = [
+            option
+            for option in options
+            if isinstance(option, (str, int, float)) or isinstance(option, dict)
+        ]
+    target_link = item.get("target_link") or item_anchor.get("target_link")
+    if isinstance(target_link, dict):
+        overlay["target_link"] = target_link
+    return overlay
+
+
+def workflow_input_overlays_for_step(step_id: str, required_inputs: list[Any]) -> list[dict[str, Any]]:
+    overlays: list[dict[str, Any]] = []
+    for item in required_inputs:
+        overlay = workflow_input_overlay(step_id, item)
+        if overlay is not None:
+            overlays.append(overlay)
+    return overlays
 
 
 def audit_url_resource_id(url: str) -> str:
@@ -634,6 +702,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
     workflow_steps: list[dict[str, Any]] = []
     resources: list[dict[str, Any]] = []
     artifacts: list[dict[str, Any]] = []
+    workflow_input_overlays: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     host_index: dict[str, dict[str, Any]] = {}
     slot_index: dict[str, dict[str, Any]] = {}
@@ -648,6 +717,8 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
         step_id = str(step.get("id") or "")
         if not step_id:
             continue
+        required_inputs = normalized_required_inputs(step.get("required_inputs"))
+        workflow_input_overlays.extend(workflow_input_overlays_for_step(step_id, required_inputs))
         parent_step_ids = [
             str(parent_id)
             for parent_id in (step.get("parent_step_ids") or [])
@@ -663,7 +734,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
                 "started_at": step.get("started_at"),
                 "completed_at": step.get("completed_at"),
                 "error": step.get("error"),
-                "required_inputs": step.get("required_inputs") if isinstance(step.get("required_inputs"), list) else [],
+                "required_inputs": required_inputs,
                 "artifact_ids": [
                     str(artifact_id)
                     for artifact_id in (step.get("artifact_ids") or [])
@@ -840,6 +911,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
             "template_id": manifest.get("template_id"),
             "talent_segment": manifest.get("talent_segment"),
             "steps": workflow_steps,
+            "input_overlays": workflow_input_overlays,
         },
         "resources": resources,
         "artifacts": artifacts,

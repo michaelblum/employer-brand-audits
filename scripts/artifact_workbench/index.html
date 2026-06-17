@@ -41,6 +41,21 @@
           <textarea class="markdown-source" id="markdown-source" spellcheck="true" hidden></textarea>
           <div class="markdown-marker" id="markdown-marker" hidden></div>
         </div>
+        <div class="target-link-layer" id="target-pairing-layer" data-target-link-layer hidden>
+          <svg class="target-link-connectors" id="target-pairing-connectors" data-target-link-connector data-workflow-pairing-connector aria-hidden="true">
+            <defs>
+              <linearGradient id="target-link-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop data-target-link-gradient-stop="primary" offset="0%" stop-color="#38bdf8" stop-opacity="0.15"></stop>
+                <stop data-target-link-gradient-stop="secondary" offset="45%" stop-color="#93c5fd" stop-opacity="1"></stop>
+                <stop data-target-link-gradient-stop="accent" offset="72%" stop-color="#22d3ee" stop-opacity="0.85"></stop>
+                <stop data-target-link-gradient-stop="primary" offset="100%" stop-color="#38bdf8" stop-opacity="0.15"></stop>
+              </linearGradient>
+            </defs>
+            <path class="target-link-connector-path" id="target-pairing-connector-path" data-target-link-connector-path data-workflow-pairing-connector-path></path>
+          </svg>
+          <div class="target-link-highlight" id="target-pairing-highlight" data-target-link-highlight data-workflow-pairing-highlight hidden></div>
+        </div>
+        <div class="bounded-input-layer" id="bounded-input-layer" hidden></div>
         <div class="comment-popover" id="comment-popover" hidden>
           <div class="dictation-field">
             <textarea id="comment-text" placeholder="Leave a comment"></textarea>
@@ -81,6 +96,7 @@
   <script src="/assets/artifact-primitives/artifact_renderer.js" defer></script>
   <script src="/assets/artifacts/navigation/artifact_navigator.js" defer></script>
   <script src="/assets/artifact-primitives/interaction_overlay.js" defer></script>
+  <script src="/assets/artifact-primitives/target_link.js" defer></script>
   <script src="/assets/artifact-primitives/interaction_overlay_controller.js" defer></script>
   <script src="/assets/artifact-toolbar.js" defer></script>
   <script src="/assets/artifact-binding.js" defer></script>

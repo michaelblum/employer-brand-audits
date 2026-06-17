@@ -142,6 +142,7 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     groups = payload.get("artifact_groups")
     facets = payload.get("facets") or {}
     report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-final-report"), None)
+    intake_flow = next((artifact for artifact in artifacts if artifact.get("id") == "l0-intake-flow"), None)
     html_report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-final-report-html"), None)
     screenshot = next(
         (artifact for artifact in artifacts if artifact.get("id") == "l1-careers-screenshot"),
@@ -154,6 +155,7 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     }
     step_ids = {step.get("id") for step in steps}
     expected_step_ids = {
+        "l0-seed-intake",
         "l0-url-discovery",
         "l1-source-capture",
         "l2-kilos-analysis",
@@ -166,6 +168,7 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
     group_id = "composite:audit-report:l4-report"
     report_bundle = next((group for group in groups if group.get("id") == group_id), None)
     expected_report_bundle_ids = {
+        "l0-intake-flow",
         "l0-source-urls",
         "l1-careers-text",
         "l1-careers-screenshot",
@@ -205,6 +208,26 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
         )
     require(payload.get("workflow", {}).get("status") == "complete", "ADR-002 workflow status drifted")
     require(step_ids == expected_step_ids, "Easy-audit step graph drifted")
+    input_overlays = payload.get("workflow", {}).get("input_overlays")
+    require(isinstance(input_overlays, list), "ADR-002 projection must expose workflow.input_overlays")
+    require(
+        [item.get("id") for item in input_overlays]
+        == [
+            "input:l0-seed-intake:company",
+            "input:l0-seed-intake:domain_hint",
+            "input:l0-seed-intake:workflow_template",
+            "input:l0-seed-intake:talent_segment",
+        ],
+        "Easy-audit intake bounded input overlay ids drifted",
+    )
+    require(
+        all(item.get("subtype") == "bounded_input" for item in input_overlays),
+        "Easy-audit intake overlays must use bounded_input subtype",
+    )
+    require(
+        all(item.get("anchor", {}).get("artifact_id") == "l0-intake-flow" for item in input_overlays),
+        "Easy-audit intake overlays must anchor to the intake flow artifact",
+    )
     require(
         payload.get("workflow", {}).get("template_id") == "employer-brand-audit.easy",
         "Easy-audit template id drifted",
@@ -242,6 +265,10 @@ def assert_audit_projection_shape(payload: dict[str, Any]) -> dict[str, Any]:
         },
         "Easy-audit JSON/text projection drifted",
     )
+    require(isinstance(intake_flow, dict), "Missing ADR-002 intake flow artifact")
+    require(intake_flow.get("type") == "markdown", "ADR-002 intake flow should project as markdown")
+    require(intake_flow.get("kind") == "intake_flow", "ADR-002 intake flow semantic kind should be preserved")
+    require("render" in (intake_flow.get("capabilities") or []), "ADR-002 intake flow should expose Mermaid render")
     for artifact in (report, screenshot):
         projected_path = Path(str(artifact.get("path") or ""))
         require(not projected_path.is_absolute(), f"{artifact.get('id')} path must be repo-root-relative")
@@ -293,6 +320,7 @@ def assert_audit_server_collection(manifest_path: Path, payload: dict[str, Any])
     require(
         artifact_ids
         == {
+            "l0-intake-flow",
             "l0-source-urls",
             "l1-careers-text",
             "l1-careers-screenshot",
@@ -305,6 +333,7 @@ def assert_audit_server_collection(manifest_path: Path, payload: dict[str, Any])
         "Server collection must expose projected ADR-002 image, markdown, HTML, JSON, and text artifacts",
     )
     report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-final-report"), None)
+    intake_flow = next((artifact for artifact in artifacts if artifact.get("id") == "l0-intake-flow"), None)
     html_report = next((artifact for artifact in artifacts if artifact.get("id") == "l4-final-report-html"), None)
     screenshot = next((artifact for artifact in artifacts if artifact.get("id") == "l1-careers-screenshot"), None)
     source_urls = next((artifact for artifact in artifacts if artifact.get("id") == "l0-source-urls"), None)
@@ -312,6 +341,9 @@ def assert_audit_server_collection(manifest_path: Path, payload: dict[str, Any])
     kilos_json = next((artifact for artifact in artifacts if artifact.get("id") == "l2-kilos-json"), None)
     synthesis_notes = next((artifact for artifact in artifacts if artifact.get("id") == "l3-synthesis-notes"), None)
     require(isinstance(report, dict), "ADR-002 report missing from server collection")
+    require(isinstance(intake_flow, dict), "ADR-002 intake flow missing from server collection")
+    require(intake_flow.get("type") == "markdown", "ADR-002 intake flow collection type drifted")
+    require("render" in (intake_flow.get("capabilities") or []), "ADR-002 intake flow render capability missing in collection")
     require(report.get("type") == "markdown", "ADR-002 report collection type drifted")
     require("render" in (report.get("capabilities") or []), "ADR-002 report render capability missing in collection")
     require(isinstance(html_report, dict), "ADR-002 HTML report missing from server collection")

@@ -25,8 +25,45 @@
       --artifact-document-list-width: 88ch;
       --artifact-document-body-padding: 36px 44px 240px;
       --artifact-document-font: 15px/1.58 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --artifact-mermaid-edge: #93c5fd;
+      --artifact-mermaid-node-radius: 5px;
+      --target-link-color-a: #38bdf8;
+      --target-link-color-b: #93c5fd;
+      --target-link-color-c: #22d3ee;
+      --target-link-color-faint: rgba(56, 189, 248, 0.08);
+      --target-link-highlight-bg: rgba(56, 189, 248, 0.08);
+      --target-link-highlight-shadow: rgba(147, 197, 253, 0.22);
+      --target-link-highlight-shadow-strong: rgba(147, 197, 253, 0.42);
+      --target-link-glow: rgba(56, 189, 248, 0.18);
+      --target-link-line-duration: 1.8s;
+      --target-link-pulse-duration: 3.3s;
+      --target-link-border-duration: 3.9s;
+      --target-link-border-width: 2px;
+      --target-link-connector-width: 2.6px;
+      --target-link-connector-dasharray: 12 10;
+      --target-link-connector-dashoffset: -44;
+      --target-link-highlight-radius: 10px;
       --artifact-projection-inset: 32px;
       --sidebar-width: 360px;
+    }
+    @property --target-link-angle {
+      syntax: "<angle>";
+      inherits: false;
+      initial-value: 0deg;
+    }
+    @keyframes target-link-chase-border {
+      to { --target-link-angle: 360deg; }
+    }
+    @keyframes target-link-chase-line {
+      to { stroke-dashoffset: var(--target-link-connector-dashoffset); }
+    }
+    @keyframes target-link-chase-highlight {
+      0%, 100% { box-shadow: 0 0 0 1px var(--target-link-highlight-shadow), 0 0 18px var(--target-link-color-faint); }
+      50% { box-shadow: 0 0 0 1px var(--target-link-highlight-shadow-strong), 0 0 26px var(--target-link-glow); }
+    }
+    @keyframes target-link-chase-panel {
+      0%, 100% { box-shadow: var(--shadow), 0 0 0 rgba(147, 197, 253, 0); }
+      50% { box-shadow: var(--shadow), 0 0 26px var(--target-link-glow); }
     }
     body[data-artifact-document-theme="light"] {
       --artifact-document-bg: #f7f8fb;
@@ -38,6 +75,7 @@
       --artifact-document-line: #d4dae4;
       --artifact-document-code-bg: #171717;
       --artifact-document-code-ink: #f4f4f5;
+      --artifact-mermaid-edge: #2563eb;
     }
     * { box-sizing: border-box; }
     html {
@@ -556,7 +594,7 @@
     }
     .markdown-mermaid {
       margin: 18px 0;
-      padding: 14px;
+      padding: 14px 14px 22px;
       border: 1px solid var(--artifact-document-line);
       border-radius: 10px;
       background: var(--artifact-document-panel);
@@ -573,7 +611,7 @@
       overflow: auto;
       display: grid;
       place-items: center;
-      padding: 12px;
+      padding: 18px 18px 34px;
       border: 1px solid var(--artifact-document-line);
       border-radius: 8px;
       background: var(--artifact-document-bg);
@@ -584,6 +622,23 @@
     .mermaid-render-target svg {
       max-width: 100%;
       height: auto;
+      overflow: visible;
+    }
+    .mermaid-render-target svg .edgePath path,
+    .mermaid-render-target svg path.flowchart-link {
+      stroke: var(--artifact-mermaid-edge) !important;
+      stroke-width: 2.4px !important;
+    }
+    .mermaid-render-target svg marker path {
+      fill: var(--artifact-mermaid-edge) !important;
+      stroke: var(--artifact-mermaid-edge) !important;
+    }
+    .mermaid-render-target svg g.node rect.label-container {
+      rx: var(--artifact-mermaid-node-radius);
+      ry: var(--artifact-mermaid-node-radius);
+    }
+    .mermaid-render-target svg g.node foreignObject {
+      overflow: visible;
     }
     .mermaid-render-status {
       margin: 10px 0;
@@ -715,6 +770,65 @@
       pointer-events: none;
     }
     .markdown-marker[hidden] { display: none; }
+    .target-link-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 11;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .target-link-layer[hidden] { display: none; }
+    .target-link-connectors {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .target-link-connector-path {
+      fill: none;
+      stroke: url(#target-link-gradient);
+      stroke-width: var(--target-link-connector-width);
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: var(--target-link-connector-dasharray);
+      filter: drop-shadow(0 0 5px rgba(56, 189, 248, 0.45));
+      animation: target-link-chase-line var(--target-link-line-duration) linear infinite;
+    }
+    .target-link-highlight {
+      position: absolute;
+      border-radius: var(--target-link-highlight-radius);
+      background: var(--target-link-highlight-bg);
+      pointer-events: none;
+      animation: target-link-chase-highlight var(--target-link-pulse-duration) ease-in-out infinite;
+    }
+    .target-link-highlight::before,
+    .is-target-linked::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      padding: var(--target-link-border-width);
+      border-radius: inherit;
+      background:
+        conic-gradient(
+          from var(--target-link-angle),
+          var(--target-link-color-faint) 0deg,
+          var(--target-link-color-a) 40deg,
+          var(--target-link-color-b) 70deg,
+          var(--target-link-color-c) 94deg,
+          var(--target-link-color-faint) 140deg,
+          var(--target-link-color-faint) 360deg
+        );
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      animation: target-link-chase-border var(--target-link-border-duration) linear infinite;
+    }
+    .target-link-highlight[hidden] { display: none; }
     .comment-popover {
       position: fixed;
       z-index: 50;
@@ -742,6 +856,77 @@
     }
     .dictation-field textarea {
       padding-right: 74px;
+    }
+    .bounded-input-layer {
+      position: absolute;
+      z-index: 12;
+      top: 18px;
+      right: 18px;
+      width: min(340px, calc(100% - 36px));
+      pointer-events: none;
+    }
+    .bounded-input-layer[hidden] { display: none; }
+    .bounded-input-panel {
+      position: relative;
+      isolation: isolate;
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid rgba(110, 168, 255, 0.32);
+      border-radius: 8px;
+      background: rgba(20, 20, 22, 0.94);
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+    }
+    .is-target-linked {
+      position: relative;
+      isolation: isolate;
+    }
+    .bounded-input-panel.is-target-linked {
+      border-color: rgba(147, 197, 253, 0.34);
+      animation: target-link-chase-panel var(--target-link-pulse-duration) ease-in-out infinite;
+    }
+    .bounded-input-title {
+      color: #e5e7eb;
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    .bounded-input-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .bounded-input-field {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .bounded-input-field input,
+    .bounded-input-field select,
+    .bounded-input-field textarea {
+      width: 100%;
+      min-width: 0;
+      color: var(--ink);
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      font-weight: 500;
+      outline: 0;
+    }
+    .bounded-input-field textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+    .bounded-input-field input:focus,
+    .bounded-input-field select:focus,
+    .bounded-input-field textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(110, 168, 255, 0.18);
     }
     .dictation-control {
       position: absolute;

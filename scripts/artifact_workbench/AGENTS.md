@@ -22,6 +22,16 @@ and app shell JavaScript.
 - HTML artifacts use the shared document stage and annotation editor; the shell
   may route saved `html_element` anchors to the marker/popover, but HTML
   identity extraction and inspector binding stay with the HTML type/primitive.
+- Bounded intake fields are rendered as `bounded_input` interaction overlays
+  attached to projected workflow step/input ids. Persist them through the
+  workbench state surface as overlay state plus an agent-readable
+  `bounded_inputs` summary; do not collapse them into annotation comments.
+- Stage-level workflow pairing overlays may visually connect bounded input
+  panels to resolved artifact DOM/SVG targets. Keep those pairings selector- and
+  anchor-driven through projection data or adapter helpers; do not hardcode
+  Mermaid-generated element ids in the app shell. Render the visible chase
+  highlight and connector through the reusable `target_link.js` primitive; the
+  shell may supply per-instance options from projected `target_link` data.
 - `styles.css` owns the static workbench stylesheet, including shared toolbar
   and current type-control classes, until a deliberate per-type CSS asset
   boundary exists. Do not add artifact-type behavior to the shell JavaScript to

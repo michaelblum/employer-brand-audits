@@ -3,7 +3,7 @@
 ## Purpose
 
 Reusable browser-loaded JavaScript primitives for rendering markdown, Mermaid,
-images, documents, HTML, and interaction overlays.
+images, documents, HTML, interaction overlays, and reusable target-link effects.
 
 ## Ownership
 
@@ -28,8 +28,17 @@ images, documents, HTML, and interaction overlays.
 - HTML primitives own iframe rendering, element-anchor extraction, and
   iframe-to-workbench rect mapping; the workbench app shell still owns editor
   state, overlay placement, and persistence.
-- Interaction overlay primitives expose subtype models and state helpers;
-  controller code owns effect execution and annotation routing.
+- Interaction overlay primitives expose subtype models and state helpers.
+  `annotation` is the comment-like subtype; `bounded_input` is the typed
+  workflow-input subtype anchored with `workflow_input` step/input ids.
+  Generic target helpers may resolve selector-backed DOM/SVG anchors and
+  rect-to-rect connector geometry.
+- `target_link.js` owns reusable visual link effects between arbitrary resolved
+  rects, including default and per-instance CSS variable configuration for
+  color, speed, duration, border width, connector width, and radius.
+  Artifact/workbench adapters own selectors, target resolution, workflow
+  semantics, and visible target choice.
+- Controller code owns effect execution and annotation routing.
 - Vendor code under `vendor/` should stay isolated from project-authored
   primitives.
 
@@ -47,6 +56,7 @@ images, documents, HTML, and interaction overlays.
 
 - Run `node --check` on changed primitive files.
 - Run relevant checks such as `node tests/interaction_overlay_primitive_check.js`,
+  `node tests/target_link_primitive_check.js`,
   `node tests/html_renderer_primitive_check.js`,
   `node tests/document_renderer_primitive_check.js`,
   `node tests/artifact_renderer_primitive_check.js`,

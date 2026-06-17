@@ -75,6 +75,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "--check", "scripts/artifact_primitives/target_link.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/artifact_primitives/interaction_overlay_controller.js"],
             validation_commands(),
         )
@@ -108,6 +112,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn(
             ["node", "tests/interaction_overlay_primitive_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "tests/target_link_primitive_check.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -154,6 +162,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             ["node", "--check", "scripts/playwright-snippets/artifact-workbench-annotation-reorder-check.js"],
             validation_commands(),
         )
+        self.assertIn(
+            ["node", "--check", "scripts/playwright-snippets/artifact-workbench-bounded-input-check.js"],
+            validation_commands(),
+        )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/html_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/core/artifact_common.js", WORKBENCH_ASSETS)
@@ -168,6 +180,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertIn("/assets/artifact-primitives/image_viewer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/navigation/artifact_navigator.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-primitives/target_link.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/interaction_overlay_controller.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-toolbar.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-binding.js", WORKBENCH_ASSETS)
@@ -1872,6 +1885,77 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("workbench_projection", glance)
+
+    def test_workbench_state_accepts_bounded_input_overlays_for_projected_inputs(self) -> None:
+        from scripts.playwright_cli_workbench_server import clean_interaction_overlays
+
+        clean = clean_interaction_overlays(
+            [
+                {
+                    "id": "input:l0-seed-intake:company",
+                    "subtype": "bounded_input",
+                    "subject": {"kind": "workflow_step", "id": "l0-seed-intake"},
+                    "anchor": {
+                        "type": "workflow_input",
+                        "coordinate_space": "workflow_graph",
+                        "artifact_id": "l0-intake-flow",
+                        "step_id": "l0-seed-intake",
+                        "input_id": "company",
+                    },
+                    "body": {"kind": "input_value", "value": "Acme Robotics"},
+                    "created_at_epoch": 1781564957,
+                },
+                {
+                    "id": "input:l0-seed-intake:source_urls",
+                    "subtype": "bounded_input",
+                    "subject": {"kind": "workflow_step", "id": "l0-seed-intake"},
+                    "anchor": {
+                        "type": "workflow_input",
+                        "coordinate_space": "workflow_graph",
+                        "artifact_id": "l0-intake-flow",
+                        "step_id": "l0-seed-intake",
+                        "input_id": "source_urls",
+                    },
+                    "body": {"kind": "input_value", "value": "https://acme.example/careers/jobs/123"},
+                    "created_at_epoch": 1781564957,
+                },
+            ],
+            {"l0-intake-flow"},
+            bounded_input_definitions=[
+                {
+                    "id": "input:l0-seed-intake:company",
+                    "step_id": "l0-seed-intake",
+                    "input_id": "company",
+                    "anchor": {
+                        "type": "workflow_input",
+                        "artifact_id": "l0-intake-flow",
+                        "step_id": "l0-seed-intake",
+                        "input_id": "company",
+                    },
+                }
+            ],
+        )
+
+        self.assertEqual(
+            clean,
+            [
+                {
+                    "id": "input:l0-seed-intake:company",
+                    "subtype": "bounded_input",
+                    "subject": {"kind": "workflow_step", "id": "l0-seed-intake"},
+                    "anchor": {
+                        "type": "workflow_input",
+                        "coordinate_space": "workflow_graph",
+                        "artifact_id": "l0-intake-flow",
+                        "step_id": "l0-seed-intake",
+                        "input_id": "company",
+                    },
+                    "body": {"kind": "input_value", "value": "Acme Robotics"},
+                    "created_at_epoch": 1781564957,
+                    "updated_at_epoch": None,
+                }
+            ],
+        )
 
 
 if __name__ == "__main__":

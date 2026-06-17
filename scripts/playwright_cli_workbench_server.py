@@ -101,6 +101,10 @@ WORKBENCH_ASSETS = {
         ARTIFACT_PRIMITIVES_DIR / "interaction_overlay.js",
         "text/javascript",
     ),
+    "/assets/artifact-primitives/target_link.js": (
+        ARTIFACT_PRIMITIVES_DIR / "target_link.js",
+        "text/javascript",
+    ),
     "/assets/artifact-primitives/interaction_overlay_controller.js": (
         ARTIFACT_PRIMITIVES_DIR / "interaction_overlay_controller.js",
         "text/javascript",
@@ -255,14 +259,31 @@ def build_collection(manifest_path: Path, projection: dict[str, Any] | None = No
     }
 
 
-def clean_interaction_overlays(payload: Any, artifact_ids: set[str]) -> list[dict[str, Any]]:
+def clean_interaction_overlays(
+    payload: Any,
+    artifact_ids: set[str],
+    *,
+    bounded_input_definitions: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     if not isinstance(payload, list):
         return []
+    bounded_input_definitions = bounded_input_definitions or []
+    bounded_input_keys = {
+        (str(definition.get("step_id") or ""), str(definition.get("input_id") or ""))
+        for definition in bounded_input_definitions
+        if isinstance(definition, dict)
+    }
     clean: list[dict[str, Any]] = []
     for overlay in payload:
         if not isinstance(overlay, dict):
             continue
-        if str(overlay.get("subtype") or "") != "annotation":
+        subtype = str(overlay.get("subtype") or "")
+        if subtype == "bounded_input":
+            cleaned = clean_bounded_input_overlay(overlay, artifact_ids, bounded_input_keys)
+            if cleaned is not None:
+                clean.append(cleaned)
+            continue
+        if subtype != "annotation":
             continue
         subject = overlay.get("subject")
         if not isinstance(subject, dict) or str(subject.get("kind") or "") != "artifact":
@@ -295,6 +316,100 @@ def clean_interaction_overlays(payload: Any, artifact_ids: set[str]) -> list[dic
         except (KeyError, TypeError, ValueError):
             continue
     return clean
+
+
+def clean_bounded_input_overlay(
+    overlay: dict[str, Any],
+    artifact_ids: set[str],
+    bounded_input_keys: set[tuple[str, str]],
+) -> dict[str, Any] | None:
+    subject = overlay.get("subject")
+    if not isinstance(subject, dict) or str(subject.get("kind") or "") != "workflow_step":
+        return None
+    anchor = overlay.get("anchor")
+    if not isinstance(anchor, dict) or str(anchor.get("type") or "") != "workflow_input":
+        return None
+    artifact_id_value = str(anchor.get("artifact_id") or "")
+    step_id = str(anchor.get("step_id") or subject.get("id") or "")
+    input_id = str(anchor.get("input_id") or "")
+    if artifact_id_value not in artifact_ids:
+        return None
+    if (step_id, input_id) not in bounded_input_keys:
+        return None
+    body = overlay.get("body")
+    if not isinstance(body, dict) or str(body.get("kind") or "") != "input_value":
+        return None
+    try:
+        created_at_epoch = int(overlay.get("created_at_epoch") or time.time())
+        updated_at_epoch = (
+            int(overlay["updated_at_epoch"])
+            if overlay.get("updated_at_epoch") is not None
+            else None
+        )
+    except (TypeError, ValueError):
+        return None
+    return {
+        "id": str(overlay.get("id") or f"input:{step_id}:{input_id}"),
+        "subtype": "bounded_input",
+        "subject": {"kind": "workflow_step", "id": step_id},
+        "anchor": {
+            "type": "workflow_input",
+            "coordinate_space": "workflow_graph",
+            "artifact_id": artifact_id_value,
+            "step_id": step_id,
+            "input_id": input_id,
+        },
+        "body": {"kind": "input_value", "value": str(body.get("value") or "")[:5000]},
+        "created_at_epoch": created_at_epoch,
+        "updated_at_epoch": updated_at_epoch,
+    }
+
+
+def bounded_input_overlay_key(overlay: dict[str, Any]) -> tuple[str, str]:
+    anchor = overlay.get("anchor") if isinstance(overlay.get("anchor"), dict) else {}
+    return str(anchor.get("step_id") or ""), str(anchor.get("input_id") or "")
+
+
+def bounded_input_value(overlay: dict[str, Any] | None, default: Any = None) -> str:
+    if overlay is None:
+        return "" if default is None else str(default)
+    body = overlay.get("body") if isinstance(overlay.get("body"), dict) else {}
+    return str(body.get("value") or "")
+
+
+def bounded_input_state(
+    definitions: list[dict[str, Any]],
+    overlays: list[dict[str, Any]],
+) -> dict[str, Any]:
+    overlays_by_key = {
+        bounded_input_overlay_key(overlay): overlay
+        for overlay in overlays
+        if isinstance(overlay, dict) and str(overlay.get("subtype") or "") == "bounded_input"
+    }
+    items: list[dict[str, Any]] = []
+    values: dict[str, str] = {}
+    for definition in definitions:
+        if not isinstance(definition, dict):
+            continue
+        step_id = str(definition.get("step_id") or "")
+        input_id = str(definition.get("input_id") or "")
+        if not step_id or not input_id:
+            continue
+        key = (step_id, input_id)
+        value = bounded_input_value(overlays_by_key.get(key), definition.get("value"))
+        value_key = f"{step_id}.{input_id}"
+        values[value_key] = value
+        item = {
+            **definition,
+            "value": value,
+            "status": "filled" if value else "pending",
+        }
+        items.append(item)
+    return {
+        "status": "bounded_inputs",
+        "items": items,
+        "values": values,
+    }
 
 
 def clean_overlay_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:
@@ -412,6 +527,13 @@ class WorkbenchServer(ThreadingHTTPServer):
             self.context_changed_by = changed_by
             self.context_changed_at_epoch = int(time.time())
 
+    def bounded_input_definitions(self) -> list[dict[str, Any]]:
+        workflow = self.workbench_projection.get("workflow")
+        if not isinstance(workflow, dict):
+            return []
+        definitions = workflow.get("input_overlays")
+        return definitions if isinstance(definitions, list) else []
+
     def workbench_state(self) -> dict[str, Any]:
         contexts = discover_workbench_contexts(self.manifest_path)
         return {
@@ -419,6 +541,10 @@ class WorkbenchServer(ThreadingHTTPServer):
             "collection": self.collection,
             "workbench_projection": self.workbench_projection,
             "interaction_overlays": self.interaction_overlays,
+            "bounded_inputs": bounded_input_state(
+                self.bounded_input_definitions(),
+                self.interaction_overlays,
+            ),
             "view": self.view_state,
             "contexts": contexts,
             "context": {
@@ -432,7 +558,11 @@ class WorkbenchServer(ThreadingHTTPServer):
 
     def replace_interaction_overlays(self, overlays: Any) -> None:
         artifact_ids = {item["id"] for item in self.collection["artifacts"]}
-        self.interaction_overlays = clean_interaction_overlays(overlays, artifact_ids)
+        self.interaction_overlays = clean_interaction_overlays(
+            overlays,
+            artifact_ids,
+            bounded_input_definitions=self.bounded_input_definitions(),
+        )
         self.updated_at_epoch = int(time.time())
 
     def replace_view_state(self, view: Any) -> None:

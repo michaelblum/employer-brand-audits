@@ -31,6 +31,10 @@ CAPTURE_FEATURES = [
     "internal_scroll",
     "tall_full_page",
 ]
+INTAKE_FLOW_STEP_SELECTOR_CANDIDATES = [
+    '[data-workflow-step-id="l0-seed-intake"]',
+    'g.node[data-node="true"][data-id="intake"]',
+]
 
 
 def write_text(path: Path, value: str) -> None:
@@ -44,6 +48,13 @@ def write_json(path: Path, value: Any) -> None:
 
 def repo_relative(path: Path) -> str:
     return str(path.resolve().relative_to(REPO_ROOT))
+
+
+def intake_flow_input_anchor() -> dict[str, Any]:
+    return {
+        "artifact_id": "l0-intake-flow",
+        "selector_candidates": INTAKE_FLOW_STEP_SELECTOR_CANDIDATES,
+    }
 
 
 def png_chunk(kind: bytes, data: bytes) -> bytes:
@@ -437,6 +448,36 @@ flowchart TD
 """
 
 
+def intake_flow_markdown() -> str:
+    return """# Employer Brand Audit Intake
+
+```mermaid
+flowchart TD
+  intake[Seed intake<br/>company · domain hint · template · talent segment]
+  seeds[L0 seed entry points<br/>domain and platform roots]
+  targets[Navigated capture targets<br/>pages and sections found by Playwright traversal]
+  evidence[L1 captured evidence<br/>text · screenshots · clips]
+  kilos[L2 KILOS analysis]
+  synth[L3 synthesis]
+  report[L4 report]
+
+  intake --> seeds
+  seeds --> targets
+  targets --> evidence
+  evidence --> kilos
+  kilos --> synth
+  synth --> report
+```
+
+## Intake Inputs
+
+- Company
+- Domain or inferred-domain hint
+- Workflow template
+- Talent segment or scope
+"""
+
+
 def report_html() -> str:
     return """<!doctype html>
 <html lang="en">
@@ -509,7 +550,8 @@ def build_manifest(output_dir: Path) -> dict[str, Any]:
         "created_at": "2026-06-13T01:00:00Z",
         "required_inputs": [
             {"id": "company", "label": "Company", "value": "Acme Robotics"},
-            {"id": "domain", "label": "Domain", "value": "acme.example"},
+            {"id": "domain_hint", "label": "Domain or inferred-domain hint", "value": "acme.example"},
+            {"id": "workflow_template", "label": "Workflow template", "value": "standard-audit"},
             {
                 "id": "talent_segment",
                 "label": "Talent segment",
@@ -523,16 +565,73 @@ def build_manifest(output_dir: Path) -> dict[str, Any]:
         },
         "steps": [
             {
+                "id": "l0-seed-intake",
+                "layer": 0,
+                "name": "L0 seed intake",
+                "description": (
+                    "Collect seed-level audit inputs. The agent uses these inputs to browse "
+                    "entry points and discover concrete capture targets."
+                ),
+                "status": "pending",
+                "started_at": None,
+                "completed_at": None,
+                "required_inputs": [
+                    {
+                        "id": "company",
+                        "label": "Company",
+                        "status": "pending",
+                        "value": None,
+                        "input_type": "text",
+                        "placeholder": "Acme Robotics",
+                        "anchor": intake_flow_input_anchor(),
+                    },
+                    {
+                        "id": "domain_hint",
+                        "label": "Domain or inferred-domain hint",
+                        "status": "pending",
+                        "value": None,
+                        "input_type": "text",
+                        "placeholder": "acme.example",
+                        "anchor": intake_flow_input_anchor(),
+                    },
+                    {
+                        "id": "workflow_template",
+                        "label": "Workflow template",
+                        "status": "pending",
+                        "value": "standard-audit",
+                        "input_type": "select",
+                        "options": [
+                            {"value": "standard-audit", "label": "Standard audit"},
+                            {"value": "tech-talent-audit", "label": "Tech talent audit"},
+                        ],
+                        "anchor": intake_flow_input_anchor(),
+                    },
+                    {
+                        "id": "talent_segment",
+                        "label": "Talent segment or scope",
+                        "status": "pending",
+                        "value": None,
+                        "input_type": "text",
+                        "placeholder": "Senior robotics engineers",
+                        "anchor": intake_flow_input_anchor(),
+                    },
+                ],
+                "artifact_ids": ["l0-intake-flow"],
+                "parent_step_ids": [],
+            },
+            {
                 "id": "l0-url-discovery",
                 "layer": 0,
                 "name": "L0 URL discovery",
-                "description": "Collect public source URLs for the audit.",
+                "description": (
+                    "Browse seed entry points to discover concrete pages and sections for capture."
+                ),
                 "status": "complete",
                 "started_at": "2026-06-13T01:00:00Z",
                 "completed_at": "2026-06-13T01:01:00Z",
                 "required_inputs": ["company", "domain"],
                 "artifact_ids": ["l0-source-urls"],
-                "parent_step_ids": [],
+                "parent_step_ids": ["l0-seed-intake"],
             },
             {
                 "id": "l1-source-capture",
@@ -585,13 +684,28 @@ def build_manifest(output_dir: Path) -> dict[str, Any]:
         ],
         "artifacts": [
             {
+                "id": "l0-intake-flow",
+                "layer": 0,
+                "type": "intake_flow",
+                "status": "pending",
+                "created_at": "2026-06-13T00:59:00Z",
+                "produced_by_step_id": "l0-seed-intake",
+                "parent_ids": [],
+                "file_path": "l0-intake-flow.md",
+                "params": {"slot": "intake.flow"},
+                "card": {
+                    "summary": "Fixture-backed intake flow with bounded seed input overlays",
+                    "tags": {"layer": "L0", "slot": "intake.flow"},
+                },
+            },
+            {
                 "id": "l0-source-urls",
                 "layer": 0,
                 "type": "url_list",
                 "status": "complete",
                 "created_at": "2026-06-13T01:01:00Z",
                 "produced_by_step_id": "l0-url-discovery",
-                "parent_ids": [],
+                "parent_ids": ["l0-intake-flow"],
                 "file_path": "l0-source-urls.json",
                 "params": {"url": "https://acme.example/careers"},
                 "card": {"summary": "Seed source URLs", "tags": {"layer": "L0"}},
@@ -694,6 +808,7 @@ def generate_easy_audit_fixture(output_dir: Path = DEFAULT_OUTPUT_DIR) -> Path:
             {"url": "https://acme.example/jobs/robotics-engineer", "role": "job_posting"},
         ],
     )
+    write_text(output_dir / "l0-intake-flow.md", intake_flow_markdown())
     write_text(
         output_dir / "l1-careers-text.txt",
         "Build autonomous systems with Acme Robotics. Benefits, mission, and roles are visible; interview process proof is missing.\n",

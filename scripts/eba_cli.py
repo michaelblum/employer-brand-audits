@@ -298,6 +298,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/artifact_primitives/artifact_renderer.js"],
         ["node", "--check", "scripts/artifacts/navigation/artifact_navigator.js"],
         ["node", "--check", "scripts/artifact_primitives/interaction_overlay.js"],
+        ["node", "--check", "scripts/artifact_primitives/target_link.js"],
         ["node", "--check", "scripts/artifact_primitives/interaction_overlay_controller.js"],
         ["node", "tests/document_renderer_primitive_check.js"],
         ["node", "tests/html_renderer_primitive_check.js"],
@@ -307,6 +308,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "tests/artifact_binding_check.js"],
         ["node", "tests/artifact_navigator_check.js"],
         ["node", "tests/interaction_overlay_primitive_check.js"],
+        ["node", "tests/target_link_primitive_check.js"],
         ["node", "tests/interaction_overlay_controller_check.js"],
         ["node", "--check", "scripts/artifact_workbench/app.js"],
         ["node", "--check", "scripts/artifact_workbench/artifact_toolbar.js"],
@@ -321,6 +323,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-navigation-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-annotation-reorder-check.js"],
         ["node", "--check", "scripts/playwright-snippets/artifact-workbench-interaction-overlay-check.js"],
+        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-bounded-input-check.js"],
     ]
     venv_python = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "python"
     pytest = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "pytest"
