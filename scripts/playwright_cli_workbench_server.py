@@ -16,8 +16,18 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 try:
+    from workbench_bounded_input import (
+        bounded_input_key as bounded_input_overlay_key,
+        bounded_input_state,
+        clean_bounded_input_overlay,
+    )
     from workbench_projection import project_workbench_manifest
 except ModuleNotFoundError:
+    from scripts.workbench_bounded_input import (
+        bounded_input_key as bounded_input_overlay_key,
+        bounded_input_state,
+        clean_bounded_input_overlay,
+    )
     from scripts.workbench_projection import project_workbench_manifest
 
 
@@ -37,6 +47,7 @@ WORKBENCH_STATE_PATH = "/api/workbench-state"
 WORKBENCH_CONTEXT_PATH = "/api/workbench-context"
 SERVER_SOURCE_FILES = [
     Path(__file__).resolve(),
+    Path(__file__).resolve().parent / "workbench_bounded_input.py",
     Path(__file__).resolve().parent / "workbench_projection.py",
 ]
 WORKBENCH_ASSETS = {
@@ -71,6 +82,10 @@ WORKBENCH_ASSETS = {
     ),
     "/assets/artifacts/core/artifact_common.js": (
         ARTIFACTS_DIR / "core" / "artifact_common.js",
+        "text/javascript",
+    ),
+    "/assets/artifacts/core/workflow_pairing.js": (
+        ARTIFACTS_DIR / "core" / "workflow_pairing.js",
         "text/javascript",
     ),
     "/assets/artifacts/types/image_artifact.js": (
@@ -366,100 +381,6 @@ def clean_interaction_overlays(
         except (KeyError, TypeError, ValueError):
             continue
     return clean
-
-
-def clean_bounded_input_overlay(
-    overlay: dict[str, Any],
-    artifact_ids: set[str],
-    bounded_input_keys: set[tuple[str, str]],
-) -> dict[str, Any] | None:
-    subject = overlay.get("subject")
-    if not isinstance(subject, dict) or str(subject.get("kind") or "") != "workflow_step":
-        return None
-    anchor = overlay.get("anchor")
-    if not isinstance(anchor, dict) or str(anchor.get("type") or "") != "workflow_input":
-        return None
-    artifact_id_value = str(anchor.get("artifact_id") or "")
-    step_id = str(anchor.get("step_id") or subject.get("id") or "")
-    input_id = str(anchor.get("input_id") or "")
-    if artifact_id_value not in artifact_ids:
-        return None
-    if (step_id, input_id) not in bounded_input_keys:
-        return None
-    body = overlay.get("body")
-    if not isinstance(body, dict) or str(body.get("kind") or "") != "input_value":
-        return None
-    try:
-        created_at_epoch = int(overlay.get("created_at_epoch") or time.time())
-        updated_at_epoch = (
-            int(overlay["updated_at_epoch"])
-            if overlay.get("updated_at_epoch") is not None
-            else None
-        )
-    except (TypeError, ValueError):
-        return None
-    return {
-        "id": str(overlay.get("id") or f"input:{step_id}:{input_id}"),
-        "subtype": "bounded_input",
-        "subject": {"kind": "workflow_step", "id": step_id},
-        "anchor": {
-            "type": "workflow_input",
-            "coordinate_space": "workflow_graph",
-            "artifact_id": artifact_id_value,
-            "step_id": step_id,
-            "input_id": input_id,
-        },
-        "body": {"kind": "input_value", "value": str(body.get("value") or "")[:5000]},
-        "created_at_epoch": created_at_epoch,
-        "updated_at_epoch": updated_at_epoch,
-    }
-
-
-def bounded_input_overlay_key(overlay: dict[str, Any]) -> tuple[str, str]:
-    anchor = overlay.get("anchor") if isinstance(overlay.get("anchor"), dict) else {}
-    return str(anchor.get("step_id") or ""), str(anchor.get("input_id") or "")
-
-
-def bounded_input_value(overlay: dict[str, Any] | None, default: Any = None) -> str:
-    if overlay is None:
-        return "" if default is None else str(default)
-    body = overlay.get("body") if isinstance(overlay.get("body"), dict) else {}
-    return str(body.get("value") or "")
-
-
-def bounded_input_state(
-    definitions: list[dict[str, Any]],
-    overlays: list[dict[str, Any]],
-) -> dict[str, Any]:
-    overlays_by_key = {
-        bounded_input_overlay_key(overlay): overlay
-        for overlay in overlays
-        if isinstance(overlay, dict) and str(overlay.get("subtype") or "") == "bounded_input"
-    }
-    items: list[dict[str, Any]] = []
-    values: dict[str, str] = {}
-    for definition in definitions:
-        if not isinstance(definition, dict):
-            continue
-        step_id = str(definition.get("step_id") or "")
-        input_id = str(definition.get("input_id") or "")
-        if not step_id or not input_id:
-            continue
-        key = (step_id, input_id)
-        value = bounded_input_value(overlays_by_key.get(key), definition.get("value"))
-        value_key = f"{step_id}.{input_id}"
-        values[value_key] = value
-        item = {
-            **definition,
-            "value": value,
-            "status": "filled" if value else "pending",
-        }
-        items.append(item)
-    return {
-        "status": "bounded_inputs",
-        "items": items,
-        "values": values,
-    }
 
 
 def clean_overlay_anchor(anchor: dict[str, Any]) -> dict[str, Any] | None:

@@ -59,6 +59,7 @@ COMPILE_TARGETS = [
     "scripts/playwright_cli_workbench_server.py",
     "scripts/playwright_cli_workbench_gate.py",
     "scripts/playwright_cli_browser.py",
+    "scripts/workbench_bounded_input.py",
     "scripts/workbench_projection.py",
     "scripts/workbench_projection_shape_check.py",
     "scripts/url_stage_capture.py",
@@ -293,6 +294,7 @@ def command_sig(args: argparse.Namespace) -> int:
 def validation_commands() -> list[list[str]]:
     commands = [
         [sys.executable, "-m", "py_compile", *COMPILE_TARGETS],
+        [sys.executable, "tests/test_workbench_bounded_input.py"],
         [sys.executable, "tests/test_easy_audit_fixture.py"],
         [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
         [sys.executable, "tests/test_url_stage_capture.py"],
@@ -304,6 +306,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
         ["node", "--check", "scripts/artifact_primitives/html_renderer.js"],
         ["node", "--check", "scripts/artifacts/core/artifact_common.js"],
+        ["node", "--check", "scripts/artifacts/core/workflow_pairing.js"],
         ["node", "--check", "scripts/artifacts/types/image_artifact.js"],
         ["node", "--check", "scripts/artifacts/types/markdown_artifact.js"],
         ["node", "--check", "scripts/artifacts/types/html_artifact.js"],
@@ -322,6 +325,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "tests/artifact_toolbar_check.js"],
         ["node", "tests/artifact_binding_check.js"],
         ["node", "tests/artifact_navigator_check.js"],
+        ["node", "tests/workflow_pairing_check.js"],
         ["node", "tests/workbench_shell_check.js"],
         ["node", "tests/interaction_overlay_primitive_check.js"],
         ["node", "tests/target_link_primitive_check.js"],

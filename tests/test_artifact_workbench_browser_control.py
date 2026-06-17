@@ -47,6 +47,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "--check", "scripts/artifacts/core/workflow_pairing.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/artifacts/types/image_artifact.js"],
             validation_commands(),
         )
@@ -84,6 +88,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn(
             ["node", "tests/artifact_navigator_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "tests/workflow_pairing_check.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -185,6 +193,7 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/html_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/core/artifact_common.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/core/workflow_pairing.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/image_artifact.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/markdown_artifact.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/html_artifact.js", WORKBENCH_ASSETS)
@@ -1228,6 +1237,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
 
     def test_workbench_asset_health_fetches_manifest_and_registered_assets(self) -> None:
         expected_manifest = gate.build_workbench_asset_manifest()
+        self.assertIn(
+            "scripts/workbench_bounded_input.py",
+            [source["path"] for source in expected_manifest["server_sources"]],
+        )
         served_manifest = {
             **expected_manifest,
             "startup_server_source_fingerprint": expected_manifest["server_source_fingerprint"],
