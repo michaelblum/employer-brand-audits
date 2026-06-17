@@ -387,6 +387,8 @@ def test_trace_and_gh_command_authorization_shape() -> None:
     assert "hooks" not in ACTIVE_TURN_REQUIRED_COMMANDS
     assert "demo" in ALLOWED_DEV_COMMANDS
     assert "demo" not in ACTIVE_TURN_REQUIRED_COMMANDS
+    assert "stage-url" in ALLOWED_DEV_COMMANDS
+    assert "stage-url" not in ACTIVE_TURN_REQUIRED_COMMANDS
     assert "workbench" in ALLOWED_DEV_COMMANDS
     assert "workbench" not in ACTIVE_TURN_REQUIRED_COMMANDS
     assert "gh" in ALLOWED_DEV_COMMANDS

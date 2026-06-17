@@ -121,6 +121,23 @@ class UrlStageCaptureTests(unittest.TestCase):
         )
         self.assertEqual(manifest["screenshot"]["dimensions"], {"width": 1000, "height": 1200})
 
+    def test_validation_includes_url_stage_capture_files(self) -> None:
+        from scripts.eba_cli import validation_commands
+
+        self.assertIn([sys.executable, "tests/test_url_stage_capture.py"], validation_commands())
+        self.assertIn(["node", "--check", "scripts/playwright-snippets/extract-web-blueprint.js"], validation_commands())
+
+    def test_stage_url_parser_is_registered(self) -> None:
+        from scripts.eba_cli import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["dev", "stage-url", "https://example.com/jobs", "--name", "example-jobs", "--no-browser"])
+
+        self.assertEqual(args.command, "stage-url")
+        self.assertEqual(args.url, "https://example.com/jobs")
+        self.assertEqual(args.name, "example-jobs")
+        self.assertTrue(args.no_browser)
+
 
 if __name__ == "__main__":
     unittest.main()

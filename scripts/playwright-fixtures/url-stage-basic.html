@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>URL Stage Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+        color: #172033;
+        background: #f6f8fb;
+      }
+      body {
+        margin: 0;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 40px;
+        background: rgba(255, 255, 255, 0.96);
+        border-bottom: 1px solid #d8deea;
+      }
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 72px 40px 120px;
+      }
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+        gap: 48px;
+        align-items: center;
+      }
+      h1 {
+        margin: 0 0 24px;
+        font-size: 56px;
+        line-height: 1.04;
+      }
+      p {
+        font-size: 20px;
+        color: #4d5b71;
+      }
+      a,
+      button {
+        font: inherit;
+      }
+      .actions {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-top: 32px;
+      }
+      .primary,
+      .secondary {
+        border-radius: 8px;
+        padding: 12px 18px;
+        text-decoration: none;
+        border: 1px solid #224f9f;
+      }
+      .primary {
+        color: #ffffff;
+        background: #224f9f;
+      }
+      .secondary {
+        color: #224f9f;
+        background: #ffffff;
+      }
+      .panel {
+        border: 1px solid #d8deea;
+        background: #ffffff;
+        padding: 28px;
+        box-shadow: 0 16px 60px rgba(34, 79, 159, 0.12);
+      }
+      .job-search {
+        display: grid;
+        gap: 12px;
+        margin-top: 44px;
+        padding: 24px;
+        background: #ffffff;
+        border: 1px solid #d8deea;
+      }
+      label {
+        font-weight: 700;
+      }
+      input {
+        min-height: 44px;
+        border: 1px solid #abb6c8;
+        border-radius: 6px;
+        padding: 0 12px;
+        font: inherit;
+      }
+      button {
+        min-height: 44px;
+        border: 1px solid #172033;
+        border-radius: 6px;
+        background: #172033;
+        color: #ffffff;
+        cursor: pointer;
+      }
+      section {
+        margin-top: 80px;
+      }
+      h2 {
+        font-size: 32px;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+      article {
+        min-height: 180px;
+        padding: 24px;
+        background: #ffffff;
+        border: 1px solid #d8deea;
+      }
+      @media (max-width: 760px) {
+        header,
+        main {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+        .hero,
+        .cards {
+          grid-template-columns: 1fr;
+        }
+        h1 {
+          font-size: 40px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Acme Careers</strong>
+      <nav aria-label="Primary navigation">
+        <a href="#roles">Roles</a>
+        <a href="#culture">Culture</a>
+      </nav>
+    </header>
+    <main>
+      <section class="hero" aria-label="Career introduction">
+        <div>
+          <h1>Build useful robotics with patient teams.</h1>
+          <p>
+            Acme Robotics hires senior engineers who like field problems,
+            thoughtful teammates, and production hardware with real customers.
+          </p>
+          <div class="actions">
+            <a class="primary" id="apply-now" href="#open-roles">Apply now</a>
+            <a class="secondary" href="#culture">Meet the team</a>
+          </div>
+        </div>
+        <aside class="panel" aria-label="Hiring snapshot">
+          <h2>Hiring focus</h2>
+          <p>Autonomy, controls, perception, and reliability engineering.</p>
+        </aside>
+      </section>
+      <form class="job-search" aria-label="Search open roles">
+        <label for="role-query">Find an engineering role</label>
+        <input id="role-query" name="q" placeholder="robotics engineer">
+        <button type="submit">Search jobs</button>
+      </form>
+      <section id="culture">
+        <h2>What senior engineers inspect first</h2>
+        <div class="cards">
+          <article>
+            <h3>Technical depth</h3>
+            <p>Design reviews include field telemetry and real postmortems.</p>
+          </article>
+          <article>
+            <h3>Team clarity</h3>
+            <p>Managers publish roadmaps with tradeoffs, not slogans.</p>
+          </article>
+          <article id="open-roles">
+            <h3>Open roles</h3>
+            <p><a href="/jobs/senior-robotics-engineer">Senior robotics engineer</a></p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

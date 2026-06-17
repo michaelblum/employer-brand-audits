@@ -6,6 +6,10 @@ from __future__ import annotations
 import html
 import json
 import re
+import shutil
+import struct
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -13,6 +17,12 @@ from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "artifacts" / "url-stage"
+WRAPPER = REPO_ROOT / "scripts" / "playwright_cli_browser.py"
+TEXT_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "extract-visible-text.js"
+SETTLE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "settle-page.js"
+HIDE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "hide-obscuring-elements.js"
+RESTORE_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "restore-page.js"
+BLUEPRINT_SNIPPET = REPO_ROOT / "scripts" / "playwright-snippets" / "extract-web-blueprint.js"
 
 
 def repo_relative(path: Path) -> str:
@@ -45,6 +55,72 @@ def read_json(path: Path) -> Any:
 
 def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def parse_playwright_cli_result(stdout: str) -> Any | None:
+    marker = "### Result"
+    marker_index = stdout.find(marker)
+    if marker_index < 0:
+        return None
+    result_lines = stdout[marker_index + len(marker) :].splitlines()
+    result_text = next((line.strip() for line in result_lines if line.strip()), "")
+    if not result_text:
+        return None
+    try:
+        return json.loads(result_text)
+    except json.JSONDecodeError:
+        return result_text
+
+
+def png_dimensions(path: Path) -> dict[str, int]:
+    with path.open("rb") as handle:
+        header = handle.read(24)
+    if len(header) < 24 or header[:8] != b"\x89PNG\r\n\x1a\n":
+        raise RuntimeError(f"Not a PNG file: {path}")
+    width, height = struct.unpack(">II", header[16:24])
+    return {"width": int(width), "height": int(height)}
+
+
+def command_for(session: str, *args: str | int | Path) -> list[str]:
+    return [sys.executable, str(WRAPPER), *[str(arg) for arg in args], "--session", session]
+
+
+def run_step(
+    label: str,
+    cmd: list[str],
+    log_path: Path,
+    stdout_path: Path | None = None,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    print(f"[url-stage] {label}")
+    print("+ " + " ".join(str(part) for part in cmd))
+    completed = subprocess.run(
+        cmd,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(f"\n## {label}\n")
+        handle.write("+ " + " ".join(str(part) for part in cmd) + "\n")
+        if completed.stdout:
+            handle.write("\n[stdout]\n")
+            handle.write(completed.stdout)
+            if not completed.stdout.endswith("\n"):
+                handle.write("\n")
+        if completed.stderr:
+            handle.write("\n[stderr]\n")
+            handle.write(completed.stderr)
+            if not completed.stderr.endswith("\n"):
+                handle.write("\n")
+        handle.write(f"\n[exit_code] {completed.returncode}\n")
+    if stdout_path is not None:
+        stdout_path.write_text(completed.stdout, encoding="utf-8")
+    cli_reported_error = "### Error" in completed.stdout or "### Error" in completed.stderr
+    if check and (completed.returncode != 0 or cli_reported_error):
+        raise RuntimeError(f"{label} failed with exit code {completed.returncode}")
+    return completed
 
 
 def screenshot_rect(document_rect: dict[str, Any], *, scale_x: float, scale_y: float) -> dict[str, int]:
@@ -173,3 +249,123 @@ def write_url_stage_manifest(
     manifest_path = output_dir / "manifest.json"
     write_json(manifest_path, manifest)
     return manifest_path
+
+
+def capture_url_stage(
+    url: str,
+    *,
+    slug: str,
+    output_dir: Path,
+    session: str = "eba-url-stage",
+    width: int = 1365,
+    height: int = 900,
+) -> Path:
+    resolved_output = safe_stage_output_dir(output_dir)
+    shutil.rmtree(resolved_output, ignore_errors=True)
+    resolved_output.mkdir(parents=True, exist_ok=True)
+
+    paths = {
+        "blueprint": resolved_output / "web-blueprint.json",
+        "target_map": resolved_output / "target-map.json",
+        "web_snapshot": resolved_output / "web-snapshot.html",
+        "page_screenshot": resolved_output / "page.full-page.png",
+        "visible_text": resolved_output / "visible-text.txt",
+        "page_snapshot": resolved_output / "page-snapshot.txt",
+        "capture_log": resolved_output / "capture.log",
+        "settle_stdout": resolved_output / "settle.stdout.txt",
+        "hide_stdout": resolved_output / "hide-obscuring.stdout.txt",
+        "restore_stdout": resolved_output / "restore-page.stdout.txt",
+        "blueprint_stdout": resolved_output / "web-blueprint.stdout.txt",
+        "visible_text_stdout": resolved_output / "visible-text.stdout.txt",
+    }
+
+    opened = False
+    failed = False
+    try:
+        run_step(
+            "open URL stage",
+            command_for(session, "open", url, "--no-persistent"),
+            paths["capture_log"],
+        )
+        opened = True
+        run_step(
+            "resize URL stage viewport",
+            command_for(session, "resize", width, height),
+            paths["capture_log"],
+        )
+        run_step(
+            "settle URL stage",
+            command_for(session, "run-code", SETTLE_SNIPPET),
+            paths["capture_log"],
+            stdout_path=paths["settle_stdout"],
+        )
+        run_step(
+            "hide obscuring elements",
+            command_for(session, "run-code", HIDE_SNIPPET),
+            paths["capture_log"],
+            stdout_path=paths["hide_stdout"],
+        )
+        blueprint_result = run_step(
+            "extract web blueprint",
+            command_for(session, "run-code", BLUEPRINT_SNIPPET),
+            paths["capture_log"],
+            stdout_path=paths["blueprint_stdout"],
+        )
+        blueprint = parse_playwright_cli_result(blueprint_result.stdout)
+        if not isinstance(blueprint, dict):
+            raise RuntimeError("extract web blueprint did not return an object")
+        write_json(paths["blueprint"], blueprint)
+        run_step(
+            "write page snapshot",
+            command_for(session, "snapshot", paths["page_snapshot"]),
+            paths["capture_log"],
+        )
+        text_result = run_step(
+            "extract visible text",
+            command_for(session, "run-code", TEXT_SNIPPET),
+            paths["capture_log"],
+            stdout_path=paths["visible_text_stdout"],
+        )
+        visible_text = parse_playwright_cli_result(text_result.stdout)
+        paths["visible_text"].write_text(str(visible_text or ""), encoding="utf-8")
+        run_step(
+            "write full-page screenshot",
+            command_for(session, "screenshot", paths["page_screenshot"], "--full-page"),
+            paths["capture_log"],
+        )
+        screenshot_dimensions = png_dimensions(paths["page_screenshot"])
+        target_map = build_target_map(
+            blueprint,
+            screenshot_dimensions=screenshot_dimensions,
+            screenshot_path=repo_relative(paths["page_screenshot"]),
+        )
+        write_json(paths["target_map"], target_map)
+        paths["web_snapshot"].write_text(build_web_snapshot_html(target_map), encoding="utf-8")
+        run_step(
+            "restore page",
+            command_for(session, "run-code", RESTORE_SNIPPET),
+            paths["capture_log"],
+            stdout_path=paths["restore_stdout"],
+        )
+        return write_url_stage_manifest(
+            output_dir=resolved_output,
+            slug=slug,
+            url=url,
+            status="passed",
+            viewport=blueprint.get("viewport") or {"width": width, "height": height},
+            paths=paths,
+            screenshot_dimensions=screenshot_dimensions,
+        )
+    except RuntimeError:
+        failed = True
+        raise
+    finally:
+        if opened:
+            close_result = run_step(
+                "close session",
+                command_for(session, "close"),
+                paths["capture_log"],
+                check=False,
+            )
+            if failed and close_result.returncode != 0:
+                print("[url-stage] close session failed after capture error", file=sys.stderr)
