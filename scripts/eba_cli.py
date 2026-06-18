@@ -20,6 +20,7 @@ try:
     )
     from scripts.eba_signature import append_signature_footer, current_eba_signature, signature_payload
     from scripts.fixture_registry import FIXTURE_GENERATORS
+    from scripts.intake_capture import add_capture_intake_parser, extract_intake_request, run_intake_capture
     from scripts.publication_pipeline.demo_recipes import demo_recipe_lines
     from scripts.url_stage_capture import DEFAULT_OUTPUT_ROOT, capture_url_stage, slugify_stage_name
     from scripts.validation_registry import COMPILE_TARGETS, validation_commands
@@ -33,15 +34,13 @@ except ModuleNotFoundError:
     )
     from eba_signature import append_signature_footer, current_eba_signature, signature_payload
     from fixture_registry import FIXTURE_GENERATORS
+    from intake_capture import add_capture_intake_parser, extract_intake_request, run_intake_capture
     from publication_pipeline.demo_recipes import demo_recipe_lines
     from url_stage_capture import DEFAULT_OUTPUT_ROOT, capture_url_stage, slugify_stage_name
     from validation_registry import COMPILE_TARGETS, validation_commands
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_MANIFEST = (
-    REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
-)
+DEFAULT_MANIFEST = REPO_ROOT / "artifacts" / "playwright-cli-public-page-matrix" / "latest" / "manifest.json"
 WORKBENCH_GATE = REPO_ROOT / "scripts" / "playwright_cli_workbench_gate.py"
 BROWSER_WRAPPER = REPO_ROOT / "scripts" / "playwright_cli_browser.py"
 WORKBENCH_LIVE_BOOT_SMOKE = (
@@ -210,6 +209,7 @@ def command_situation(args: argparse.Namespace) -> int:
             "demo": "./eba dev demo",
             "demo_headless": "./eba dev demo --no-browser",
             "stage_url": "./eba dev stage-url <url>",
+            "capture_intake": "./eba dev workbench capture-intake",
             "workbench": "./eba dev workbench",
             "trace": "./eba dev trace",
             "gh": "./eba dev gh",
@@ -404,6 +404,40 @@ def current_workbench_manifest() -> Path:
         manifest = payload.get("active_manifest") or payload.get("manifest")
         if isinstance(manifest, str) and manifest:
             return REPO_ROOT / manifest
+
+    candidates = [REPO_ROOT / "artifacts" / "intake-l0-l1" / "blank" / "latest" / "manifest.json", REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"]
+    artifacts_root = REPO_ROOT / "artifacts"
+    if artifacts_root.exists():
+        candidates.extend(sorted(artifacts_root.glob("*/**/manifest.json"), key=lambda item: str(item)))
+    seen: set[Path] = set()
+    existing: list[Path] = []
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen or not resolved.exists():
+            continue
+        seen.add(resolved)
+        existing.append(resolved)
+    for manifest_path in existing:
+        command = [
+            sys.executable,
+            str(WORKBENCH_GATE),
+            "status",
+            str(manifest_path),
+            "--port",
+            WORKBENCH_PORT,
+        ]
+        completed = run(command, capture=True)
+        if completed.returncode != 0:
+            continue
+        try:
+            payload = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            payload = {}
+        manifest = payload.get("active_manifest") or payload.get("manifest")
+        if isinstance(manifest, str) and manifest:
+            return REPO_ROOT / manifest
+    if existing:
+        return existing[0]
     return DEFAULT_MANIFEST
 
 
@@ -488,9 +522,101 @@ def command_workbench_live_smoke(args: argparse.Namespace) -> int:
     return smoke.returncode
 
 
+def command_workbench_capture_intake(args: argparse.Namespace) -> int:
+    manifest = resolve_current_workbench_manifest(args)
+    state = workbench_gate_json("state", manifest)
+    if not isinstance(state, dict):
+        payload = {
+            "status": "blocked",
+            "reason": "workbench_state_unavailable",
+            "question": "I cannot read the current workbench state. Refresh the workbench and say ready again.",
+            "manifest": str(manifest.relative_to(REPO_ROOT) if manifest.is_absolute() and REPO_ROOT in manifest.resolve().parents else manifest),
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print(payload["question"], file=sys.stderr)
+        return 2
+    try:
+        request = extract_intake_request(
+            state,
+            company=args.company,
+            domain_hint=args.domain_hint,
+            talent_segment=args.talent_segment,
+            workflow_template=args.workflow_template,
+        )
+    except ValueError as exc:
+        payload = {
+            "status": "blocked",
+            "reason": "missing_intake",
+            "question": str(exc),
+            "manifest": state.get("context", {}).get("manifest"),
+            "bounded_inputs": state.get("bounded_inputs"),
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print(payload["question"])
+        return 2
+
+    try:
+        payload = run_intake_capture(
+            request,
+            output_dir=args.output_dir,
+            session=args.capture_session,
+            width=args.width,
+            height=args.height,
+        )
+    except ValueError as exc:
+        payload = {
+            "status": "blocked",
+            "reason": "capture_input_needed",
+            "question": str(exc),
+            "intake": {
+                "company": request.company,
+                "domain_hint": request.domain_hint,
+                "talent_segment": request.talent_segment,
+                "workflow_template": request.workflow_template,
+            },
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print(payload["question"])
+        return 2
+
+    payload["source_workbench"] = {
+        "manifest": state.get("context", {}).get("manifest"),
+        "bounded_inputs": state.get("bounded_inputs", {}).get("values")
+        if isinstance(state.get("bounded_inputs"), dict)
+        else {},
+    }
+    payload["workbench_command"] = f"./eba dev demo {payload['manifest']}"
+    if not args.no_browser and not args.json:
+        demo_result = command_demo(
+            argparse.Namespace(
+                manifest=REPO_ROOT / payload["manifest"],
+                fixture=None,
+                no_browser=False,
+                json=True,
+            )
+        )
+        payload["workbench_refresh"] = "passed" if demo_result == 0 else "failed"
+        if demo_result != 0:
+            if args.json:
+                print_json(payload)
+            return demo_result
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"manifest={payload['manifest']}")
+        print(f"selected_url={payload['selected_url']}")
+    return 0
+
+
 def command_workbench(args: argparse.Namespace) -> int:
     action = args.workbench_action
-    if action in {"click", "fill", "press"}:
+    if action in {"click", "fill", "press", "capture-intake"}:
         assert_dev_command_allowed(REPO_ROOT, "workbench", require_active_turn=True)
     if action == "reset":
         return command_demo(
@@ -505,8 +631,10 @@ def command_workbench(args: argparse.Namespace) -> int:
         return command_workbench_refresh(args)
     if action == "live-smoke":
         return command_workbench_live_smoke(args)
+    if action == "capture-intake":
+        return command_workbench_capture_intake(args)
     if action in {"context", "glance"}:
-        manifest = resolve_manifest(args)
+        manifest = resolve_current_workbench_manifest(args)
         command = [
             sys.executable,
             str(WORKBENCH_GATE),
@@ -731,13 +859,13 @@ def build_parser() -> argparse.ArgumentParser:
     reset.set_defaults(func=command_workbench)
 
     context = workbench_subparsers.add_parser("context", help="Print current workbench context and interaction overlays")
-    context.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
+    context.add_argument("manifest", nargs="?", type=Path)
     context.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and inspect a named fixture")
     context.add_argument("--json", action="store_true")
     context.set_defaults(func=command_workbench)
 
     glance = workbench_subparsers.add_parser("glance", help="Print a compact live workbench summary")
-    glance.add_argument("manifest", nargs="?", type=Path, default=DEFAULT_MANIFEST)
+    glance.add_argument("manifest", nargs="?", type=Path)
     glance.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and inspect a named fixture")
     glance.add_argument("--json", action="store_true")
     glance.set_defaults(func=command_workbench)
@@ -751,6 +879,8 @@ def build_parser() -> argparse.ArgumentParser:
     live_smoke.add_argument("--fixture", choices=sorted(FIXTURE_GENERATORS), help="Generate and smoke a named fixture")
     live_smoke.add_argument("--json", action="store_true")
     live_smoke.set_defaults(func=command_workbench)
+
+    add_capture_intake_parser(workbench_subparsers, sorted(FIXTURE_GENERATORS)).set_defaults(func=command_workbench)
 
     tabs = workbench_subparsers.add_parser("tabs", help="List workbench browser tabs")
     tabs.set_defaults(func=command_workbench, values=[])

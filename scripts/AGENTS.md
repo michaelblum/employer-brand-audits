@@ -27,6 +27,16 @@ workbench implementation, and checked-in Playwright snippets.
   boundary into `artifacts/url-stage/<slug>/latest/manifest.json`. It writes a
   disk screenshot, one canonical `web-snapshot-data.json`, a capture log, and a
   same-origin synthetic `web-snapshot.html`.
+- `./eba dev demo --fixture intake-l0-l1` generates a blank, workbench-visible
+  L0/L1 intake workflow. Its bounded input overlays must start empty and must
+  not display sample-company defaults.
+- `./eba dev workbench capture-intake` reads the active workbench bounded-input
+  values after the user says `ready in workbench`, probes plausible L0 careers
+  entry URLs from the filled company/domain values, and captures the selected
+  URL through URL-stage into a fresh ADR-002 manifest under
+  `artifacts/intake-l0-l1/<company>/latest/`.
+- `capture-intake` must block with a clear question instead of fabricating
+  evidence when required intake values or a reachable careers URL are missing.
 - URL-stage capture treats the screenshot as the proof boundary. Page settling,
   obscuring-element hiding, page snapshotting, visible-text extraction, and
   blueprint extraction are bounded best-effort steps; full-page screenshot

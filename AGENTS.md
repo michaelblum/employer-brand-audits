@@ -100,6 +100,7 @@ For routine browser control, use the managed workbench control surface:
 ./eba dev workbench refresh
 ./eba dev workbench glance --json
 ./eba dev workbench context --json
+./eba dev workbench capture-intake
 ./eba dev workbench live-smoke --fixture easy-audit --json
 ./eba dev workbench tabs
 ./eba dev workbench tab-select <index>
@@ -120,6 +121,10 @@ viewport settings. Managed browser commands are bounded and should fail with a
 available workflow manifests, and session-local
 interaction overlays. Use `./eba dev workbench glance --json` for the fast
 "what is on the workbench now?" read. Use
+`./eba dev workbench capture-intake` after a user fills a blank L0/L1 intake
+and says `ready in workbench`; it reads active workbench bounded-input values,
+probes L0 source URLs, and writes fresh L1 text, screenshot, and web snapshot
+artifacts for the entered company. Use
 `./eba dev workbench live-smoke --fixture easy-audit --json` after browser-loaded
 asset or app-shell changes when a bounded live boot/runtime check is needed.
 Use the same `./eba dev workbench` surface for snapshot/click/fill/press
