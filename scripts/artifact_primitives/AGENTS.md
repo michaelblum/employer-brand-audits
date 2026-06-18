@@ -28,6 +28,9 @@ images, documents, HTML, interaction overlays, and reusable target-link effects.
 - HTML primitives own iframe rendering, element-anchor extraction, and
   iframe-to-workbench rect mapping; the workbench app shell still owns editor
   state, overlay placement, and persistence.
+- `zoom_surface.js` owns reusable artifact zoom defaults, stage-fit/smart-fit
+  calculations, clamping, display formatting, transform-based scaling, and
+  centered-state calculation for non-image zoom surfaces.
 - Interaction overlay primitives expose subtype models and state helpers.
   `annotation` is the comment-like subtype; `bounded_input` is the typed
   workflow-input subtype anchored with `workflow_input` step/input ids.
@@ -60,6 +63,7 @@ images, documents, HTML, interaction overlays, and reusable target-link effects.
 - Run `node --check` on changed primitive files.
 - Run relevant checks such as `node tests/interaction_overlay_primitive_check.js`,
   `node tests/target_link_primitive_check.js`,
+  `node tests/zoom_surface_primitive_check.js`,
   `node tests/html_renderer_primitive_check.js`,
   `node tests/document_renderer_primitive_check.js`,
   `node tests/artifact_renderer_primitive_check.js`,

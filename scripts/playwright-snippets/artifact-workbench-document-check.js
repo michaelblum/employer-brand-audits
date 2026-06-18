@@ -20,7 +20,7 @@ async (page) => {
       && imageWrap.hidden
       && renderer
       && source
-      && document.querySelector("#image-controls") === null
+      && document.querySelector("#artifact-zoom-controls") === null
       && document.querySelector("#markdown-controls") === null
       && /lines|bytes/.test(readout)
       && /acme\.example|knowledge|identity|logistics/.test(source.textContent || "");
@@ -38,7 +38,7 @@ async (page) => {
       rendererType: documentNode?.getAttribute("data-document-type"),
       hasSource: Boolean(source),
       readout: document.querySelector("#artifact-readout")?.textContent?.trim(),
-      imageControlsMounted: Boolean(document.querySelector("#image-controls")),
+      zoomControlsMounted: Boolean(document.querySelector("#artifact-zoom-controls")),
       markdownControlsMounted: Boolean(document.querySelector("#markdown-controls")),
     };
   });

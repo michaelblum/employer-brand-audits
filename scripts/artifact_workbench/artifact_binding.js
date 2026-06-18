@@ -25,7 +25,11 @@
     }
 
     function capabilities(artifact) {
-      return selectedComponent(artifact)?.capabilities || {};
+      const item = artifactOrDefault(artifact);
+      const component = selectedComponent(item);
+      return typeof component?.capabilities === "function"
+        ? component.capabilities(item, context())
+        : component?.capabilities || {};
     }
 
     function supports(capability, artifact) {

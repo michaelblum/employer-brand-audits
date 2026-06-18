@@ -84,6 +84,8 @@ assert.deepEqual(
 );
 assert.match(webSnapshotContainer.innerHTML, /data-artifact-renderer="html"/);
 assert.match(webSnapshotContainer.innerHTML, /data-web-snapshot-root="true"/);
+assert.match(webSnapshotContainer.innerHTML, /data-zoom-wrap="web-snapshot"/);
+assert.match(webSnapshotContainer.innerHTML, /data-zoom-target="web-snapshot-frame"/);
 assert.doesNotMatch(webSnapshotContainer.innerHTML, /<article class="html-artifact"/);
 assert.doesNotMatch(webSnapshotContainer.innerHTML, /<header>/);
 assert.match(webSnapshotContainer.innerHTML, /width:1200px/);
@@ -194,4 +196,17 @@ assert.deepEqual(
     wrapEl: { getBoundingClientRect: () => ({ left: 80, top: 150 }) },
   }),
   { x: 40, y: 80, width: 140, height: 44 },
+);
+assert.deepEqual(
+  renderer.displayRectForHtmlElementAnchor({
+    anchor,
+    frameEl: {
+      offsetWidth: 1000,
+      offsetHeight: 500,
+      style: {},
+      getBoundingClientRect: () => ({ left: 100, top: 200, width: 500, height: 250 }),
+    },
+    wrapEl: { getBoundingClientRect: () => ({ left: 80, top: 150 }) },
+  }),
+  { x: 30, y: 65, width: 70, height: 22 },
 );

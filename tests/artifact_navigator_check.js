@@ -17,6 +17,7 @@ assert.equal(typeof navigator.renderOverviewHtml, "function");
 assert.equal(typeof navigator.artifactProjectionModel, "function");
 assert.equal(typeof navigator.artifactNavigationContext, "function");
 assert.equal(typeof navigator.renderActiveCompositeReadoutHtml, "function");
+assert.equal(typeof navigator.artifactSummaryModel, "function");
 
 const artifacts = [
   { id: "hero", name: "Hero <Shot>", path: "hero.png", type: "image" },
@@ -254,6 +255,10 @@ assert.equal(navigator.filterSummaryText({ total: 3, visible: 1 }), "1 of 3 arti
 const html = navigator.renderSidebarHtml(context);
 assert.match(html, /Easy Audit/);
 assert.match(html, /1 of 4 artifacts/);
+assert.match(html, /data-summary-section="workflow"/);
+assert.match(html, /data-summary-section="role"/);
+assert.match(html, /data-summary-section="health"/);
+assert.match(html, /workbench-ready/);
 assert.match(html, /data-filter-kind="clear"/);
 assert.match(html, /composite-readout/);
 assert.match(html, /Visible bundle/);
@@ -265,6 +270,16 @@ assert.match(html, /Hero &lt;Shot&gt;/);
 assert.match(html, /Contrast &lt;needs&gt; work/);
 assert.match(html, /image 10,20 30x40/);
 assert.doesNotMatch(html, /artifact-row[^>]+data-index="1"/);
+
+assert.deepEqual(navigator.artifactSummaryModel(context), {
+  title: "Easy Audit",
+  status: "ready",
+  statusLabel: "Ready",
+  role: "1 visible of 4 artifacts",
+  workbenchReady: "4 workbench-ready",
+  workflowShape: "2 steps · 4 slots · 1 composite",
+  health: "1 warning · 3 complete",
+});
 
 const unfilteredHtml = navigator.renderSidebarHtml({
   ...context,

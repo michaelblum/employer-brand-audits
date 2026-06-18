@@ -608,6 +608,7 @@ def project_url_stage_manifest(manifest_path: str | Path) -> dict[str, Any]:
         if key == "web_snapshot":
             facets["data_artifact_id"] = url_stage_artifact_id(slug, web_snapshot_data_key)
             facets.update(web_snapshot_data_facets)
+            facets["zoom_default"] = "stage-fit"
             facets["intent_spine"] = "annotation_overlays"
             facets["selector_policy"] = "advisory"
         if key == web_snapshot_data_key:

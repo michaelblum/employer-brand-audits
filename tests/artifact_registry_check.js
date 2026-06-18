@@ -7,7 +7,9 @@ require(path.join(__dirname, "../scripts/artifact_primitives/document_renderer.j
 require(path.join(__dirname, "../scripts/artifact_primitives/html_renderer.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_renderer.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_interactions.js"));
+require(path.join(__dirname, "../scripts/artifact_primitives/zoom_surface.js"));
 require(path.join(__dirname, "../scripts/artifacts/core/artifact_common.js"));
+require(path.join(__dirname, "../scripts/artifacts/core/zoom_controls.js"));
 require(path.join(__dirname, "../scripts/artifacts/artifact_registry.js"));
 
 assert.equal(typeof window.Artifacts.registerType, "function");
@@ -39,6 +41,7 @@ assert.equal(registry.resolveArtifactComponent({ type: "html" }).kind, "html");
 assert.equal(registry.resolveArtifactComponent({ type: "json" }).kind, "document");
 assert.equal(registry.resolveArtifactComponent({ type: "unknown" }).kind, "image");
 assert.deepEqual(registry.resolveArtifactComponent({ type: "image" }).capabilities, {
+  artifactZoom: true,
   imageRegionAnnotations: true,
   imageZoom: true,
 });
@@ -47,6 +50,10 @@ assert.deepEqual(registry.resolveArtifactComponent({ type: "markdown" }).capabil
   textRangeAnnotations: true,
 });
 assert.deepEqual(registry.resolveArtifactComponent({ type: "html" }).capabilities, {
+  htmlElementAnnotations: true,
+});
+assert.deepEqual(registry.resolveArtifactComponent({ type: "html", kind: "web_snapshot" }).capabilities, {
+  artifactZoom: true,
   htmlElementAnnotations: true,
 });
 assert.deepEqual(registry.resolveArtifactComponent({ type: "json" }).capabilities, {});
@@ -171,8 +178,8 @@ assert.deepEqual(imageToolbar.readout, [
   { id: "image-dimensions", label: "Dimensions", value: "1000 x 720 px" },
 ]);
 assert.equal(imageToolbar.controls.length, 1);
-assert.equal(imageToolbar.controls[0].id, "image-zoom");
-assert.match(imageToolbar.controls[0].html, /id="image-controls"/);
+assert.equal(imageToolbar.controls[0].id, "artifact-zoom");
+assert.match(imageToolbar.controls[0].html, /id="artifact-zoom-controls"/);
 assert.match(imageToolbar.controls[0].html, /id="zoom-in"[\s\S]*id="zoom-out"/);
 assert.doesNotMatch(imageToolbar.controls[0].html, /markdown-controls/);
 assert.equal(typeof registry.resolveArtifactComponent({ type: "image" }).bindControls, "function");
@@ -183,7 +190,8 @@ const readOnlyImageToolbar = registry.artifactToolbarPlan({
 });
 assert.equal(readOnlyImageToolbar.kind, "image");
 assert.deepEqual(readOnlyImageToolbar.readout, imageToolbar.readout);
-assert.deepEqual(readOnlyImageToolbar.controls, []);
+assert.equal(readOnlyImageToolbar.controls.length, 1);
+assert.equal(readOnlyImageToolbar.controls[0].id, "artifact-zoom");
 
 const markdownToolbar = registry.artifactToolbarPlan({
   artifact: { id: "md", type: "markdown" },
@@ -223,6 +231,44 @@ assert.deepEqual(htmlToolbar.readout, [
 ]);
 assert.deepEqual(htmlToolbar.controls, []);
 assert.equal(typeof registry.resolveArtifactComponent({ type: "html" }).bindInspector, "function");
+
+const webSnapshotToolbar = registry.artifactToolbarPlan({
+  artifact: {
+    id: "web",
+    type: "html",
+    kind: "web_snapshot",
+    size_bytes: 15335,
+    facets: {
+      target_count: 19,
+      visual_dimensions: { width: 1365, height: 1228 },
+      zoom_default: "stage-fit",
+    },
+  },
+  documentContentById: { web: "<main></main>" },
+  html: window.ArtifactPrimitives.html,
+});
+assert.equal(webSnapshotToolbar.kind, "html");
+assert.deepEqual(webSnapshotToolbar.readout, [
+  { id: "html-summary", label: "HTML", value: "19 targets · 1365 x 1228 px · 15335 bytes" },
+]);
+assert.equal(webSnapshotToolbar.controls.length, 1);
+assert.equal(webSnapshotToolbar.controls[0].id, "artifact-zoom");
+assert.match(webSnapshotToolbar.controls[0].html, /id="artifact-zoom-controls"/);
+assert.doesNotMatch(webSnapshotToolbar.controls[0].html, /id="image-controls"/);
+
+const readOnlyWebSnapshotToolbar = registry.artifactToolbarPlan({
+  artifact: {
+    id: "web",
+    type: "html",
+    kind: "web_snapshot",
+    facets: { target_count: 19, visual_dimensions: { width: 1365, height: 1228 } },
+  },
+  controlPolicy: "read-only",
+  documentContentById: { web: "<main></main>" },
+  html: window.ArtifactPrimitives.html,
+});
+assert.equal(readOnlyWebSnapshotToolbar.controls.length, 1);
+assert.equal(readOnlyWebSnapshotToolbar.controls[0].id, "artifact-zoom");
 
 assert.equal(
   registry.artifactReadout({

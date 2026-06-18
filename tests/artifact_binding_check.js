@@ -17,10 +17,11 @@ let syncedPayload = null;
 const components = {
   image: {
     kind: "image",
-    capabilities: {
+    capabilities: () => ({
+      artifactZoom: true,
       imageRegionAnnotations: true,
       imageZoom: true,
-    },
+    }),
     bindControls: (payload) => {
       boundPayload = payload;
       return () => {
@@ -93,9 +94,11 @@ const binding = bindingModule.createArtifactBinding({
 
 assert.equal(binding.selectedComponent().kind, "image");
 assert.deepEqual(binding.capabilities(), {
+  artifactZoom: true,
   imageRegionAnnotations: true,
   imageZoom: true,
 });
+assert.equal(binding.supports("artifactZoom"), true);
 assert.equal(binding.supports("imageZoom"), true);
 assert.equal(binding.supports("markdownEditing"), false);
 

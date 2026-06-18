@@ -25,7 +25,8 @@
   }
 
   function controlsForPolicy(controls = [], { controlPolicy } = {}) {
-    return controlPolicy === "read-only" ? [] : controls;
+    if (controlPolicy !== "read-only") return controls;
+    return controls.filter((control) => control.readOnlyAllowed);
   }
 
   function toolbarPlan({ kind, readoutId, readoutLabel, readoutValue, controls = [], controlPolicy = null }) {

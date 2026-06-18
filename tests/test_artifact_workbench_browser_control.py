@@ -147,6 +147,10 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "tests/zoom_surface_primitive_check.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/artifact_primitives/markdown_renderer.js"],
             validation_commands(),
         )
@@ -155,7 +159,15 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
             validation_commands(),
         )
         self.assertIn(
+            ["node", "--check", "scripts/artifact_primitives/zoom_surface.js"],
+            validation_commands(),
+        )
+        self.assertIn(
             ["node", "--check", "scripts/artifact_primitives/image_viewer.js"],
+            validation_commands(),
+        )
+        self.assertIn(
+            ["node", "--check", "scripts/artifacts/core/zoom_controls.js"],
             validation_commands(),
         )
         self.assertIn(
@@ -200,9 +212,11 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn("/assets/artifact-primitives/document_renderer.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifact-primitives/html_renderer.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifact-primitives/zoom_surface.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/core/artifact_common.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/core/bounded_input_controls.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/core/workflow_pairing.js", WORKBENCH_ASSETS)
+        self.assertIn("/assets/artifacts/core/zoom_controls.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/image_artifact.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/markdown_artifact.js", WORKBENCH_ASSETS)
         self.assertIn("/assets/artifacts/types/html_artifact.js", WORKBENCH_ASSETS)

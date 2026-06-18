@@ -57,7 +57,7 @@ async (page) => {
         && image.naturalWidth > 0
         && !document.querySelector("#image-wrap")?.hidden
         && document.querySelector("#markdown-wrap")?.hidden
-        && document.querySelector("#image-controls") === null
+        && document.querySelector("#artifact-zoom-controls") !== null
         && document.querySelector("#markdown-controls") === null
         && /\d+ x \d+ px/.test(readout);
     }, null, { timeout: 5000 });
@@ -67,7 +67,7 @@ async (page) => {
       const readout = document.querySelector("#artifact-readout")?.textContent || "";
       return document.querySelector("#image-wrap")?.hidden
         && !document.querySelector("#markdown-wrap")?.hidden
-        && document.querySelector("#image-controls") === null
+        && document.querySelector("#artifact-zoom-controls") === null
         && document.querySelector("#markdown-controls") === null
         && /lines/.test(readout);
     }, null, { timeout: 5000 });
@@ -79,7 +79,7 @@ async (page) => {
       return document.querySelector("#image-wrap")?.hidden
         && !document.querySelector("#markdown-wrap")?.hidden
         && document.querySelector("[data-artifact-renderer='html']") !== null
-        && document.querySelector("#image-controls") === null
+        && document.querySelector("#artifact-zoom-controls") === null
         && document.querySelector("#markdown-controls") === null
         && frame?.contentDocument?.querySelector('[data-report-surface="signal-brief"]')
         && /elements|bytes/.test(readout);
@@ -91,7 +91,7 @@ async (page) => {
       return document.querySelector("#image-wrap")?.hidden
         && !document.querySelector("#markdown-wrap")?.hidden
         && document.querySelector("[data-artifact-renderer='document']") !== null
-        && document.querySelector("#image-controls") === null
+        && document.querySelector("#artifact-zoom-controls") === null
         && document.querySelector("#markdown-controls") === null
         && /lines|bytes/.test(readout);
     }, null, { timeout: 5000 });
@@ -106,7 +106,7 @@ async (page) => {
       assetCount: boot.assetCount,
       artifactCount: boot.artifactCount,
       hasBinding: Boolean(window.WorkbenchArtifactBinding),
-      imageControlsMounted: Boolean(document.querySelector("#image-controls")),
+      zoomControlsMounted: Boolean(document.querySelector("#artifact-zoom-controls")),
       markdownControlsMounted: Boolean(document.querySelector("#markdown-controls")),
       rendererType: document.querySelector("[data-artifact-renderer]")?.getAttribute("data-artifact-renderer"),
       status: "passed",

@@ -338,7 +338,7 @@
       justify-content: flex-end;
       gap: 10px;
     }
-    .image-controls {
+    .artifact-zoom-controls {
       width: 100%;
       display: flex;
       align-items: center;
@@ -604,6 +604,9 @@
       display: block;
       min-height: 100%;
       background: #0f1115;
+    }
+    .web-snapshot-artifact.centered {
+      margin: auto;
     }
     .web-snapshot-artifact-frame {
       min-width: 1px;
@@ -1155,23 +1158,42 @@
       font-size: 15px;
       font-weight: 750;
     }
-    .summary-grid {
+    .artifact-summary-sections {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 6px;
     }
-    .summary-grid span {
+    .artifact-summary-section {
       min-width: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
       padding: 6px 7px;
       border: 1px solid var(--line);
       border-radius: 8px;
       color: #cbd5e1;
       background: #19191d;
+    }
+    .summary-section-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .summary-section-value,
+    .summary-section-detail {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       font-size: 12px;
-      text-align: center;
+    }
+    .summary-section-value {
+      margin-top: 3px;
+      color: #e5e7eb;
+      font-weight: 650;
+    }
+    .summary-section-detail {
+      margin-top: 2px;
+      color: var(--muted);
     }
     .slot-strip {
       display: flex;

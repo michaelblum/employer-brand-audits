@@ -20,7 +20,7 @@ async (page) => {
     const stage = document.querySelector("#stage");
     const imageWrap = document.querySelector("#image-wrap");
     const markdownWrap = document.querySelector("#markdown-wrap");
-    const imageControls = document.querySelector("#image-controls");
+    const imageControls = document.querySelector("#artifact-zoom-controls");
     const markdownControls = document.querySelector("#markdown-controls");
     const readout = document.querySelector("#artifact-readout")?.textContent || "";
     return image
@@ -39,7 +39,7 @@ async (page) => {
   return await page.evaluate(() => {
     const image = document.querySelector("#artifact-image");
     const stage = document.querySelector("#stage");
-    const imageControls = document.querySelector("#image-controls");
+    const imageControls = document.querySelector("#artifact-zoom-controls");
     const markdownControls = document.querySelector("#markdown-controls");
     const activeIcon = document.querySelector(".artifact-row.active .artifact-type-icon");
     return {

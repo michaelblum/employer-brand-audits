@@ -14,6 +14,9 @@ workbench browser control, and JavaScript primitive behavior.
 
 - Tests should exercise public command surfaces, primitive contracts, and
   workflow behavior without depending on provider-specific browser tools.
+- Reusable artifact zoom behavior is covered by
+  `tests/zoom_surface_primitive_check.js`; type wiring is covered by the
+  artifact registry, binding, toolbar, and browser-control checks.
 - Keep browser/workbench tests aligned with Playwright CLI and repo wrappers.
 - Avoid broad brittle assertions when a smaller behavior contract is available.
 

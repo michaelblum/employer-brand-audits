@@ -35,7 +35,12 @@
   }
 
   function resolveArtifactComponent(artifact = {}, options = {}) {
-    return components().find((component) => component.matches(artifact, options)) || fallbackComponent();
+    const component = components().find((candidate) => candidate.matches(artifact, options)) || fallbackComponent();
+    if (!component) return null;
+    const capabilities = typeof component.capabilities === "function"
+      ? component.capabilities(artifact, options)
+      : component.capabilities || {};
+    return { ...component, capabilities };
   }
 
   function artifactRenderKind(artifact = {}, options = {}) {

@@ -480,26 +480,93 @@
     return visible === total ? `${total} artifacts` : `${visible} of ${total} artifacts`;
   }
 
+  function statusLabel(value) {
+    const raw = String(value || "unknown").replace(/[._-]/g, " ").trim().toLowerCase();
+    if (raw === "ok" || raw === "passed") return "complete";
+    return raw || "unknown";
+  }
+
+  function titleCase(value) {
+    return String(value || "").replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  function pluralize(count, singular, plural = `${singular}s`) {
+    return `${count} ${count === 1 ? singular : plural}`;
+  }
+
+  function artifactHealthText(context = {}) {
+    const counts = {};
+    for (const item of context.artifacts || []) {
+      const projected = projectedArtifact(context, item);
+      const label = statusLabel(projected?.status || item.status || projectedStep(context, item)?.status);
+      counts[label] = (counts[label] || 0) + 1;
+    }
+    const priority = ["error", "failed", "warning", "unknown", "complete"];
+    return Object.keys(counts)
+      .sort((left, right) => {
+        const priorityDelta = priority.indexOf(left) - priority.indexOf(right);
+        if (priorityDelta !== 0) return priorityDelta;
+        return left.localeCompare(right);
+      })
+      .map((label) => `${counts[label]} ${label}`)
+      .join(" · ");
+  }
+
+  function artifactSummaryModel(context = {}) {
+    const workflow = context.workbenchProjection?.workflow || {};
+    const artifacts = context.artifacts || [];
+    const steps = workflow.steps || [];
+    const slots = filterSlots(context);
+    const composites = filterComposites(context);
+    const visible = visibleArtifactIndexes(context).length;
+    const workbenchProjectionCount = artifacts
+      .filter((item) => Boolean(projectedArtifact(context, item))).length;
+    return {
+      title: workflow.name || "Workflow",
+      status: statusLabel(workflow.status),
+      statusLabel: titleCase(statusLabel(workflow.status)),
+      role: `${visible} visible of ${artifacts.length} artifacts`,
+      workbenchReady: `${workbenchProjectionCount} workbench-ready`,
+      workflowShape: [
+        pluralize(steps.length, "step"),
+        pluralize(slots.length, "slot"),
+        pluralize(composites.length, "composite"),
+      ].join(" · "),
+      health: artifactHealthText(context),
+    };
+  }
+
+  function renderArtifactSummarySection(section = {}) {
+    return `
+      <div class="artifact-summary-section" data-summary-section="${escapeHtml(section.id)}">
+        <div class="summary-section-label">${escapeHtml(section.label)}</div>
+        <div class="summary-section-value">${escapeHtml(section.value)}</div>
+        ${section.detail ? `<div class="summary-section-detail">${escapeHtml(section.detail)}</div>` : ""}
+      </div>
+    `;
+  }
+
   function renderArtifactNavigationHeader(context = {}) {
     const workflow = context.workbenchProjection?.workflow;
     if (!workflow) return "";
     const artifacts = context.artifacts || [];
     const filters = context.filters || {};
-    const workbenchProjectionCount = artifacts
-      .filter((item) => Boolean(projectedArtifact(context, item))).length;
+    const summary = artifactSummaryModel(context);
     const steps = filterSteps(context);
     const slots = filterSlots(context);
     const composites = filterComposites(context);
     const visible = visibleArtifactIndexes(context).length;
+    const summarySections = [
+      { id: "workflow", label: "Workflow", value: summary.statusLabel, detail: summary.workflowShape },
+      { id: "role", label: "Role", value: summary.role, detail: summary.workbenchReady },
+      { id: "health", label: "Health", value: summary.health, detail: filterSummaryText({ total: artifacts.length, visible }) },
+    ];
     return `
         <div class="artifact-summary">
-          <div class="summary-kicker">${escapeHtml(workflow.status || "unknown")}</div>
-          <div class="summary-title">${escapeHtml(workflow.name || "Workflow")}</div>
-          <div class="summary-grid">
-            <span>${escapeHtml(String((workflow.steps || []).length))} steps</span>
-            <span>${escapeHtml(String(workbenchProjectionCount))} workbench-visible</span>
-            <span>${escapeHtml(String(slots.length))} slots</span>
-            <span>${escapeHtml(String(composites.length))} composites</span>
+          <div class="summary-kicker">Audit summary</div>
+          <div class="summary-title">${escapeHtml(summary.title)}</div>
+          <div class="artifact-summary-sections">
+            ${summarySections.map(renderArtifactSummarySection).join("")}
           </div>
           <div class="filter-line">
             <span>${escapeHtml(filterSummaryText({ total: artifacts.length, visible }))}</span>
@@ -584,6 +651,7 @@
     anchorSummary,
     artifactMatchesFilters,
     artifactProjectionLine,
+    artifactSummaryModel,
     artifactTypeLabel,
     filterComposites,
     filterSlots,
