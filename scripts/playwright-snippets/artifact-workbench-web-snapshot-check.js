@@ -77,7 +77,7 @@ async (page) => {
         && previewBody?.classList.contains("web-snapshot-preview-body")
         && previewStyle?.paddingTop === "0px"
         && previewStyle?.paddingLeft === "0px"
-        && document.querySelector("#image-controls") === null
+        && document.querySelector("#artifact-zoom-controls") !== null
         && document.querySelector("#markdown-controls") === null
         && stage
         && target

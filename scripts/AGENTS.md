@@ -32,7 +32,8 @@ workbench implementation, and checked-in Playwright snippets.
   artifact; the app shell must not need URL-stage-specific component
   registration. Target-map rects stay in screenshot coordinate space inside the
   data file. Selector candidates remain advisory replay/mining hints, while
-  annotations and overlays are the natural-language intent spine.
+  annotations and overlays are the natural-language intent spine. Web-snapshot
+  artifacts declare their default zoom policy with `facets.zoom_default`.
 - URL-stage support files such as `page_screenshot` and `capture_log` project as
   file resources for provenance/debugging, not as workbench-visible sidebar
   artifacts.
@@ -44,6 +45,10 @@ workbench implementation, and checked-in Playwright snippets.
   input control value resolution, HTML rendering, and control event wiring.
   The workbench app shell still owns overlay persistence, sync calls, and
   lifecycle scheduling.
+- `scripts/artifact_primitives/zoom_surface.js` owns reusable artifact zoom
+  defaults, fit calculations, clamping, image width scaling, and
+  transform-based zoom application. `scripts/artifacts/core/zoom_controls.js`
+  owns the shared browser toolbar controls for artifact zoom.
 - Artifact type modules load through `scripts/artifacts/types/manifest.json`.
   Server assets, rendered workbench HTML, and validation commands should read
   that manifest instead of hard-coding concrete type script files.
@@ -60,7 +65,11 @@ workbench implementation, and checked-in Playwright snippets.
   message signing automatic where possible.
 - Route routine workbench browser behavior through named management helpers in
   `playwright_cli_workbench_gate.py`; keep tab cleanup, focus, maximize, and
-  viewport sync as separate operations so tests can guard their side effects.
+  explicit viewport resize as separate operations so tests can guard their side
+  effects. The default headed workbench uses the browser's native viewport;
+  fixed Playwright viewport sizes belong to explicit/capture paths. Managed
+  browser commands must be bounded and leave a `workbench-browser.log` trail on
+  timeout.
 - Keep fixture generation separate from generated runtime output.
 - The deterministic easy-audit fixture treats `l4-final-report` as the single
   L4 report artifact and projects it as HTML. Keep Mermaid/markdown smoke
@@ -81,6 +90,8 @@ workbench implementation, and checked-in Playwright snippets.
   `python3 tests/test_workbench_server_hardening.py`.
 - For workbench shell/toolbar structure changes, run
   `node tests/workbench_shell_check.js`.
+- For reusable zoom behavior, run `node tests/zoom_surface_primitive_check.js`
+  plus the relevant artifact registry/binding checks.
 - Run `./eba dev demo` and relevant Playwright smoke snippets when workbench
   behavior is tangible. For browser-loaded workbench asset or app-shell changes,
   prefer `./eba dev workbench live-smoke --fixture easy-audit --json` as the

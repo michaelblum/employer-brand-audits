@@ -35,7 +35,17 @@
   }
 
   function resolveArtifactComponent(artifact = {}, options = {}) {
-    return components().find((component) => component.matches(artifact, options)) || fallbackComponent();
+    const component = components().find((candidate) => candidate.matches(artifact, options)) || fallbackComponent();
+    return component || null;
+  }
+
+  function artifactCapabilities(artifact = {}, options = {}) {
+    const component = resolveArtifactComponent(artifact, options);
+    if (!component) return {};
+    const capabilities = typeof component.capabilities === "function"
+      ? component.capabilities(artifact, options)
+      : component.capabilities || {};
+    return capabilities || {};
   }
 
   function artifactRenderKind(artifact = {}, options = {}) {
@@ -60,6 +70,7 @@
   ROOT.registry = {
     artifactReadout,
     artifactRenderKind,
+    artifactCapabilities,
     artifactStagePlan,
     artifactToolbarPlan,
     registeredArtifactTypes: components,

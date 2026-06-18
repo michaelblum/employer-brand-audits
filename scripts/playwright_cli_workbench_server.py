@@ -90,6 +90,10 @@ WORKBENCH_ASSETS = {
         ARTIFACT_PRIMITIVES_DIR / "markdown_interactions.js",
         "text/javascript",
     ),
+    "/assets/artifact-primitives/zoom_surface.js": (
+        ARTIFACT_PRIMITIVES_DIR / "zoom_surface.js",
+        "text/javascript",
+    ),
     "/assets/artifact-primitives/image_viewer.js": (
         ARTIFACT_PRIMITIVES_DIR / "image_viewer.js",
         "text/javascript",
@@ -112,6 +116,10 @@ WORKBENCH_ASSETS = {
     ),
     "/assets/artifacts/core/workflow_pairing.js": (
         ARTIFACTS_DIR / "core" / "workflow_pairing.js",
+        "text/javascript",
+    ),
+    "/assets/artifacts/core/zoom_controls.js": (
+        ARTIFACTS_DIR / "core" / "zoom_controls.js",
         "text/javascript",
     ),
     "/assets/artifacts/types/manifest.json": (ARTIFACT_TYPE_MANIFEST, "application/json"),

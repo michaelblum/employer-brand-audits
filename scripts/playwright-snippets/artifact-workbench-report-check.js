@@ -34,7 +34,7 @@ async (page) => {
       && doc?.querySelector('[data-report-surface="signal-brief"]')
       && doc.querySelector("#candidate-signal-ledger")
       && /Acme Robotics/.test(doc.body?.textContent || "")
-      && document.querySelector("#image-controls") === null
+      && document.querySelector("#artifact-zoom-controls") === null
       && document.querySelector("#markdown-controls") === null;
   }, null, { timeout: 5000 });
 
@@ -55,7 +55,7 @@ async (page) => {
       kilosScoreCount: scoreTiles.length,
       ledgerRowCount: ledgerRows.length,
       readout: document.querySelector("#artifact-readout")?.textContent?.trim(),
-      imageControlsMounted: Boolean(document.querySelector("#image-controls")),
+      zoomControlsMounted: Boolean(document.querySelector("#artifact-zoom-controls")),
       markdownControlsMounted: Boolean(document.querySelector("#markdown-controls")),
     };
   });

@@ -15,8 +15,7 @@
       editing: null,
       activeMarker: null,
       sidebarVisible: true,
-      zoomPercent: 100,
-      zoomMode: "stage-fit",
+      artifactZoomState: {},
       markdownMode: "preview",
       markdownContent: {},
       markdownSavedContent: {},
@@ -48,6 +47,7 @@
     const artifactBinding = () => window.WorkbenchArtifactBinding;
     const documentRenderer = () => window.ArtifactPrimitives.document;
     const htmlRenderer = () => window.ArtifactPrimitives.html;
+    const zoomSurface = () => window.ArtifactPrimitives.zoomSurface;
     const targetLink = () => window.ArtifactPrimitives.targetLink;
     const markdownPreviewBody = () => $("markdown-preview-body");
     const annotationAnchor = (note) => note?.anchor || {};
@@ -411,21 +411,53 @@
       if (result.status !== "rendered") clearWorkflowPairingOverlay();
     }
 
-    function imageViewerOptions() {
-      return {
-        imageEl: $("artifact-image"),
-        wrapEl: $("image-wrap"),
-        stageEl: $("stage"),
-        zoomInputEl: $("zoom-input"),
-        viewerConfig: app.viewerConfig,
-      };
+    function selectedArtifactComponent(item = artifact()) {
+      return workbenchArtifactBinding().selectedComponent(item);
     }
 
-    function updateImageAlignment() {
-      window.ArtifactPrimitives.imageViewer.updateAlignment({
-        ...imageViewerOptions(),
-        zoomPercent: app.zoomPercent,
-      });
+    function defaultZoomState(item = artifact()) {
+      const component = selectedArtifactComponent(item);
+      if (typeof component?.defaultZoomState === "function") {
+        return component.defaultZoomState({ artifact: item, zoom: zoomSurface() });
+      }
+      return zoomSurface()?.defaultZoomState?.(item) || { zoomMode: "stage-fit", zoomPercent: 100 };
+    }
+
+    function getZoomStateForArtifact(item = artifact()) {
+      const savedState = app.artifactZoomState[item.id];
+      return savedState
+        ? {
+          zoomMode: savedState.zoomMode || "manual",
+          zoomPercent: Number(savedState.zoomPercent || 100),
+        }
+        : defaultZoomState(item);
+    }
+
+    function setZoomStateForArtifact(item = artifact(), state = {}) {
+      const nextState = {
+        zoomMode: state.zoomMode || "manual",
+        zoomPercent: Number(state.zoomPercent || 100),
+      };
+      app.artifactZoomState[item.id] = nextState;
+      return nextState;
+    }
+
+    function artifactZoomPayload(item = artifact(), extras = {}) {
+      return {
+        artifact: item,
+        rootEl: markdownPreviewBody(),
+        imageViewer: window.ArtifactPrimitives.imageViewer,
+        zoom: zoomSurface(),
+        elements: {
+          imageEl: $("artifact-image"),
+          imageWrapEl: $("image-wrap"),
+          stageEl: $("stage"),
+          zoomInputEl: $("zoom-input"),
+        },
+        viewerConfig: app.viewerConfig,
+        state: getZoomStateForArtifact(item),
+        ...extras,
+      };
     }
 
     function updateMooringOverlays() {
@@ -452,29 +484,33 @@
     }
 
     function applyZoom(value, mode = "manual") {
-      const result = window.ArtifactPrimitives.imageViewer.applyZoom({
-        ...imageViewerOptions(),
+      const item = artifact();
+      const component = selectedArtifactComponent(item);
+      if (typeof component?.applyZoom !== "function") return;
+      const result = component.applyZoom(artifactZoomPayload(item, {
         value,
         mode,
-      });
-      app.zoomPercent = result.zoomPercent;
-      app.zoomMode = result.zoomMode;
+      }));
+      if (!result) return;
+      setZoomStateForArtifact(item, result);
       updateMooringOverlays();
     }
 
     function stageFitZoom() {
-      return window.ArtifactPrimitives.imageViewer.stageFitZoom(imageViewerOptions());
-    }
-
-    function smartFitZoom() {
-      return window.ArtifactPrimitives.imageViewer.smartFitZoom(imageViewerOptions());
+      const item = artifact();
+      const component = selectedArtifactComponent(item);
+      if (typeof component?.stageFitZoom === "function") {
+        return component.stageFitZoom(artifactZoomPayload(item));
+      }
+      return 100;
     }
 
     function smartFit() {
-      const result = window.ArtifactPrimitives.imageViewer.smartFit({
-        ...imageViewerOptions(),
-        currentZoomMode: app.zoomMode,
-      });
+      const item = artifact();
+      const component = selectedArtifactComponent(item);
+      const result = typeof component?.smartFit === "function"
+        ? component.smartFit(artifactZoomPayload(item))
+        : null;
       if (!result) return;
       applyZoom(result.value, result.mode);
     }
@@ -483,8 +519,9 @@
       return workbenchArtifactBinding().supports("imageRegionAnnotations", item);
     }
 
-    function supportsImageZoom(item = artifact()) {
-      return workbenchArtifactBinding().supports("imageZoom", item);
+    function supportsArtifactZoom(item = artifact()) {
+      return workbenchArtifactBinding().supports("artifactZoom", item)
+        || workbenchArtifactBinding().supports("imageZoom", item);
     }
 
     function supportsMarkdownEditing(item = artifact()) {
@@ -501,7 +538,10 @@
 
     function artifactControlActions() {
       return {
-        applyZoom: (value, options = {}) => applyZoom(options.relative ? app.zoomPercent + value : value),
+        applyZoom: (value, options = {}) => {
+          const state = getZoomStateForArtifact();
+          applyZoom(options.relative ? state.zoomPercent + value : value);
+        },
         revertMarkdownArtifact,
         saveMarkdownArtifact,
         setMarkdownMode,
@@ -530,8 +570,7 @@
             markdownMode: app.markdownMode,
             controlPolicy: app.context?.artifact_control_policy,
             mermaidSourceVisibility: app.context?.mermaid_source_visibility,
-            zoomMode: app.zoomMode,
-            zoomPercent: app.zoomPercent,
+            ...getZoomStateForArtifact(),
             documentContentById: app.documentContent,
           }),
           actions: artifactControlActions,
@@ -542,6 +581,25 @@
 
     function updateArtifactToolbar(item = artifact()) {
       workbenchArtifactBinding().updateToolbar(item);
+    }
+
+    function updateZoomSurface(item = artifact()) {
+      const component = selectedArtifactComponent(item);
+      if (typeof component?.updateZoomSurface !== "function") return;
+      component.updateZoomSurface(artifactZoomPayload(item));
+      updateMooringOverlays();
+    }
+
+    function applyCurrentZoom(item = artifact()) {
+      if (!supportsArtifactZoom(item)) return;
+      const state = getZoomStateForArtifact(item);
+      if (state.zoomMode === "stage-fit") {
+        applyZoom(stageFitZoom(), "stage-fit");
+      } else if (state.zoomMode === "actual-size") {
+        applyZoom(100, "actual-size");
+      } else {
+        applyZoom(state.zoomPercent, "manual");
+      }
     }
 
     function artifactStagePlan(item = artifact()) {
@@ -626,13 +684,7 @@
       updateArtifactToolbar();
       image.onload = () => {
         updateArtifactToolbar();
-        if (app.zoomMode === "stage-fit") {
-          applyZoom(smartFitZoom(), "stage-fit");
-        } else if (app.zoomMode === "actual-size") {
-          applyZoom(100, "actual-size");
-        } else {
-          applyZoom(app.zoomPercent, "manual");
-        }
+        applyCurrentZoom(item);
       };
       image.src = artifactUrl(item);
       image.alt = item.name;
@@ -754,6 +806,7 @@
       );
       updateArtifactToolbar();
       bindHtmlInspector(item);
+      applyCurrentZoom(item);
     }
 
     function renderArtifactFallback({ renderKind, error } = {}) {
@@ -1460,22 +1513,22 @@
       $("markdown-preview").addEventListener("mousedown", startDrag);
       $("artifact-image").addEventListener("dragstart", (event) => event.preventDefault());
       window.addEventListener("resize", () => {
-        if (!supportsImageZoom()) {
+        if (!supportsArtifactZoom()) {
           updateMooringOverlays();
-        } else if (app.zoomMode === "stage-fit") {
-          applyZoom(smartFitZoom(), "stage-fit");
+        } else if (getZoomStateForArtifact().zoomMode === "stage-fit") {
+          applyCurrentZoom();
         } else {
-          updateImageAlignment();
-          updateMooringOverlays();
+          updateZoomSurface();
         }
       });
       $("stage").addEventListener("scroll", updateMooringOverlays);
       $("markdown-preview").addEventListener("scroll", updateMooringOverlays);
       $("markdown-source").addEventListener("scroll", updateMooringOverlays);
       $("stage").addEventListener("wheel", (event) => {
-        if (!event.ctrlKey || !supportsImageZoom()) return;
+        if (!event.ctrlKey || !supportsArtifactZoom()) return;
         event.preventDefault();
-        applyZoom(app.zoomPercent + (event.deltaY < 0 ? 5 : -5));
+        const state = getZoomStateForArtifact();
+        applyZoom(state.zoomPercent + (event.deltaY < 0 ? 5 : -5));
       }, { passive: false });
       window.addEventListener("mousemove", moveDrag);
       window.addEventListener("mouseup", endDrag);

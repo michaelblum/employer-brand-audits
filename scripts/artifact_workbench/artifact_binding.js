@@ -17,15 +17,32 @@
     const toolbarRoot = () => valueOf(elements.toolbarRoot);
     const image = () => valueOf(elements.image);
 
-    function selectedComponent(artifact) {
-      return registry().resolveArtifactComponent(artifactOrDefault(artifact), {
+    function componentDependencies() {
+      return {
         document: documentRenderer(),
         html: html(),
-      });
+        markdown: markdown(),
+      };
+    }
+
+    function componentContext() {
+      return {
+        ...context(),
+        ...componentDependencies(),
+      };
+    }
+
+    function selectedComponent(artifact) {
+      return registry().resolveArtifactComponent(artifactOrDefault(artifact), componentDependencies());
     }
 
     function capabilities(artifact) {
-      return selectedComponent(artifact)?.capabilities || {};
+      const item = artifactOrDefault(artifact);
+      if (typeof registry().artifactCapabilities === "function") {
+        return registry().artifactCapabilities(item, componentContext());
+      }
+      const component = selectedComponent(item);
+      return component?.capabilities || {};
     }
 
     function supports(capability, artifact) {
@@ -50,10 +67,7 @@
     }
 
     function stagePlan(artifact) {
-      return registry().artifactStagePlan(artifactOrDefault(artifact), {
-        document: documentRenderer(),
-        html: html(),
-      });
+      return registry().artifactStagePlan(artifactOrDefault(artifact), componentDependencies());
     }
 
     function controlState(artifact) {

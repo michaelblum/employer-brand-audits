@@ -49,16 +49,6 @@
     ].filter(Boolean).join(" · ");
   }
 
-  function renderMetadata(artifact = {}) {
-    const metadata = [
-      artifact.mimeType || artifact.mime_type || "text/html",
-      artifact.sizeBytes ? `${artifact.sizeBytes} bytes` : "",
-      artifact.path,
-    ].filter(Boolean);
-    if (!metadata.length) return "";
-    return `<div class="html-artifact-meta">${metadata.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`;
-  }
-
   function htmlDocumentHeight(doc) {
     if (!doc) return 0;
     return Math.max(
@@ -110,10 +100,11 @@
     const title = artifact.name || artifact.id || "Web snapshot";
     const dimensions = webSnapshotDimensions(artifact);
     containerEl.innerHTML = `
-      <div class="web-snapshot-artifact" data-artifact-renderer="html" data-web-snapshot-root="true">
+      <div class="web-snapshot-artifact" data-artifact-renderer="html" data-web-snapshot-root="true" data-zoom-wrap="web-snapshot">
         <iframe
           class="html-artifact-frame web-snapshot-artifact-frame"
           data-html-frame
+          data-zoom-target="web-snapshot-frame"
           sandbox="allow-same-origin"
           scrolling="no"
           title="${escapeHtml(title)}"
@@ -142,7 +133,6 @@
       <article class="html-artifact" data-artifact-renderer="html">
         <header>
           <h1>${escapeHtml(title)}</h1>
-          ${renderMetadata(artifact)}
         </header>
         <div class="html-artifact-frame-wrap">
           <iframe class="html-artifact-frame" data-html-frame sandbox="allow-same-origin" scrolling="no" title="${escapeHtml(title)}"></iframe>
@@ -294,11 +284,15 @@
     const frameRect = frameEl.getBoundingClientRect?.();
     const wrapRect = wrapEl.getBoundingClientRect?.();
     if (!frameRect || !wrapRect) return null;
+    const rawFrameWidth = Number(frameEl.offsetWidth || parseFloat(frameEl.style?.width || 0) || frameRect.width || 1);
+    const rawFrameHeight = Number(frameEl.offsetHeight || parseFloat(frameEl.style?.height || 0) || frameRect.height || 1);
+    const scaleX = rawFrameWidth ? Number(frameRect.width || rawFrameWidth) / rawFrameWidth : 1;
+    const scaleY = rawFrameHeight ? Number(frameRect.height || rawFrameHeight) / rawFrameHeight : 1;
     return {
-      x: Math.round(Number(frameRect.left || 0) - Number(wrapRect.left || 0) + Number(anchor.rect.x || 0)),
-      y: Math.round(Number(frameRect.top || 0) - Number(wrapRect.top || 0) + Number(anchor.rect.y || 0)),
-      width: Math.round(Number(anchor.rect.width || 0)),
-      height: Math.round(Number(anchor.rect.height || 0)),
+      x: Math.round(Number(frameRect.left || 0) - Number(wrapRect.left || 0) + Number(anchor.rect.x || 0) * scaleX),
+      y: Math.round(Number(frameRect.top || 0) - Number(wrapRect.top || 0) + Number(anchor.rect.y || 0) * scaleY),
+      width: Math.round(Number(anchor.rect.width || 0) * scaleX),
+      height: Math.round(Number(anchor.rect.height || 0) * scaleY),
     };
   }
 

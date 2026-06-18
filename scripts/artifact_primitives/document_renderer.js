@@ -11,14 +11,6 @@
     }[char]));
   }
 
-  function prettyBytes(value) {
-    const size = Number(value);
-    if (!Number.isFinite(size) || size < 0) return "";
-    if (size < 1024) return `${size} B`;
-    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
   function formatJson(content) {
     try {
       return {
@@ -47,16 +39,6 @@
       .join(" · ");
   }
 
-  function renderMetadata(artifact = {}) {
-    const metadata = [
-      artifact.mimeType || artifact.mime_type,
-      artifact.sizeBytes ? prettyBytes(artifact.sizeBytes) : "",
-      artifact.path,
-    ].filter(Boolean);
-    if (!metadata.length) return "";
-    return `<div class="document-artifact-meta">${metadata.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`;
-  }
-
   function renderActions(artifact = {}) {
     if (!artifact.url) return "";
     return `<div class="document-artifact-actions"><a href="${escapeHtml(artifact.url)}" target="_blank" rel="noopener noreferrer">Open source file</a></div>`;
@@ -71,7 +53,6 @@
     const isJson = type === "json" || mimeType.includes("json");
     const isReadableText = isJson || type === "text" || type === "log" || mimeType.startsWith("text/");
     const title = escapeHtml(artifact.name || artifact.id || "Artifact");
-    const metadata = renderMetadata(artifact);
     const actions = renderActions(artifact);
 
     if (!isReadableText) {
@@ -80,7 +61,6 @@
           <header>
             <p class="document-render-status" role="status">No inline renderer is available for this file artifact.</p>
             <h1>${title}</h1>
-            ${metadata}
             ${actions}
           </header>
         </article>
@@ -102,7 +82,6 @@
       <article class="document-artifact" data-artifact-renderer="document" data-document-type="${escapeHtml(language)}">
         <header>
           <h1>${title}</h1>
-          ${metadata}
           ${actions}
           ${status}
         </header>

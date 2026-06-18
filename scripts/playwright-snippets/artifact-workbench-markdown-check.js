@@ -24,7 +24,7 @@ async (page) => {
       && imageWrap
       && !markdownWrap.hidden
       && imageWrap.hidden
-      && document.querySelector("#image-controls") === null
+      && document.querySelector("#artifact-zoom-controls") === null
       && document.querySelector("#markdown-controls") === null
       && /lines/.test(readout)
       && /Employer Brand Audit Intake/.test(preview?.textContent || "")
@@ -40,7 +40,7 @@ async (page) => {
     const editButton = document.querySelector("#markdown-source-mode");
     const revertButton = document.querySelector("#markdown-revert");
     const saveButton = document.querySelector("#markdown-save");
-    const imageControls = document.querySelector("#image-controls");
+    const imageControls = document.querySelector("#artifact-zoom-controls");
     const mermaidFigure = document.querySelector("[data-artifact-renderer='mermaid']");
     const mermaidSource = mermaidFigure?.querySelector(".mermaid-source");
     return {

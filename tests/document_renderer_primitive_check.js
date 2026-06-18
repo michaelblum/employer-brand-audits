@@ -42,13 +42,16 @@ assert.deepEqual(
     mimeType: "application/json",
     sizeBytes: 1536,
     content: '{"z":1,"a":2}',
-    url: "/artifact/raw.json",
+    url: "/artifact/raw-source",
   }, jsonContainer),
   { ok: true, state: "complete", errorMessage: "" },
 );
 assert.match(jsonContainer.innerHTML, /data-document-type="json"/);
 assert.match(jsonContainer.innerHTML, /Raw &lt;JSON&gt;/);
-assert.match(jsonContainer.innerHTML, /1\.5 KB/);
+assert.doesNotMatch(jsonContainer.innerHTML, /document-artifact-meta/);
+assert.doesNotMatch(jsonContainer.innerHTML, /application\/json/);
+assert.doesNotMatch(jsonContainer.innerHTML, /1\.5 KB/);
+assert.doesNotMatch(jsonContainer.innerHTML, /raw\.json/);
 assert.match(jsonContainer.innerHTML, /&quot;z&quot;: 1/);
 assert.match(jsonContainer.innerHTML, /Open source file/);
 

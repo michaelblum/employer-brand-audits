@@ -120,9 +120,12 @@ Passive workbench reads should reuse the managed `eba-workbench` session without
 resizing or repositioning the browser window. Explicit human-visible summon
 paths such as `demo`, `reset`, and `refresh` may close and relaunch the managed
 browser session so a fresh headed Chrome window is raised without accumulating
-duplicates; those paths may then maximize and sync the fixed viewport to the
-current display's visible bounds. Workbench `click`, `fill`, and `press` still
-require an active turn. For "what is on the workbench now?" questions, use
+duplicates; those paths may then maximize the managed window. The default
+headed workbench uses the browser's native viewport instead of a fixed
+Playwright viewport. Managed browser commands are bounded and should fail with a
+`workbench-browser.log` trail instead of hanging indefinitely. Workbench
+`click`, `fill`, and `press` still require an active turn. For "what is on the
+workbench now?" questions, use
 `glance` first; it returns the compact live context, current artifact, and
 annotation summary. Use `live-smoke` after browser-loaded workbench asset or
 app-shell changes when a bounded live boot/runtime check is warranted.

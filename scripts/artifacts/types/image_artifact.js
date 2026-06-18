@@ -2,6 +2,7 @@
   const ROOT = window.Artifacts = window.Artifacts || {};
   ROOT.types = ROOT.types || {};
   const common = ROOT.common;
+  const zoomControls = ROOT.zoomControls;
 
   function stagePlan() {
     return {
@@ -25,68 +26,80 @@
     return `${width} x ${height} px`;
   }
 
-  function renderZoomControls() {
-    return `
-      <div class="image-controls" id="image-controls" data-control-kind="image-zoom">
-        <div class="zoom-control" id="zoom-control">
-          <button class="zoom-fit" id="zoom-fit" type="button" aria-label="Smart fit" title="Smart fit">
-            ${common.renderIconUse("icon-fit")}
-          </button>
-          <input id="zoom-input" type="text" inputmode="numeric" aria-label="Zoom percentage">
-          <div class="zoom-steps">
-            <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
-            <button id="zoom-out" type="button" aria-label="Zoom out">-</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
   function toolbarPlan(options = {}) {
     return common.toolbarPlan({
       kind: "image",
       readoutId: "image-dimensions",
       readoutLabel: "Dimensions",
       readoutValue: readout(options),
-      controls: [{ id: "image-zoom", html: renderZoomControls() }],
+      controls: [zoomControls.zoomControlPlan()],
       controlPolicy: options.controlPolicy,
     });
   }
 
-  function bindControls({ rootEl, actions = {} } = {}) {
-    if (!rootEl) return common.noopUnbind;
-    const scope = common.makeAbortScope();
-    scope.add(rootEl, "click", (event) => {
-      const button = common.closestElement(event.target, "button");
-      if (!button || !rootEl.contains(button)) return;
-      if (button.id === "zoom-in") actions.applyZoom?.(10, { relative: true });
-      if (button.id === "zoom-out") actions.applyZoom?.(-10, { relative: true });
-      if (button.id === "zoom-fit") actions.smartFit?.();
+  function imageZoomOptions({ elements = {}, viewerConfig = {} } = {}) {
+    return {
+      imageEl: elements.imageEl,
+      wrapEl: elements.imageWrapEl,
+      stageEl: elements.stageEl,
+      zoomInputEl: elements.zoomInputEl,
+      viewerConfig,
+    };
+  }
+
+  function applyZoom(options = {}) {
+    return options.zoom.applyZoom({
+      ...imageZoomOptions(options),
+      value: options.value,
+      mode: options.mode,
     });
-    scope.add(rootEl, "change", (event) => {
-      if (event.target?.id === "zoom-input") actions.applyZoom?.(event.target.value.replace("%", ""));
+  }
+
+  function stageFitZoom(options = {}) {
+    return options.zoom.stageFitZoom(imageZoomOptions(options));
+  }
+
+  function smartFit(options = {}) {
+    return options.zoom.smartFit({
+      ...imageZoomOptions(options),
+      currentZoomMode: options.state?.zoomMode,
+      fitMode: "contain",
     });
-    scope.add(rootEl, "wheel", (event) => {
-      if (!common.closestElement(event.target, "#zoom-control")) return;
-      event.preventDefault();
-      actions.applyZoom?.(event.deltaY < 0 ? 5 : -5, { relative: true });
-    }, { passive: false });
-    return scope.done;
+  }
+
+  function updateZoomSurface(options = {}) {
+    options.zoom.updateAlignment({
+      ...imageZoomOptions(options),
+      zoomPercent: options.state?.zoomPercent || 100,
+    });
+  }
+
+  function defaultZoomState({ artifact = {}, zoom = window.ArtifactPrimitives?.zoomSurface } = {}) {
+    return typeof zoom?.defaultZoomState === "function"
+      ? zoom.defaultZoomState(artifact)
+      : { zoomMode: "stage-fit", zoomPercent: 100 };
   }
 
   const component = {
-    bindControls,
+    applyZoom,
+    bindControls: zoomControls.bindControls,
     capabilities: {
+      artifactZoom: true,
       imageRegionAnnotations: true,
       imageZoom: true,
     },
+    defaultZoomState,
     fallback: true,
     kind: "image",
     matches: (artifact = {}) => String(artifact.type || "").toLowerCase() === "image",
     order: 100,
     readout,
+    smartFit,
     stagePlan,
+    stageFitZoom,
+    syncControls: zoomControls.syncControls,
     toolbarPlan,
+    updateZoomSurface,
   };
   ROOT.types.image = typeof ROOT.registerType === "function" ? ROOT.registerType(component) : component;
 }());

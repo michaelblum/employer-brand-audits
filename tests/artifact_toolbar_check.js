@@ -15,7 +15,7 @@ const source = require("node:fs").readFileSync(
   "utf-8",
 );
 assert.doesNotMatch(source, /renderImageZoomControls|renderMarkdownControls/);
-assert.doesNotMatch(source, /image-controls|markdown-controls|zoom-control/);
+assert.doesNotMatch(source, /artifact-zoom-controls|image-controls|markdown-controls|zoom-control/);
 
 const imageHtml = toolbar.renderToolbarHtml({
   kind: "image",
@@ -24,8 +24,8 @@ const imageHtml = toolbar.renderToolbarHtml({
   ],
   controls: [
     {
-      id: "image-zoom",
-      html: '<div class="image-controls" id="image-controls"><div class="zoom-control" id="zoom-control"><div class="zoom-steps"><button id="zoom-in"></button><button id="zoom-out"></button></div></div></div>',
+      id: "artifact-zoom",
+      html: '<div class="artifact-zoom-controls" id="artifact-zoom-controls"><div class="zoom-control" id="zoom-control"><div class="zoom-steps"><button id="zoom-in"></button><button id="zoom-out"></button></div></div></div>',
     },
   ],
 });
@@ -35,7 +35,7 @@ assert.match(imageHtml, /data-readout-id="image-dimensions"/);
 assert.match(imageHtml, /1000 x 720 px/);
 assert.match(imageHtml, /id="artifact-controls"/);
 assert.match(imageHtml, /data-slot="controls"/);
-assert.match(imageHtml, /id="image-controls"/);
+assert.match(imageHtml, /id="artifact-zoom-controls"/);
 assert.match(imageHtml, /id="zoom-control"/);
 assert.match(imageHtml, /class="zoom-steps"/);
 assert.match(imageHtml, /id="zoom-in"[\s\S]*id="zoom-out"/);
@@ -68,7 +68,7 @@ assert.match(markdownHtml, /id="markdown-controls"/);
 assert.match(markdownHtml, /id="markdown-preview-mode"/);
 assert.match(markdownHtml, /id="markdown-source-mode"/);
 assert.match(markdownHtml, /id="markdown-save"/);
-assert.doesNotMatch(markdownHtml, /image-controls/);
+assert.doesNotMatch(markdownHtml, /artifact-zoom-controls|image-controls/);
 
 const documentHtml = toolbar.renderToolbarHtml({
   kind: "document",
@@ -78,4 +78,4 @@ const documentHtml = toolbar.renderToolbarHtml({
   controls: [],
 });
 assert.match(documentHtml, /json · 1 lines · 42 bytes/);
-assert.doesNotMatch(documentHtml, /image-controls|markdown-controls|zoom-control/);
+assert.doesNotMatch(documentHtml, /artifact-zoom-controls|image-controls|markdown-controls|zoom-control/);

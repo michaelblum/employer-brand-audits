@@ -28,6 +28,12 @@ images, documents, HTML, interaction overlays, and reusable target-link effects.
 - HTML primitives own iframe rendering, element-anchor extraction, and
   iframe-to-workbench rect mapping; the workbench app shell still owns editor
   state, overlay placement, and persistence.
+- `zoom_surface.js` owns reusable artifact zoom defaults, stage-fit/smart-fit
+  calculations, clamping, display formatting, image width scaling,
+  transform-based scaling, and centered-state calculation for zoom-capable
+  artifact surfaces.
+- `image_viewer.js` owns image annotation geometry and marker/popover placement;
+  do not put zoom math or zoom state there.
 - Interaction overlay primitives expose subtype models and state helpers.
   `annotation` is the comment-like subtype; `bounded_input` is the typed
   workflow-input subtype anchored with `workflow_input` step/input ids.
@@ -41,6 +47,9 @@ images, documents, HTML, interaction overlays, and reusable target-link effects.
 - Mermaid rendering accepts context source visibility from the workbench shell.
   `preview-hidden` hides successful raw source in preview presentation while
   preserving source data and showing source fallback on render errors.
+- Document and HTML primitives must not render MIME type, byte size, or file
+  path metadata as inline pills in the stage; keep provenance metadata in
+  shell/sidebar/readout surfaces when needed.
 - Controller code owns effect execution and annotation routing.
 - Vendor code under `vendor/` should stay isolated from project-authored
   primitives.
@@ -60,6 +69,7 @@ images, documents, HTML, interaction overlays, and reusable target-link effects.
 - Run `node --check` on changed primitive files.
 - Run relevant checks such as `node tests/interaction_overlay_primitive_check.js`,
   `node tests/target_link_primitive_check.js`,
+  `node tests/zoom_surface_primitive_check.js`,
   `node tests/html_renderer_primitive_check.js`,
   `node tests/document_renderer_primitive_check.js`,
   `node tests/artifact_renderer_primitive_check.js`,

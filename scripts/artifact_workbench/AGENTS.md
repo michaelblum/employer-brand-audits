@@ -19,6 +19,9 @@ and app shell JavaScript.
 - The workspace and artifact toolbar are shell-owned mount points. The selected
   artifact component owns type-specific stage, readout, controls, and control
   binding inside those mount points through `scripts/artifacts/`.
+- The app shell owns selected-artifact zoom state through explicit get/set
+  helpers and generic wheel/resize routing, but selected artifact components
+  own concrete zoom hooks and default zoom policy.
 - HTML artifacts use the shared document stage and annotation editor; the shell
   may route saved `html_element` anchors to the marker/popover, but HTML
   identity extraction and inspector binding stay with the HTML type/primitive.
@@ -35,8 +38,8 @@ and app shell JavaScript.
   from projected `target_link` data.
 - The stage is the shared vertical scroll boundary for rendered artifacts.
   Document-like artifact surfaces fill the stage height and must not introduce
-  nested vertical preview scroll panes. Image artifacts keep zoom behavior and
-  center within the stage only when the zoomed image fits without scrollbars.
+  nested vertical preview scroll panes. Zoom-capable artifacts center within the
+  stage only when the zoomed surface fits without scrollbars.
 - `styles.css` owns the static workbench stylesheet, including shared toolbar
   and current type-control classes, until a deliberate per-type CSS asset
   boundary exists. Do not add artifact-type behavior to the shell JavaScript to
@@ -71,6 +74,8 @@ and app shell JavaScript.
   and `node tests/artifact_binding_check.js` for artifact binding changes.
 - Run `node tests/artifact_registry_check.js` when toolbar ownership or
   artifact component behavior changes.
+- Run `node tests/zoom_surface_primitive_check.js` when generic artifact zoom
+  defaults, clamping, or transform behavior changes.
 - Run `./eba dev demo --fixture easy-audit --json` for tangible workbench changes.
 - Run relevant Playwright snippets from `scripts/playwright-snippets/` for live
   smoke proof.

@@ -335,6 +335,8 @@ class UrlStageCaptureTests(unittest.TestCase):
             [artifact["id"] for artifact in projection["artifacts"]],
             ["acme-careers:web_snapshot", "acme-careers:web_snapshot_data"],
         )
+        web_snapshot_artifact = projection["artifacts"][0]
+        self.assertEqual(web_snapshot_artifact["facets"]["zoom_default"], "stage-fit")
 
     def test_validation_includes_url_stage_capture_files(self) -> None:
         from scripts.eba_cli import validation_commands

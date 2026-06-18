@@ -27,3 +27,8 @@ assert.match(html, /id="toggle-sidebar"/);
 assert.doesNotMatch(html, /<div class="top-spacer"><\/div>/);
 assert.match(css, /\.artifact-subtype-icon\s*\{[\s\S]*cursor:\s*help;/);
 assert.doesNotMatch(app, /web-snapshot-preview-body/);
+assert.match(app, /function getZoomStateForArtifact/);
+assert.match(app, /function setZoomStateForArtifact/);
+assert.doesNotMatch(app, /function zoomStateForArtifact/);
+assert.doesNotMatch(app, /app\.zoomMode\s*=/);
+assert.doesNotMatch(app, /app\.zoomPercent\s*=/);
