@@ -11,8 +11,6 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from scripts.artifact_type_manifest import artifact_type_script_paths
-    from scripts.easy_audit_fixture import generate_easy_audit_fixture
     from scripts.eba_control_plane import (
         ControlPlaneError,
         assert_dev_command_allowed,
@@ -21,10 +19,11 @@ try:
         print_json as print_control_plane_json,
     )
     from scripts.eba_signature import append_signature_footer, current_eba_signature, signature_payload
+    from scripts.fixture_registry import FIXTURE_GENERATORS
+    from scripts.publication_pipeline.demo_recipes import demo_recipe_lines
     from scripts.url_stage_capture import DEFAULT_OUTPUT_ROOT, capture_url_stage, slugify_stage_name
+    from scripts.validation_registry import COMPILE_TARGETS, validation_commands
 except ModuleNotFoundError:
-    from artifact_type_manifest import artifact_type_script_paths
-    from easy_audit_fixture import generate_easy_audit_fixture
     from eba_control_plane import (
         ControlPlaneError,
         assert_dev_command_allowed,
@@ -33,7 +32,10 @@ except ModuleNotFoundError:
         print_json as print_control_plane_json,
     )
     from eba_signature import append_signature_footer, current_eba_signature, signature_payload
+    from fixture_registry import FIXTURE_GENERATORS
+    from publication_pipeline.demo_recipes import demo_recipe_lines
     from url_stage_capture import DEFAULT_OUTPUT_ROOT, capture_url_stage, slugify_stage_name
+    from validation_registry import COMPILE_TARGETS, validation_commands
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -50,31 +52,6 @@ THREAD_WORKBENCH = (
 )
 WORKBENCH_BROWSER_SESSION = "eba-workbench"
 WORKBENCH_PORT = "8765"
-COMPILE_TARGETS = [
-    "scripts/easy_audit_fixture.py",
-    "scripts/easy_audit_site_capture_smoke.py",
-    "scripts/image_normalization_bridge.py",
-    "scripts/playwright_cli_public_page_matrix_smoke.py",
-    "scripts/playwright_cli_public_page_smoke.py",
-    "scripts/playwright_cli_capture_modes_smoke.py",
-    "scripts/playwright_cli_finalize_approval.py",
-    "scripts/playwright_cli_workbench_server.py",
-    "scripts/playwright_cli_workbench_gate.py",
-    "scripts/playwright_cli_browser.py",
-    "scripts/workbench_bounded_input.py",
-    "scripts/workbench_projection.py",
-    "scripts/workbench_projection_shape_check.py",
-    "scripts/url_stage_capture.py",
-    "scripts/artifact_type_manifest.py",
-    "scripts/eba_cli.py",
-    "scripts/eba_commit_msg_hook.py",
-    "scripts/eba_signature.py",
-]
-FIXTURE_GENERATORS = {
-    "easy-audit": generate_easy_audit_fixture,
-}
-
-
 def run(args: list[str], *, check: bool = False, capture: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
@@ -294,80 +271,6 @@ def command_sig(args: argparse.Namespace) -> int:
     return 0
 
 
-def validation_commands() -> list[list[str]]:
-    commands = [
-        [sys.executable, "-m", "py_compile", *COMPILE_TARGETS],
-        [sys.executable, "tests/test_workbench_bounded_input.py"],
-        [sys.executable, "tests/test_workbench_server_hardening.py"],
-        [sys.executable, "tests/test_easy_audit_fixture.py"],
-        [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
-        [sys.executable, "tests/test_url_stage_capture.py"],
-        [sys.executable, "scripts/workbench_projection_shape_check.py"],
-        ["node", "--check", "scripts/artifact_primitives/mermaid_renderer.js"],
-        ["node", "--check", "scripts/artifact_primitives/markdown_renderer.js"],
-        ["node", "--check", "scripts/artifact_primitives/markdown_interactions.js"],
-        ["node", "--check", "scripts/artifact_primitives/zoom_surface.js"],
-        ["node", "--check", "scripts/artifact_primitives/image_viewer.js"],
-        ["node", "--check", "scripts/artifact_primitives/document_renderer.js"],
-        ["node", "--check", "scripts/artifact_primitives/html_renderer.js"],
-        ["node", "--check", "scripts/artifacts/core/artifact_common.js"],
-        ["node", "--check", "scripts/artifacts/core/bounded_input_controls.js"],
-        ["node", "--check", "scripts/artifacts/core/workflow_pairing.js"],
-        ["node", "--check", "scripts/artifacts/core/zoom_controls.js"],
-        *[["node", "--check", script_path] for script_path in artifact_type_script_paths()],
-        ["node", "--check", "scripts/artifacts/artifact_registry.js"],
-        ["node", "--check", "scripts/artifact_primitives/artifact_renderer.js"],
-        ["node", "--check", "scripts/artifacts/navigation/artifact_navigator.js"],
-        ["node", "--check", "scripts/artifact_primitives/interaction_overlay.js"],
-        ["node", "--check", "scripts/artifact_primitives/target_link.js"],
-        ["node", "--check", "scripts/artifact_primitives/interaction_overlay_controller.js"],
-        ["node", "tests/markdown_renderer_primitive_check.js"],
-        ["node", "tests/document_renderer_primitive_check.js"],
-        ["node", "tests/html_renderer_primitive_check.js"],
-        ["node", "tests/zoom_surface_primitive_check.js"],
-        ["node", "tests/artifact_registry_check.js"],
-        ["node", "tests/artifact_renderer_primitive_check.js"],
-        ["node", "tests/artifact_toolbar_check.js"],
-        ["node", "tests/artifact_binding_check.js"],
-        ["node", "tests/artifact_navigator_check.js"],
-        ["node", "tests/bounded_input_controls_check.js"],
-        ["node", "tests/workflow_pairing_check.js"],
-        ["node", "tests/workbench_shell_check.js"],
-        ["node", "tests/interaction_overlay_primitive_check.js"],
-        ["node", "tests/target_link_primitive_check.js"],
-        ["node", "tests/interaction_overlay_controller_check.js"],
-        ["node", "--check", "scripts/artifact_workbench/app.js"],
-        ["node", "--check", "scripts/artifact_workbench/artifact_toolbar.js"],
-        ["node", "--check", "scripts/artifact_workbench/artifact_binding.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-composition-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-document-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-image-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-layout-regression-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-markdown-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-report-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-live-boot-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-mermaid-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-navigation-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-annotation-reorder-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-interaction-overlay-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-bounded-input-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/artifact-workbench-web-snapshot-check.js"],
-        ["node", "--check", "scripts/playwright-snippets/settle-page.js"],
-        ["node", "--check", "scripts/playwright-snippets/hide-obscuring-elements.js"],
-        ["node", "--check", "scripts/playwright-snippets/restore-page.js"],
-        ["node", "--check", "scripts/playwright-snippets/extract-visible-text.js"],
-        ["node", "--check", "scripts/playwright-snippets/extract-web-blueprint.js"],
-    ]
-    venv_python = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "python"
-    pytest = REPO_ROOT / "mcp-server" / ".venv" / "bin" / "pytest"
-    if pytest.exists():
-        commands.append(
-            [str(venv_python), "-m", "pytest", "-q", "tests/test_eba_control_plane.py"]
-        )
-        commands.append([str(pytest), "-q", "mcp-server/tests"])
-    commands.append(["git", "diff", "--check"])
-    return commands
-
 
 def command_validate(args: argparse.Namespace) -> int:
     results = []
@@ -452,18 +355,8 @@ def command_demo(args: argparse.Namespace) -> int:
     if not args.json:
         print()
         print("Self-guided demo recipe:")
-        if args.fixture == "easy-audit" or manifest.resolve() == (
-            REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"
-        ).resolve():
-            print("1. Confirm the artifact summary shows the Acme Robotics audit, not the public-page matrix.")
-            print("2. Inspect the projected L0-L4 steps and provenance edges in the sidebar.")
-            print("3. Open the final report and confirm the designed HTML report renders without edit controls.")
-            print("4. Open the JSON/text artifacts and confirm they render as inspectable document views.")
-        else:
-            print("1. Inspect the artifact summary in the right sidebar.")
-            print("2. Toggle page and slot filter chips; previous/next should follow the filtered set.")
-            print("3. Open a markdown summary artifact and confirm edit/annotation still works.")
-            print("4. Inspect tall/full-page captures; viewer zoom should fit without mutating image bytes.")
+        for line in demo_recipe_lines(fixture=args.fixture, manifest=manifest):
+            print(line)
     return 0
 
 

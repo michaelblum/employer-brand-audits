@@ -1,0 +1,62 @@
+{
+  "project_id": "sample-healthcare-evp",
+  "sample_profile_id": "sample-healthcare-evp",
+  "client_name": "Cedar Valley Health",
+  "client_full_name": "Cedar Valley Health",
+  "industry": "Healthcare",
+  "geography": "United States",
+  "audience": "Clinical and technical talent",
+  "report_title": "Cedar Valley Health EVP Client Data Immersion and Competitor Messaging Audit",
+  "report_date": "2026-06-18",
+  "domain": "cedarvalley.example",
+  "client_signals": {
+    "mission": "Cedar Valley Health helps communities receive timely, compassionate care close to home.",
+    "values": [
+      "Compassion",
+      "Access",
+      "Teamwork",
+      "Progress",
+      "Stewardship"
+    ],
+    "flexibility_program": "Cedar Flex lets clinical teams choose preferred sites and schedule patterns.",
+    "benefits": [
+      "Comprehensive wellbeing benefits",
+      "Family support programs",
+      "Tuition and certification support"
+    ],
+    "awards": [
+      "Regional care quality leader",
+      "Top workplace recognition",
+      "Clinical excellence award"
+    ]
+  },
+  "competitors": [
+    {
+      "entity_id": "competitor-riverbend-medical",
+      "name": "Riverbend Medical",
+      "careers_url": "https://riverbend.example/careers",
+      "culture_url": "https://riverbend.example/culture",
+      "review_urls": [
+        "https://reviews.example/riverbend-medical"
+      ]
+    },
+    {
+      "entity_id": "competitor-pioneer-care",
+      "name": "Pioneer Care Network",
+      "careers_url": "https://pioneercare.example/careers",
+      "culture_url": "https://pioneercare.example/team",
+      "review_urls": [
+        "https://reviews.example/pioneer-care"
+      ]
+    },
+    {
+      "entity_id": "competitor-lakeside-health",
+      "name": "Lakeside Health System",
+      "careers_url": "https://lakesidehealth.example/careers",
+      "culture_url": "https://lakesidehealth.example/benefits",
+      "review_urls": [
+        "https://reviews.example/lakeside-health"
+      ]
+    }
+  ]
+}

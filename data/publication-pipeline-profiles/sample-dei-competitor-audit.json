@@ -1,0 +1,68 @@
+{
+  "project_id": "sample-dei-competitor-audit",
+  "sample_profile_id": "sample-dei-competitor-audit",
+  "client_name": "Solstice Capital",
+  "client_full_name": "Solstice Capital",
+  "industry": "Private markets investment management",
+  "geography": "United States and United Kingdom",
+  "audience": "Investment, operations, and corporate talent",
+  "report_title": "Solstice Capital DEI Competitor Audit",
+  "report_date": "2026-06-18",
+  "domain": "solsticecapital.example",
+  "workbook_entities": [
+    "Solstice Capital",
+    "Aster Equity",
+    "Juniper Growth",
+    "Elmstone Partners",
+    "Horizon Markets",
+    "Vale Alternatives",
+    "Copper Ridge",
+    "Mariner Funds"
+  ],
+  "competitors": [
+    {
+      "entity_id": "competitor-aster-equity",
+      "name": "Aster Equity"
+    },
+    {
+      "entity_id": "competitor-juniper-growth",
+      "name": "Juniper Growth"
+    },
+    {
+      "entity_id": "competitor-elmstone-partners",
+      "name": "Elmstone Partners"
+    },
+    {
+      "entity_id": "competitor-horizon-markets",
+      "name": "Horizon Markets"
+    },
+    {
+      "entity_id": "competitor-vale-alternatives",
+      "name": "Vale Alternatives"
+    },
+    {
+      "entity_id": "competitor-copper-ridge",
+      "name": "Copper Ridge"
+    },
+    {
+      "entity_id": "competitor-mariner-funds",
+      "name": "Mariner Funds"
+    }
+  ],
+  "dei_dimensions": [
+    "gender",
+    "ethnicity",
+    "LGBTQ+",
+    "socioeconomic",
+    "disability",
+    "age",
+    "caregivers"
+  ],
+  "partner_org_sources": [
+    "memberships",
+    "external networks",
+    "awards",
+    "benchmarks"
+  ],
+  "withdrawal_watch": true
+}

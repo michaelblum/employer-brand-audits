@@ -136,7 +136,6 @@ URL_STAGE_SUPPORT_RESOURCE_SLOTS = {
     "capture_log": "debug.log",
 }
 
-
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -288,6 +287,28 @@ def collect_artifact_lineage_ids(
     return [artifact_id for artifact_id in artifact_order if artifact_id in seen]
 
 
+def declared_composite_group_config(artifact: dict[str, Any]) -> dict[str, str] | None:
+    facets = artifact.get("facets") if isinstance(artifact.get("facets"), dict) else {}
+    config = facets.get("composite_group") if isinstance(facets.get("composite_group"), dict) else None
+    if config is None:
+        return None
+    kind = str(config.get("kind") or "").strip()
+    label = str(config.get("label") or "").strip()
+    slot = str(config.get("slot") or "").strip()
+    if not kind or not label or not slot:
+        return None
+    return {"kind": kind, "label": label, "slot": slot}
+
+
+def propagated_authored_artifact_facets(artifact: dict[str, Any]) -> dict[str, Any]:
+    facets = artifact.get("facets") if isinstance(artifact.get("facets"), dict) else {}
+    propagated: dict[str, Any] = {}
+    composite_group = facets.get("composite_group")
+    if isinstance(composite_group, dict):
+        propagated["composite_group"] = composite_group
+    return propagated
+
+
 def audit_report_artifact_groups(
     workflow_steps: list[dict[str, Any]],
     artifacts: list[dict[str, Any]],
@@ -304,12 +325,36 @@ def audit_report_artifact_groups(
             for artifact_id in (str(value) for value in (step.get("artifact_ids") or []))
             if artifact_id in artifacts_by_id
         ]
-        report_artifact_ids = [
-            artifact_id
-            for artifact_id in step_artifact_ids
-            if artifacts_by_id[artifact_id].get("layer") == 4
-            or artifacts_by_id[artifact_id].get("kind") in {"report", "html"}
-        ]
+        report_artifact_ids = []
+        for artifact_id in step_artifact_ids:
+            artifact = artifacts_by_id[artifact_id]
+            composite_config = declared_composite_group_config(artifact)
+            if composite_config is not None:
+                group_artifact_ids = collect_artifact_lineage_ids([artifact_id], artifact_order, artifacts_by_id)
+                if not group_artifact_ids:
+                    continue
+                group_id = f"composite:manifest-declared:{step_id}:{artifact_id}"
+                groups.append(
+                    {
+                        "id": group_id,
+                        "kind": composite_config["kind"],
+                        "label": f"{composite_config['label']} bundle",
+                        "artifact_ids": group_artifact_ids,
+                        "edge_ids": [
+                            f"edge:{group_id}:{item_id}"
+                            for item_id in group_artifact_ids
+                        ],
+                        "source": {
+                            "kind": "manifest_declared_composite_group",
+                            "step_id": step_id,
+                            "artifact_ids": [artifact_id],
+                        },
+                        "slot": composite_config["slot"],
+                    }
+                )
+                continue
+            if artifact.get("layer") == 4 or artifact.get("kind") in {"report", "html"}:
+                report_artifact_ids.append(artifact_id)
         if not report_artifact_ids:
             continue
         group_id = f"composite:audit-report:{step_id}"
@@ -1165,6 +1210,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
             "slot": slot,
             "layer": artifact.get("layer"),
         }
+        facets.update(propagated_authored_artifact_facets(artifact))
         if workbench_type == "markdown" and file_path and markdown_has_mermaid(file_path, manifest_dir):
             capabilities.append("render")
             facets["diagram_kind"] = "mermaid"

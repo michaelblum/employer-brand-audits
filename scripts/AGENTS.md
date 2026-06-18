@@ -7,9 +7,9 @@ workbench implementation, and checked-in Playwright snippets.
 
 ## Ownership
 
-- Owns `eba_cli.py`, `eba_control_plane.py`, capture/smoke scripts, projection
-  scripts, bounded-input helpers, workbench server/gate scripts, and child
-  script folders.
+- Owns `eba_cli.py`, `eba_control_plane.py`, fixture and validation
+  registries, capture/smoke scripts, projection scripts, bounded-input
+  helpers, workbench server/gate scripts, and child script folders.
 - Does not own MCP imaging internals or repo-level tests.
 
 ## Local Contracts
@@ -63,11 +63,77 @@ workbench implementation, and checked-in Playwright snippets.
 - The workbench server's mutating local HTTP endpoints must reject browser
   cross-origin writes, bound request bodies, return clean JSON client errors,
   and send `X-Content-Type-Options: nosniff` on typed responses.
+- Publication pipeline implementation lives under `scripts/publication_pipeline/`.
+  `scripts/publication_pipeline_fixture.py` is a compatibility wrapper for
+  existing imports and direct CLI execution.
+- Publication fixture generators must prepare output through the package-owned
+  cleanup guard. Recursive deletion is allowed only for marker-owned fixture
+  outputs or each generator's own default output directory; arbitrary non-empty
+  directories under `artifacts/` must be refused before deletion.
+- ADR-002 manifests may declare generic composite grouping metadata on artifact
+  facets. `workbench_projection.py` consumes those declarations generically and
+  must not import publication-pipeline-specific grouping code. Projection-owned
+  facets such as host, artifact type, artifact kind, slot, and layer remain
+  canonical; manifest-authored facets must be whitelisted before propagation.
+- `./eba dev demo --fixture publication-pipeline` generates a deterministic
+  publication-pipeline ADR-002 manifest from tracked KILOS data and fixture
+  records using a fictional sample profile by default. It must not depend on
+  local-only `reference_publications/` files, and default generated artifacts
+  must not contain reference-client or reference-competitor labels.
+- Publication-pipeline manifests start with `p0-pipeline-intake`, a
+  workbench-visible `pipeline_intake` artifact that records the client,
+  objective, source seeds, competitors, ontology, desired outputs, and review
+  requirements driving downstream records.
+- `./eba dev demo --fixture segment-tvp-audit` generates a deterministic
+  segment-specific TVP ADR-002 manifest from a fictional sample profile and
+  KILOS data. It models the structural shape of the segment TVP references but
+  must not inherit reference-client competitor labels, job URLs, or
+  social-source defaults.
+- `./eba dev demo --fixture competitor-messaging-workbook` generates a
+  deterministic workbook-normalization ADR-002 manifest from a fictional sample
+  profile. It models effective sheet ranges, wide matrix cells, evidence cells,
+  partner organizations, and partner activations without depending on
+  local-only workbook files at runtime.
+- `./eba dev demo --fixture dei-competitor-audit` generates a deterministic DEI
+  competitor-audit ADR-002 manifest from a fictional sample profile. It models
+  deck extraction, DEI activations, inclusion philosophies, partner
+  organizations, coverage gaps, benchmark sources, and deck/L4 views.
+- `./eba dev demo --fixture campaign-desk-research-comp-audit` generates a
+  deterministic campaign desk-research ADR-002 manifest from a fictional sample
+  profile. It models research source groups, labor-market stats,
+  policy/context signals, campaign case studies, channel tactics,
+  recommendations, and L4 views.
+- `./eba dev demo --fixture kilos-methodology` generates a deterministic KILOS
+  methodology ADR-002 manifest from tracked `data/kilos-framework.json` and
+  reference-modeled metadata. It preserves pillar/factor counts, survey-label
+  mappings, methodology deck metadata, scorecard table metadata, snippets, and
+  L4 views.
+- `scripts/publication_pipeline_fixture.py --project-profile <profile.json>`
+  generates the generic EVP client immersion and competitor messaging audit
+  shape for an arbitrary company profile: client plus competitors, report
+  outline, source roster, capture pack, KILOS evidence matrix, survey signals,
+  review snapshots, derived analysis findings, and report/deck/workbook/L4
+  views. The bundled profile is a fictional sample under
+  `data/publication-pipeline-profiles/`; real reference names are structural
+  source labels only and must not appear in default generated artifacts.
+- `scripts/publication_pipeline_fixture.py --url-stage-manifest <manifest>` may
+  be repeated to import one or more existing URL-stage capture manifests as the
+  publication capture-pack sources while preserving screenshot, text, and
+  web-snapshot data paths on disk. `--url-stage-entity-id <entity-id>` may also
+  be repeated once per manifest to pin each imported source to an entity. When
+  URL-stage manifests are imported, `source-roster.json` is derived from the
+  imported capture-pack sources so roster entities and source URLs match the
+  evidence lineage. Imported sources without explicit entity IDs use neutral
+  `source-<slug>` entity IDs inferred from URL-stage slugs instead of borrowing
+  demo client or competitor IDs.
 
 ## Work Guidance
 
 - Keep command routes typed, small, and honest; do not add routes that are not
   wired or validated.
+- Register fixture generators in `fixture_registry.py` and validation target
+  lists in `validation_registry.py`; do not grow `eba_cli.py` with every fixture
+  family.
 - `./eba sig`, `./eba dev trace`, `./eba dev gh`, and `./eba dev hooks` own the
   repo-private provenance signature surface; keep GitHub prose and commit
   message signing automatic where possible.
@@ -119,6 +185,9 @@ workbench implementation, and checked-in Playwright snippets.
   shared artifact helpers, and navigation planning.
 - `scripts/artifact_primitives/AGENTS.md` - lower-level workbench renderer and
   interaction primitives.
+- `scripts/publication_pipeline/AGENTS.md` - publication pipeline fixture
+  package, archetype entrypoints, sample-profile loading, marker-owned output
+  cleanup, demo recipes, and manifest-declared publication grouping metadata.
 - `scripts/playwright-snippets/AGENTS.md` - checked-in snippets for Playwright
   CLI `run-code`.
 - `scripts/artifact_workbench/AGENTS.md` - browser-loaded workbench app
