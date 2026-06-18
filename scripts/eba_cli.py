@@ -23,8 +23,10 @@ try:
     from scripts.eba_signature import append_signature_footer, current_eba_signature, signature_payload
     from scripts.publication_pipeline_fixture import (
         COMPETITOR_WORKBOOK_TEMPLATE_ID,
+        DEI_COMPETITOR_AUDIT_TEMPLATE_ID,
         SEGMENT_TVP_TEMPLATE_ID,
         generate_competitor_messaging_workbook_fixture,
+        generate_dei_competitor_audit_fixture,
         generate_publication_pipeline_fixture,
         generate_segment_tvp_audit_fixture,
     )
@@ -42,8 +44,10 @@ except ModuleNotFoundError:
     from eba_signature import append_signature_footer, current_eba_signature, signature_payload
     from publication_pipeline_fixture import (
         COMPETITOR_WORKBOOK_TEMPLATE_ID,
+        DEI_COMPETITOR_AUDIT_TEMPLATE_ID,
         SEGMENT_TVP_TEMPLATE_ID,
         generate_competitor_messaging_workbook_fixture,
+        generate_dei_competitor_audit_fixture,
         generate_publication_pipeline_fixture,
         generate_segment_tvp_audit_fixture,
     )
@@ -90,6 +94,7 @@ FIXTURE_GENERATORS = {
     "publication-pipeline": generate_publication_pipeline_fixture,
     "segment-tvp-audit": generate_segment_tvp_audit_fixture,
     "competitor-messaging-workbook": generate_competitor_messaging_workbook_fixture,
+    "dei-competitor-audit": generate_dei_competitor_audit_fixture,
 }
 
 
@@ -322,6 +327,7 @@ def validation_commands() -> list[list[str]]:
         [sys.executable, "tests/test_publication_capture_pack.py"],
         [sys.executable, "tests/test_publication_segment_tvp.py"],
         [sys.executable, "tests/test_publication_competitor_workbook.py"],
+        [sys.executable, "tests/test_publication_dei_competitor_audit.py"],
         [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
         [sys.executable, "tests/test_url_stage_capture.py"],
         [sys.executable, "scripts/workbench_projection_shape_check.py"],
@@ -484,6 +490,13 @@ def demo_recipe_lines(*, fixture: str | None, manifest: Path) -> list[str]:
             "2. Open Workbook Extraction and confirm sheet dimensions, effective ranges, and header maps are visible.",
             "3. Open Data Workbook and confirm evidence cells and Partner Activation records retain source cells.",
             "4. Open L4 Publication and confirm coverage findings cite workbook evidence ids.",
+        ]
+    if fixture == "dei-competitor-audit" or manifest_template_id(manifest) == DEI_COMPETITOR_AUDIT_TEMPLATE_ID:
+        return [
+            "1. Confirm the workflow shows pipeline intake, source roster, deck extraction, DEI evidence matrix, analysis pack, and publication views.",
+            "2. Open DEI Activation Matrix and confirm each activation cites evidence ids.",
+            "3. Open Inclusion Philosophy Map and Partner Landscape to compare philosophy classes and coverage gaps.",
+            "4. Open L4 Publication and confirm the readout is built from the DEI evidence matrix.",
         ]
     if fixture == "easy-audit" or manifest.resolve() == (
         REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"

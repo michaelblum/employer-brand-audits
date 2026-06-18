@@ -159,7 +159,11 @@ Status:
   HarbourVest workbook reference profile, workbook extraction metadata,
   long-form evidence cells, partner organization and activation records,
   analysis pack, workbook view, L4 readout, and arbitrary-profile leakage tests.
-- `publication-pipeline.dei-competitor-audit` remains next in this family.
+- `publication-pipeline.dei-competitor-audit` is implemented as
+  `./eba dev demo --fixture dei-competitor-audit` with the HarbourVest reference
+  profile, DEI deck extraction metadata, activation, inclusion philosophy,
+  partner, benchmark, coverage-gap, deck, L4, and arbitrary-profile leakage
+  tests.
 
 Additional intake fields:
 

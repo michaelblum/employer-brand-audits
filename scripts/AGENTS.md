@@ -79,6 +79,10 @@ workbench implementation, and checked-in Playwright snippets.
   HarbourVest workbook reference profile. It models effective sheet ranges,
   wide matrix cells, evidence cells, partner organizations, and partner
   activations without depending on local-only workbook files at runtime.
+- `./eba dev demo --fixture dei-competitor-audit` generates a deterministic DEI
+  competitor-audit ADR-002 manifest from the tracked HarbourVest reference
+  profile. It models deck extraction, DEI activations, inclusion philosophies,
+  partner organizations, coverage gaps, benchmark sources, and deck/L4 views.
 - `scripts/publication_pipeline_fixture.py --project-profile <profile.json>`
   generates the generic EVP client immersion and competitor messaging audit
   shape for an arbitrary company profile: client plus competitors, report
