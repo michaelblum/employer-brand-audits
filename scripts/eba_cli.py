@@ -21,7 +21,11 @@ try:
         print_json as print_control_plane_json,
     )
     from scripts.eba_signature import append_signature_footer, current_eba_signature, signature_payload
-    from scripts.publication_pipeline_fixture import generate_publication_pipeline_fixture
+    from scripts.publication_pipeline_fixture import (
+        SEGMENT_TVP_TEMPLATE_ID,
+        generate_publication_pipeline_fixture,
+        generate_segment_tvp_audit_fixture,
+    )
     from scripts.url_stage_capture import DEFAULT_OUTPUT_ROOT, capture_url_stage, slugify_stage_name
 except ModuleNotFoundError:
     from artifact_type_manifest import artifact_type_script_paths
@@ -34,7 +38,11 @@ except ModuleNotFoundError:
         print_json as print_control_plane_json,
     )
     from eba_signature import append_signature_footer, current_eba_signature, signature_payload
-    from publication_pipeline_fixture import generate_publication_pipeline_fixture
+    from publication_pipeline_fixture import (
+        SEGMENT_TVP_TEMPLATE_ID,
+        generate_publication_pipeline_fixture,
+        generate_segment_tvp_audit_fixture,
+    )
     from url_stage_capture import DEFAULT_OUTPUT_ROOT, capture_url_stage, slugify_stage_name
 
 
@@ -76,6 +84,7 @@ COMPILE_TARGETS = [
 FIXTURE_GENERATORS = {
     "easy-audit": generate_easy_audit_fixture,
     "publication-pipeline": generate_publication_pipeline_fixture,
+    "segment-tvp-audit": generate_segment_tvp_audit_fixture,
 }
 
 
@@ -306,6 +315,7 @@ def validation_commands() -> list[list[str]]:
         [sys.executable, "tests/test_easy_audit_fixture.py"],
         [sys.executable, "tests/test_publication_pipeline_fixture.py"],
         [sys.executable, "tests/test_publication_capture_pack.py"],
+        [sys.executable, "tests/test_publication_segment_tvp.py"],
         [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
         [sys.executable, "tests/test_url_stage_capture.py"],
         [sys.executable, "scripts/workbench_projection_shape_check.py"],
@@ -454,6 +464,13 @@ def demo_recipe_lines(*, fixture: str | None, manifest: Path) -> list[str]:
             "2. Open Evidence Matrix and confirm every KILOS-coded item has pillar/factor provenance.",
             "3. Open Analysis Pack and confirm findings link back to evidence ids.",
             "4. Open L4 Publication and confirm it is a view over the same upstream records, not a separate source.",
+        ]
+    if fixture == "segment-tvp-audit" or manifest_template_id(manifest) == SEGMENT_TVP_TEMPLATE_ID:
+        return [
+            "1. Confirm the workflow shows pipeline intake, Segment Source Roster, segment capture pack, evidence matrix, TVP analysis pack, and publication views.",
+            "2. Open Segment Source Roster and confirm role-family, job-posting, and social sources are represented.",
+            "3. Open Social Platform Audit and confirm social observations cite upstream evidence ids.",
+            "4. Open L4 Publication and confirm recommendations cite segment evidence records.",
         ]
     if fixture == "easy-audit" or manifest.resolve() == (
         REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"

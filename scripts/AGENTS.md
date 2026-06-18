@@ -70,6 +70,10 @@ workbench implementation, and checked-in Playwright snippets.
   workbench-visible `pipeline_intake` artifact that records the client,
   objective, source seeds, competitors, ontology, desired outputs, and review
   requirements driving downstream records.
+- `./eba dev demo --fixture segment-tvp-audit` generates a deterministic
+  segment-specific TVP ADR-002 manifest from the tracked ADT reference profile
+  and KILOS data. It must support arbitrary project profiles without inheriting
+  ADT competitor labels, job URLs, or social-source defaults.
 - `scripts/publication_pipeline_fixture.py --project-profile <profile.json>`
   generates the generic EVP client immersion and competitor messaging audit
   shape for an arbitrary company profile: client plus competitors, report

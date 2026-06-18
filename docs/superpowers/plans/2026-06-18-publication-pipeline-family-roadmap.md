@@ -96,6 +96,13 @@ Generalized pipeline id:
 
 - `publication-pipeline.segment-tvp-audit`
 
+Status:
+
+- Implemented as `./eba dev demo --fixture segment-tvp-audit` with a tracked
+  ADT reference profile, segment source roster, segment capture pack, KILOS
+  segment evidence matrix, TVP analysis pack, report/deck/social/workbook/L4
+  views, and arbitrary-profile leakage tests.
+
 Additional intake fields:
 
 - `target_talent_segments`: for example Technology, Product, Engineering,

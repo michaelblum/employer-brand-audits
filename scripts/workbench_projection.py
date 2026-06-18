@@ -152,6 +152,16 @@ PUBLICATION_VIEW_KINDS = {
         "slot": "publication.data_workbook.bundle",
         "group_kind": "publication_data_workbook_bundle",
     },
+    "brand_strategy_deck": {
+        "label": "Brand Strategy Deck View",
+        "slot": "publication.brand_strategy_deck.bundle",
+        "group_kind": "publication_brand_strategy_deck_bundle",
+    },
+    "social_platform_audit": {
+        "label": "Social Platform Audit View",
+        "slot": "publication.social_platform_audit.bundle",
+        "group_kind": "publication_social_platform_audit_bundle",
+    },
     "l4_publication": {
         "label": "L4 Publication View",
         "slot": "publication.l4_publication.bundle",
