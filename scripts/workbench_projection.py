@@ -136,6 +136,29 @@ URL_STAGE_SUPPORT_RESOURCE_SLOTS = {
     "capture_log": "debug.log",
 }
 
+PUBLICATION_VIEW_KINDS = {
+    "report_docx": {
+        "label": "Report DOCX View",
+        "slot": "publication.report_docx.bundle",
+        "group_kind": "publication_report_docx_bundle",
+    },
+    "audit_deck": {
+        "label": "Audit Deck View",
+        "slot": "publication.audit_deck.bundle",
+        "group_kind": "publication_audit_deck_bundle",
+    },
+    "data_workbook": {
+        "label": "Data Workbook View",
+        "slot": "publication.data_workbook.bundle",
+        "group_kind": "publication_data_workbook_bundle",
+    },
+    "l4_publication": {
+        "label": "L4 Publication View",
+        "slot": "publication.l4_publication.bundle",
+        "group_kind": "publication_l4_publication_bundle",
+    },
+}
+
 
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -304,12 +327,36 @@ def audit_report_artifact_groups(
             for artifact_id in (str(value) for value in (step.get("artifact_ids") or []))
             if artifact_id in artifacts_by_id
         ]
-        report_artifact_ids = [
-            artifact_id
-            for artifact_id in step_artifact_ids
-            if artifacts_by_id[artifact_id].get("layer") == 4
-            or artifacts_by_id[artifact_id].get("kind") in {"report", "html"}
-        ]
+        report_artifact_ids = []
+        for artifact_id in step_artifact_ids:
+            artifact = artifacts_by_id[artifact_id]
+            publication_config = publication_view_group_config(artifact)
+            if publication_config is not None:
+                group_artifact_ids = collect_artifact_lineage_ids([artifact_id], artifact_order, artifacts_by_id)
+                if not group_artifact_ids:
+                    continue
+                group_id = f"composite:publication-view:{step_id}:{artifact_id}"
+                groups.append(
+                    {
+                        "id": group_id,
+                        "kind": publication_config["group_kind"],
+                        "label": f"{publication_config['label']} bundle",
+                        "artifact_ids": group_artifact_ids,
+                        "edge_ids": [
+                            f"edge:{group_id}:{item_id}"
+                            for item_id in group_artifact_ids
+                        ],
+                        "source": {
+                            "kind": "publication_view_step",
+                            "step_id": step_id,
+                            "artifact_ids": [artifact_id],
+                        },
+                        "slot": publication_config["slot"],
+                    }
+                )
+                continue
+            if artifact.get("layer") == 4 or artifact.get("kind") in {"report", "html"}:
+                report_artifact_ids.append(artifact_id)
         if not report_artifact_ids:
             continue
         group_id = f"composite:audit-report:{step_id}"
@@ -332,6 +379,11 @@ def audit_report_artifact_groups(
             }
         )
     return groups
+
+
+def publication_view_group_config(artifact: dict[str, Any]) -> dict[str, Any] | None:
+    kind = str(artifact.get("kind") or artifact.get("type") or "")
+    return PUBLICATION_VIEW_KINDS.get(kind)
 
 
 def add_slot_facet(slot_index: dict[str, dict[str, Any]], slot: str, label: str, artifact_id: str) -> None:

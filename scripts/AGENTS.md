@@ -63,6 +63,27 @@ workbench implementation, and checked-in Playwright snippets.
 - The workbench server's mutating local HTTP endpoints must reject browser
   cross-origin writes, bound request bodies, return clean JSON client errors,
   and send `X-Content-Type-Options: nosniff` on typed responses.
+- `./eba dev demo --fixture publication-pipeline` generates a deterministic
+  publication-pipeline ADR-002 manifest from tracked KILOS data and fixture
+  records. It must not depend on local-only `reference_publications/` files.
+- `scripts/publication_pipeline_fixture.py --project-profile <profile.json>`
+  generates the generic EVP client immersion and competitor messaging audit
+  shape for an arbitrary company profile: client plus competitors, report
+  outline, source roster, capture pack, KILOS evidence matrix, survey signals,
+  review snapshots, derived analysis findings, and report/deck/workbook/L4
+  views. The bundled Northside seed is a tracked reference profile under
+  `data/publication-pipeline-profiles/`, not a hard-coded business
+  requirement.
+- `scripts/publication_pipeline_fixture.py --url-stage-manifest <manifest>` may
+  be repeated to import one or more existing URL-stage capture manifests as the
+  publication capture-pack sources while preserving screenshot, text, and
+  web-snapshot data paths on disk. `--url-stage-entity-id <entity-id>` may also
+  be repeated once per manifest to pin each imported source to an entity. When
+  URL-stage manifests are imported, `source-roster.json` is derived from the
+  imported capture-pack sources so roster entities and source URLs match the
+  evidence lineage. Imported sources without explicit entity IDs use neutral
+  `source-<slug>` entity IDs inferred from URL-stage slugs instead of borrowing
+  demo client or competitor IDs.
 
 ## Work Guidance
 

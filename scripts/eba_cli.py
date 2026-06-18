@@ -21,6 +21,7 @@ try:
         print_json as print_control_plane_json,
     )
     from scripts.eba_signature import append_signature_footer, current_eba_signature, signature_payload
+    from scripts.publication_pipeline_fixture import generate_publication_pipeline_fixture
     from scripts.url_stage_capture import DEFAULT_OUTPUT_ROOT, capture_url_stage, slugify_stage_name
 except ModuleNotFoundError:
     from artifact_type_manifest import artifact_type_script_paths
@@ -33,6 +34,7 @@ except ModuleNotFoundError:
         print_json as print_control_plane_json,
     )
     from eba_signature import append_signature_footer, current_eba_signature, signature_payload
+    from publication_pipeline_fixture import generate_publication_pipeline_fixture
     from url_stage_capture import DEFAULT_OUTPUT_ROOT, capture_url_stage, slugify_stage_name
 
 
@@ -65,6 +67,7 @@ COMPILE_TARGETS = [
     "scripts/workbench_projection.py",
     "scripts/workbench_projection_shape_check.py",
     "scripts/url_stage_capture.py",
+    "scripts/publication_pipeline_fixture.py",
     "scripts/artifact_type_manifest.py",
     "scripts/eba_cli.py",
     "scripts/eba_commit_msg_hook.py",
@@ -72,6 +75,7 @@ COMPILE_TARGETS = [
 ]
 FIXTURE_GENERATORS = {
     "easy-audit": generate_easy_audit_fixture,
+    "publication-pipeline": generate_publication_pipeline_fixture,
 }
 
 
@@ -300,6 +304,8 @@ def validation_commands() -> list[list[str]]:
         [sys.executable, "tests/test_workbench_bounded_input.py"],
         [sys.executable, "tests/test_workbench_server_hardening.py"],
         [sys.executable, "tests/test_easy_audit_fixture.py"],
+        [sys.executable, "tests/test_publication_pipeline_fixture.py"],
+        [sys.executable, "tests/test_publication_capture_pack.py"],
         [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
         [sys.executable, "tests/test_url_stage_capture.py"],
         [sys.executable, "scripts/workbench_projection_shape_check.py"],
@@ -422,6 +428,50 @@ def command_stage_url(args: argparse.Namespace) -> int:
     return 0
 
 
+def manifest_template_id(manifest: Path) -> str:
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return str(payload.get("template_id") or "")
+
+
+def demo_recipe_lines(*, fixture: str | None, manifest: Path) -> list[str]:
+    publication_manifest = REPO_ROOT / "artifacts" / "publication-pipeline" / "latest" / "manifest.json"
+    publication_template_ids = {
+        "publication-pipeline.evp-client-immersion-competitor-audit",
+        "publication-pipeline.reference-workflow",
+    }
+    if (
+        fixture == "publication-pipeline"
+        or manifest_template_id(manifest) in publication_template_ids
+        or manifest.resolve() == publication_manifest.resolve()
+    ):
+        return [
+            "1. Confirm the workflow shows project frame, capture pack, evidence matrix, analysis pack, and four publication views.",
+            "2. Open Evidence Matrix and confirm every KILOS-coded item has pillar/factor provenance.",
+            "3. Open Analysis Pack and confirm findings link back to evidence ids.",
+            "4. Open L4 Publication and confirm it is a view over the same upstream records, not a separate source.",
+        ]
+    if fixture == "easy-audit" or manifest.resolve() == (
+        REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"
+    ).resolve():
+        return [
+            "1. Confirm the artifact summary shows the Acme Robotics audit, not the public-page matrix.",
+            "2. Inspect the projected L0-L4 steps and provenance edges in the sidebar.",
+            "3. Open the final report and confirm the designed HTML report renders without edit controls.",
+            "4. Open the JSON/text artifacts and confirm they render as inspectable document views.",
+        ]
+    return [
+        "1. Inspect the artifact summary in the right sidebar.",
+        "2. Toggle page and slot filter chips; previous/next should follow the filtered set.",
+        "3. Open a markdown summary artifact and confirm edit/annotation still works.",
+        "4. Inspect tall/full-page captures; viewer zoom should fit without mutating image bytes.",
+    ]
+
+
 def command_demo(args: argparse.Namespace) -> int:
     manifest = resolve_current_workbench_manifest(args)
     if not manifest.exists():
@@ -452,18 +502,8 @@ def command_demo(args: argparse.Namespace) -> int:
     if not args.json:
         print()
         print("Self-guided demo recipe:")
-        if args.fixture == "easy-audit" or manifest.resolve() == (
-            REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"
-        ).resolve():
-            print("1. Confirm the artifact summary shows the Acme Robotics audit, not the public-page matrix.")
-            print("2. Inspect the projected L0-L4 steps and provenance edges in the sidebar.")
-            print("3. Open the final report and confirm the designed HTML report renders without edit controls.")
-            print("4. Open the JSON/text artifacts and confirm they render as inspectable document views.")
-        else:
-            print("1. Inspect the artifact summary in the right sidebar.")
-            print("2. Toggle page and slot filter chips; previous/next should follow the filtered set.")
-            print("3. Open a markdown summary artifact and confirm edit/annotation still works.")
-            print("4. Inspect tall/full-page captures; viewer zoom should fit without mutating image bytes.")
+        for line in demo_recipe_lines(fixture=args.fixture, manifest=manifest):
+            print(line)
     return 0
 
 

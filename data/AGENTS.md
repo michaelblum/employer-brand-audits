@@ -6,7 +6,8 @@ Static data inputs used by audit fixtures, analysis, and future pipeline logic.
 
 ## Ownership
 
-- Owns `kilos-framework.json` and any future checked-in source data.
+- Owns `kilos-framework.json`, tracked publication-pipeline reference
+  profiles, and any future checked-in source data.
 - Does not own generated audit artifacts, workbench output, browser profiles, or
   temporary capture data.
 
@@ -15,6 +16,9 @@ Static data inputs used by audit fixtures, analysis, and future pipeline logic.
 - Keep data files deterministic and reviewable in git.
 - Preserve stable identifiers and semantics used by fixtures, tests, manifests,
   or reports.
+- Keep reference profiles distinct from pipeline defaults: a reference profile
+  may seed a fixture, but pipeline generators must still support arbitrary
+  project profiles without inheriting reference-client data.
 - Document schema or meaning changes in the nearest relevant docs when they
   affect workflow behavior.
 
