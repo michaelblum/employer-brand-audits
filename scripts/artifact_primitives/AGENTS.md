@@ -30,8 +30,8 @@ images, documents, HTML, interaction overlays, and reusable target-link effects.
   state, overlay placement, and persistence.
 - `zoom_surface.js` owns reusable artifact zoom defaults, stage-fit/smart-fit
   calculations, clamping, display formatting, image width scaling,
-  transform-based scaling, centered-state calculation, and stage viewport
-  alignment for zoom-capable artifact surfaces.
+  transform-based scaling, and centered-state calculation for zoom-capable
+  artifact surfaces.
 - `image_viewer.js` owns image annotation geometry and marker/popover placement;
   do not put zoom math or zoom state there.
 - Interaction overlay primitives expose subtype models and state helpers.

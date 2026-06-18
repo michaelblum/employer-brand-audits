@@ -40,6 +40,8 @@ artifact type components, artifact navigation, and the artifact registry.
   component hooks such as `applyZoom`, `smartFit`, `stageFitZoom`,
   `updateZoomSurface`, and `defaultZoomState`; the app shell routes generic
   zoom actions through those hooks.
+- Image artifact smart-fit uses contain-fit semantics: fit the full image inside
+  the stage, capped at 100%, and let no-scroll fits center on both axes.
 - Type modules self-register with ordering and fallback metadata while keeping
   compatibility aliases on `window.Artifacts.types`.
 - Type modules may emit class hooks for controls, but the static stylesheet

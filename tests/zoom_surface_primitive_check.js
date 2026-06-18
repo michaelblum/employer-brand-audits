@@ -160,7 +160,7 @@ const overflowStageEl = {
   clientHeight: 300,
   scrollWidth: 1000,
   scrollHeight: 600,
-  scrollLeft: 0,
+  scrollLeft: 37,
   scrollTop: 25,
   scrollTo({ left, top }) {
     this.scrollLeft = left;
@@ -180,7 +180,7 @@ assert.deepEqual(
   { zoomPercent: 100, zoomMode: "actual-size" },
 );
 assert.equal(overflowImageStyle.width, "1000px");
-assert.equal(overflowStageEl.scrollLeft, 250);
+assert.equal(overflowStageEl.scrollLeft, 37);
 assert.equal(overflowStageEl.scrollTop, 25);
 
 assert.deepEqual(
@@ -192,4 +192,19 @@ assert.deepEqual(
     currentZoomMode: "manual",
   }),
   { value: 50, mode: "stage-fit" },
+);
+
+const tallImageContainStage = { clientWidth: 1200, clientHeight: 600 };
+const containFit = zoom.smartFit({
+  contentWidth: 1000,
+  contentHeight: 720,
+  stageEl: tallImageContainStage,
+  fitMode: "contain",
+  viewerConfig: { actualSizePercent: 100 },
+  currentZoomMode: "manual",
+});
+assert.equal(containFit.mode, "stage-fit");
+assert.ok(
+  Math.abs(containFit.value - 83.33333333333334) < 0.0001,
+  `contain fit should scale tall images inside the stage: ${JSON.stringify(containFit)}`,
 );

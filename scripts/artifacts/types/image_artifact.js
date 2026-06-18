@@ -63,6 +63,7 @@
     return options.zoom.smartFit({
       ...imageZoomOptions(options),
       currentZoomMode: options.state?.zoomMode,
+      fitMode: "contain",
     });
   }
 
