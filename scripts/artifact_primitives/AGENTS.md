@@ -47,6 +47,9 @@ images, documents, HTML, interaction overlays, and reusable target-link effects.
 - Mermaid rendering accepts context source visibility from the workbench shell.
   `preview-hidden` hides successful raw source in preview presentation while
   preserving source data and showing source fallback on render errors.
+- Document and HTML primitives must not render MIME type, byte size, or file
+  path metadata as inline pills in the stage; keep provenance metadata in
+  shell/sidebar/readout surfaces when needed.
 - Controller code owns effect execution and annotation routing.
 - Vendor code under `vendor/` should stay isolated from project-authored
   primitives.

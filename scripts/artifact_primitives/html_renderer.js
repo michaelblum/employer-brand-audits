@@ -49,16 +49,6 @@
     ].filter(Boolean).join(" · ");
   }
 
-  function renderMetadata(artifact = {}) {
-    const metadata = [
-      artifact.mimeType || artifact.mime_type || "text/html",
-      artifact.sizeBytes ? `${artifact.sizeBytes} bytes` : "",
-      artifact.path,
-    ].filter(Boolean);
-    if (!metadata.length) return "";
-    return `<div class="html-artifact-meta">${metadata.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`;
-  }
-
   function htmlDocumentHeight(doc) {
     if (!doc) return 0;
     return Math.max(
@@ -143,7 +133,6 @@
       <article class="html-artifact" data-artifact-renderer="html">
         <header>
           <h1>${escapeHtml(title)}</h1>
-          ${renderMetadata(artifact)}
         </header>
         <div class="html-artifact-frame-wrap">
           <iframe class="html-artifact-frame" data-html-frame sandbox="allow-same-origin" scrolling="no" title="${escapeHtml(title)}"></iframe>

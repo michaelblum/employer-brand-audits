@@ -532,23 +532,6 @@
     .document-artifact h1 {
       margin: 0;
     }
-    .document-artifact-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .document-artifact-meta span {
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      padding: 4px 8px;
-      border: 1px solid var(--artifact-document-line);
-      border-radius: 999px;
-      color: var(--artifact-document-muted);
-      background: var(--artifact-document-panel-2);
-      font-size: 12px;
-    }
     .document-artifact-actions a {
       color: var(--accent);
       font-weight: 700;
@@ -565,23 +548,6 @@
     }
     .html-artifact h1 {
       margin: 0;
-    }
-    .html-artifact-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .html-artifact-meta span {
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      padding: 4px 8px;
-      border: 1px solid var(--artifact-document-line);
-      border-radius: 999px;
-      color: var(--artifact-document-muted);
-      background: var(--artifact-document-panel-2);
-      font-size: 12px;
     }
     .html-artifact-frame-wrap {
       min-height: 560px;

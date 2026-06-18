@@ -59,6 +59,10 @@ assert.match(container.innerHTML, /sandbox="allow-same-origin"/);
 assert.match(container.innerHTML, /scrolling="no"/);
 assert.doesNotMatch(container.innerHTML, /allow-scripts/);
 assert.match(container.innerHTML, /Audit &lt;Report&gt;/);
+assert.doesNotMatch(container.innerHTML, /html-artifact-meta/);
+assert.doesNotMatch(container.innerHTML, /text\/html/);
+assert.doesNotMatch(container.innerHTML, /2048 bytes/);
+assert.doesNotMatch(container.innerHTML, /report\.html/);
 assert.match(iframe.srcdoc, /<h1>Report<\/h1>/);
 assert.equal(iframe.scrolling, "no");
 
