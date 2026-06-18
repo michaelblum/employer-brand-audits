@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the first reproducible publication pipeline pack from tracked KILOS data and staged capture records, then expose capture-pack, evidence-matrix, analysis-pack, report/deck/workbook, and L4 publication views through the existing ADR-002 workbench manifest path. The pipeline shape is the generic EVP client immersion and competitor messaging audit; Northside is only the bundled reference profile. `--project-profile <profile.json>` must let the same minimum data shape be generated for an arbitrary company without inheriting reference-profile labels or defaults.
+**Goal:** Build the first reproducible publication pipeline pack from tracked KILOS data and staged capture records, then expose capture-pack, evidence-matrix, analysis-pack, report/deck/workbook, and L4 publication views through the existing ADR-002 workbench manifest path. The pipeline shape is the generic EVP client immersion and competitor messaging audit; runnable defaults use fictional sample profiles, while reference publications provide structural shape only. `--project-profile <profile.json>` must let the same minimum data shape be generated for an arbitrary company without inheriting reference-source labels or defaults.
 
 **Architecture:** Keep the canonical records in a deterministic Python-generated publication pack and project them through the existing `steps[]` plus `artifacts[]` audit manifest contract. The first implementation uses fixture data and tracked `data/kilos-framework.json`; later capture ingestion reads URL-stage manifests as source artifacts. Workbench support stays adapter-based in `scripts/workbench_projection.py` so publication views are grouped without inventing a separate runtime.
 
@@ -13,7 +13,7 @@
 ## File Structure
 
 - Create `scripts/publication_pipeline_fixture.py`: deterministic publication-pack generator, KILOS loader, company profile loader, fixture records, ADR-002 manifest writer, and HTML/Markdown/JSON view writers.
-- Create `data/publication-pipeline-profiles/northside-healthcare-evp-2025.json`: tracked reference profile for the default fixture seed.
+- Create `data/publication-pipeline-profiles/sample-healthcare-evp.json`: tracked fictional sample profile for the default fixture seed.
 - Create `tests/test_publication_pipeline_fixture.py`: fixture, schema, provenance, KILOS, projection, and CLI route coverage.
 - Modify `scripts/eba_cli.py`: register `publication-pipeline` as a named fixture, add the new script to compile validation, and add the test to the validation ladder.
 - Modify `scripts/workbench_projection.py`: generalize layer-4 artifact groups so report, deck, workbook, and L4 publication view bundles have accurate labels and slots.

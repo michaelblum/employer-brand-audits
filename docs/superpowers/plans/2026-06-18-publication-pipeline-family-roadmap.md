@@ -18,7 +18,11 @@ Required fields:
 - `pipeline_id`: stable pipeline family id.
 - `client`: name, sector, geography, domain, and audience.
 - `objective`: the publication or decision the pipeline supports.
-- `reference_artifacts`: local reference files used to model structure.
+- `reference_source`: optional local reference files used only to model
+  structure.
+- `pipeline_archetype`: reusable workflow structure derived from the reference
+  source shape.
+- `sample_profile`: fictional demo data used by runnable default fixtures.
 - `source_seeds`: URLs, uploaded docs, spreadsheets, decks, notes, or staged
   URL manifests.
 - `competitors`: named organizations plus optional source URLs.
@@ -60,8 +64,8 @@ Status:
 
 - First implementation exists and is being corrected to the generic
   `publication-pipeline.evp-client-immersion-competitor-audit` template.
-- Northside is a tracked reference profile under
-  `data/publication-pipeline-profiles/`, not the pipeline shape.
+- The runnable default uses `sample-healthcare-evp.json`; the reference DOCX is
+  used only for structural shape.
 - The shared `p0-pipeline-intake` artifact now starts the ADR-002 manifest and
   records the operator-facing client, source seed, competitor, ontology,
   desired-output, and review-requirement contract.
@@ -74,7 +78,8 @@ Why first:
 
 Next implementation needs:
 
-- Keep the default reference profile fixture.
+- Keep reference-shape reader tests for structural facts only.
+- Keep fictional sample profiles for runnable demos.
 - Ensure arbitrary-profile output has no reference-profile labels.
 - Keep workbench demo and projection tests around the full record chain.
 
@@ -99,9 +104,10 @@ Generalized pipeline id:
 Status:
 
 - Implemented as `./eba dev demo --fixture segment-tvp-audit` with a tracked
-  ADT reference profile, segment source roster, segment capture pack, KILOS
+  fictional sample profile, segment source roster, segment capture pack, KILOS
   segment evidence matrix, TVP analysis pack, report/deck/social/workbook/L4
-  views, and arbitrary-profile leakage tests.
+  views, default-output leakage tests, and arbitrary-profile leakage tests. The
+  reference DOCX/PPTX pair is retained only for shape-reader tests.
 
 Additional intake fields:
 
@@ -156,14 +162,16 @@ Status:
 
 - `publication-pipeline.competitor-messaging-workbook` is implemented as
   `./eba dev demo --fixture competitor-messaging-workbook` with a tracked
-  HarbourVest workbook reference profile, workbook extraction metadata,
-  long-form evidence cells, partner organization and activation records,
-  analysis pack, workbook view, L4 readout, and arbitrary-profile leakage tests.
+  fictional sample profile, workbook extraction metadata, long-form evidence
+  cells, partner organization and activation records, analysis pack, workbook
+  view, L4 readout, default-output leakage tests, and arbitrary-profile leakage
+  tests. The reference workbook is retained only for shape-reader tests.
 - `publication-pipeline.dei-competitor-audit` is implemented as
-  `./eba dev demo --fixture dei-competitor-audit` with the HarbourVest reference
-  profile, DEI deck extraction metadata, activation, inclusion philosophy,
-  partner, benchmark, coverage-gap, deck, L4, and arbitrary-profile leakage
-  tests.
+  `./eba dev demo --fixture dei-competitor-audit` with a tracked fictional
+  sample profile, DEI deck extraction metadata, activation, inclusion
+  philosophy, partner, benchmark, coverage-gap, deck, L4, default-output
+  leakage tests, and arbitrary-profile leakage tests. The reference deck is
+  retained only for shape-reader tests.
 
 Additional intake fields:
 
@@ -216,9 +224,11 @@ Status:
 
 - Implemented as
   `./eba dev demo --fixture campaign-desk-research-comp-audit` with a tracked
-  Scottish Power reference profile, research source roster, desk-research
-  evidence pack, campaign case matrix, channel tactic opportunity map,
-  campaign recommendation readout, L4 view, and arbitrary-profile leakage tests.
+  fictional sample profile, research source roster, desk-research evidence
+  pack, campaign case matrix, channel tactic opportunity map, campaign
+  recommendation readout, L4 view, default-output leakage tests, and
+  arbitrary-profile leakage tests. The reference deck is retained only for
+  shape-reader tests.
 
 Additional intake fields:
 
@@ -309,19 +319,26 @@ Workbench outputs:
 
 1. Finish the generic base pipeline correction.
 2. Add the shared `pipeline_intake` artifact and workbench view.
-3. Build `segment-tvp-audit` from the ADT DOCX/PPTX pair.
-4. Build `competitor-messaging-workbook` from the HarbourVest workbook.
-5. Extend that into `dei-competitor-audit` from the HarbourVest deck.
-6. Build `campaign-desk-research-comp-audit` from the Scottish Power deck.
+3. Build `segment-tvp-audit` as an archetype derived from the structural shape
+   of the segment TVP DOCX/PPTX pair.
+4. Build `competitor-messaging-workbook` as an archetype derived from the
+   structural shape of the competitor messaging workbook.
+5. Extend that into `dei-competitor-audit` as an archetype derived from the
+   structural shape of the DEI competitor audit deck.
+6. Build `campaign-desk-research-comp-audit` as an archetype derived from the
+   structural shape of the campaign desk-research deck.
 7. Codify `kilos-methodology` as a reusable supporting pipeline.
 
 ## Verification Pattern
 
 Each pipeline needs focused tests before workbench demo:
 
+- default-output test: runnable default artifacts contain no reference-client,
+  competitor, source, or URL labels;
 - fixture/profile test: arbitrary intake produces no reference-client leakage;
-- reader test: DOCX/PPTX/XLSX extraction captures expected headings, slides, or
-  sheets;
+- reader test: DOCX/PPTX/XLSX extraction asserts structural facts only, such as
+  section order, table/media counts, slide counts, sheet names, effective
+  ranges, or source-category counts;
 - lineage test: every analysis finding cites evidence ids;
 - manifest test: workbench projection exposes intake, capture, evidence,
   analysis, and publication views;

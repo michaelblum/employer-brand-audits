@@ -12,11 +12,13 @@ from typing import Any
 from urllib.parse import urlparse
 
 try:
+    from publication_pipeline.projection_groups import publication_view_group_config
     from workbench_bounded_input import (
         bounded_input_overlay_definition as workflow_input_overlay,
         bounded_input_overlay_definitions_for_step as workflow_input_overlays_for_step,
     )
 except ModuleNotFoundError:
+    from scripts.publication_pipeline.projection_groups import publication_view_group_config
     from scripts.workbench_bounded_input import (
         bounded_input_overlay_definition as workflow_input_overlay,
         bounded_input_overlay_definitions_for_step as workflow_input_overlays_for_step,
@@ -135,40 +137,6 @@ URL_STAGE_SUPPORT_RESOURCE_SLOTS = {
     "page_screenshot": "capture.full_page",
     "capture_log": "debug.log",
 }
-
-PUBLICATION_VIEW_KINDS = {
-    "report_docx": {
-        "label": "Report DOCX View",
-        "slot": "publication.report_docx.bundle",
-        "group_kind": "publication_report_docx_bundle",
-    },
-    "audit_deck": {
-        "label": "Audit Deck View",
-        "slot": "publication.audit_deck.bundle",
-        "group_kind": "publication_audit_deck_bundle",
-    },
-    "data_workbook": {
-        "label": "Data Workbook View",
-        "slot": "publication.data_workbook.bundle",
-        "group_kind": "publication_data_workbook_bundle",
-    },
-    "brand_strategy_deck": {
-        "label": "Brand Strategy Deck View",
-        "slot": "publication.brand_strategy_deck.bundle",
-        "group_kind": "publication_brand_strategy_deck_bundle",
-    },
-    "social_platform_audit": {
-        "label": "Social Platform Audit View",
-        "slot": "publication.social_platform_audit.bundle",
-        "group_kind": "publication_social_platform_audit_bundle",
-    },
-    "l4_publication": {
-        "label": "L4 Publication View",
-        "slot": "publication.l4_publication.bundle",
-        "group_kind": "publication_l4_publication_bundle",
-    },
-}
-
 
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -389,11 +357,6 @@ def audit_report_artifact_groups(
             }
         )
     return groups
-
-
-def publication_view_group_config(artifact: dict[str, Any]) -> dict[str, Any] | None:
-    kind = str(artifact.get("kind") or artifact.get("type") or "")
-    return PUBLICATION_VIEW_KINDS.get(kind)
 
 
 def add_slot_facet(slot_index: dict[str, dict[str, Any]], slot: str, label: str, artifact_id: str) -> None:

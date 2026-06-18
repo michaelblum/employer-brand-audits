@@ -127,7 +127,7 @@ class PublicationPipelineFixtureTests(unittest.TestCase):
             intake = json.loads((manifest_path.parent / "pipeline-intake.json").read_text(encoding="utf-8"))
 
         self.assertEqual(intake["pipeline_id"], PIPELINE_TEMPLATE_ID)
-        self.assertEqual(intake["client"]["name"], "Northside Hospital")
+        self.assertEqual(intake["client"]["name"], "Cedar Valley Health")
         self.assertEqual(intake["ontology"]["framework_id"], "KILOS")
         self.assertIn("report_docx", intake["desired_outputs"])
         self.assertIn("l4_publication", intake["desired_outputs"])
@@ -158,10 +158,10 @@ class PublicationPipelineFixtureTests(unittest.TestCase):
         self.assertEqual(
             [entity["name"] for entity in roster["entities"]],
             [
-                "Northside Hospital",
-                "Wellstar Health System",
-                "Emory Healthcare",
-                "Northeast Georgia Health System",
+                "Cedar Valley Health",
+                "Riverbend Medical",
+                "Pioneer Care Network",
+                "Lakeside Health System",
             ],
         )
         self.assertGreaterEqual(len(capture_pack["source_artifacts"]), 12)

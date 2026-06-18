@@ -23,13 +23,19 @@ The practical reproduction target is the reusable EVP client immersion and
 competitor messaging audit shape, backed by a KILOS-normalized evidence matrix
 like the HarbourVest workbook.
 
-The implementation path must be company-profile driven. Northside is one
-tracked reference profile in `data/publication-pipeline-profiles/`, not the
-pipeline shape. A profile for an arbitrary company must be able to produce the
-same minimum data groups: client plus competitors, source roster, capture pack,
-KILOS evidence, survey signals, review snapshots, analysis findings, report
-outline, and report/deck/workbook/L4 views without inheriting reference-profile
-copy, competitors, IDs, or labels.
+The implementation path must be company-profile driven. Reference publications
+provide structural shape only: section order, evidence density, slide or table
+counts, and view types. Runnable demos must use fictional sample profiles from
+`data/publication-pipeline-profiles/`. A profile for an arbitrary company must
+be able to produce the same minimum data groups: client plus competitors,
+source roster, capture pack, KILOS evidence, survey signals, review snapshots,
+analysis findings, report outline, and report/deck/workbook/L4 views without
+inheriting reference-source copy, competitors, IDs, or labels.
+
+Hard rule: reference client names and their competitor/source labels must not
+appear in generated default artifacts. They may appear only in docs identifying
+the local reference source files and in reference-reader tests that assert
+structural facts.
 
 This is not an L4-only workflow. The L4 artifact is the last projection of the
 same upstream records. The workflow must produce useful intermediate artifacts
@@ -38,8 +44,8 @@ matrices, analysis findings, and report/deck drafts.
 
 ## Reference Selection
 
-Use the Northside reference profile as the first seeded example for the generic
-EVP client immersion and competitor messaging audit pipeline because it has the
+Use the Northside reference DOCX as the first structural source for the generic
+EVP client immersion and competitor messaging audit archetype because it has the
 lowest full-report complexity among the references inspected:
 
 - one DOCX report rather than a large presentation;

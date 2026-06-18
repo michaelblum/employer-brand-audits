@@ -63,31 +63,40 @@ workbench implementation, and checked-in Playwright snippets.
 - The workbench server's mutating local HTTP endpoints must reject browser
   cross-origin writes, bound request bodies, return clean JSON client errors,
   and send `X-Content-Type-Options: nosniff` on typed responses.
+- Publication pipeline implementation lives under `scripts/publication_pipeline/`.
+  `scripts/publication_pipeline_fixture.py` is a compatibility wrapper for
+  existing imports and direct CLI execution.
+- Publication fixture generators must prepare output through the package-owned
+  cleanup guard and reject output directories outside repo `artifacts/` before
+  any recursive deletion.
 - `./eba dev demo --fixture publication-pipeline` generates a deterministic
   publication-pipeline ADR-002 manifest from tracked KILOS data and fixture
-  records. It must not depend on local-only `reference_publications/` files.
+  records using a fictional sample profile by default. It must not depend on
+  local-only `reference_publications/` files, and default generated artifacts
+  must not contain reference-client or reference-competitor labels.
 - Publication-pipeline manifests start with `p0-pipeline-intake`, a
   workbench-visible `pipeline_intake` artifact that records the client,
   objective, source seeds, competitors, ontology, desired outputs, and review
   requirements driving downstream records.
 - `./eba dev demo --fixture segment-tvp-audit` generates a deterministic
-  segment-specific TVP ADR-002 manifest from the tracked ADT reference profile
-  and KILOS data. It must support arbitrary project profiles without inheriting
-  ADT competitor labels, job URLs, or social-source defaults.
+  segment-specific TVP ADR-002 manifest from a fictional sample profile and
+  KILOS data. It models the structural shape of the segment TVP references but
+  must not inherit reference-client competitor labels, job URLs, or
+  social-source defaults.
 - `./eba dev demo --fixture competitor-messaging-workbook` generates a
-  deterministic workbook-normalization ADR-002 manifest from the tracked
-  HarbourVest workbook reference profile. It models effective sheet ranges,
-  wide matrix cells, evidence cells, partner organizations, and partner
-  activations without depending on local-only workbook files at runtime.
+  deterministic workbook-normalization ADR-002 manifest from a fictional sample
+  profile. It models effective sheet ranges, wide matrix cells, evidence cells,
+  partner organizations, and partner activations without depending on
+  local-only workbook files at runtime.
 - `./eba dev demo --fixture dei-competitor-audit` generates a deterministic DEI
-  competitor-audit ADR-002 manifest from the tracked HarbourVest reference
-  profile. It models deck extraction, DEI activations, inclusion philosophies,
-  partner organizations, coverage gaps, benchmark sources, and deck/L4 views.
+  competitor-audit ADR-002 manifest from a fictional sample profile. It models
+  deck extraction, DEI activations, inclusion philosophies, partner
+  organizations, coverage gaps, benchmark sources, and deck/L4 views.
 - `./eba dev demo --fixture campaign-desk-research-comp-audit` generates a
-  deterministic campaign desk-research ADR-002 manifest from the tracked
-  Scottish Power reference profile. It models research source groups,
-  labor-market stats, policy/context signals, campaign case studies, channel
-  tactics, recommendations, and L4 views.
+  deterministic campaign desk-research ADR-002 manifest from a fictional sample
+  profile. It models research source groups, labor-market stats,
+  policy/context signals, campaign case studies, channel tactics,
+  recommendations, and L4 views.
 - `./eba dev demo --fixture kilos-methodology` generates a deterministic KILOS
   methodology ADR-002 manifest from tracked `data/kilos-framework.json` and
   reference-modeled metadata. It preserves pillar/factor counts, survey-label
@@ -98,9 +107,9 @@ workbench implementation, and checked-in Playwright snippets.
   shape for an arbitrary company profile: client plus competitors, report
   outline, source roster, capture pack, KILOS evidence matrix, survey signals,
   review snapshots, derived analysis findings, and report/deck/workbook/L4
-  views. The bundled Northside seed is a tracked reference profile under
-  `data/publication-pipeline-profiles/`, not a hard-coded business
-  requirement.
+  views. The bundled profile is a fictional sample under
+  `data/publication-pipeline-profiles/`; real reference names are structural
+  source labels only and must not appear in default generated artifacts.
 - `scripts/publication_pipeline_fixture.py --url-stage-manifest <manifest>` may
   be repeated to import one or more existing URL-stage capture manifests as the
   publication capture-pack sources while preserving screenshot, text, and
@@ -167,6 +176,9 @@ workbench implementation, and checked-in Playwright snippets.
   shared artifact helpers, and navigation planning.
 - `scripts/artifact_primitives/AGENTS.md` - lower-level workbench renderer and
   interaction primitives.
+- `scripts/publication_pipeline/AGENTS.md` - publication pipeline fixture
+  package, archetype entrypoints, sample-profile loading, guarded output
+  cleanup, demo recipes, and publication grouping metadata.
 - `scripts/playwright-snippets/AGENTS.md` - checked-in snippets for Playwright
   CLI `run-code`.
 - `scripts/artifact_workbench/AGENTS.md` - browser-loaded workbench app

@@ -1,0 +1,70 @@
+{
+  "project_id": "sample-tech-product-tvp",
+  "sample_profile_id": "sample-tech-product-tvp",
+  "client_name": "Beacon Home Systems",
+  "client_full_name": "Beacon Home Systems",
+  "industry": "Connected home technology",
+  "geography": "United States",
+  "audience": "Technology and Product talent",
+  "target_talent_segments": [
+    "Technology",
+    "Product"
+  ],
+  "report_title": "Beacon Home Systems Tech and Product TVP Client Data Immersion and Competitor Messaging Audit",
+  "report_date": "2026-06-18",
+  "domain": "beaconhome.example",
+  "careers_url": "https://beaconhome.example/careers",
+  "role_family_url": "https://beaconhome.example/technology-product",
+  "job_search_url": "https://beaconhome.example/jobs?q=technology",
+  "social_sources": [
+    "https://social.example/beacon-home-systems"
+  ],
+  "role_evidence_sources": [
+    "job_postings",
+    "role_family_careers_page",
+    "innovation_or_product_page",
+    "social_profile"
+  ],
+  "segment_competitors": [
+    {
+      "entity_id": "competitor-aperture-devices",
+      "name": "Aperture Devices",
+      "careers_url": "https://aperturedevices.example/careers"
+    },
+    {
+      "entity_id": "competitor-shieldworks",
+      "name": "ShieldWorks",
+      "careers_url": "https://shieldworks.example/careers"
+    },
+    {
+      "entity_id": "competitor-homegrid",
+      "name": "HomeGrid Labs",
+      "careers_url": "https://homegrid.example/careers"
+    },
+    {
+      "entity_id": "competitor-sentinel-house",
+      "name": "Sentinel House",
+      "careers_url": "https://sentinelhouse.example/careers"
+    },
+    {
+      "entity_id": "competitor-brightlock",
+      "name": "BrightLock",
+      "careers_url": "https://brightlock.example/careers"
+    },
+    {
+      "entity_id": "competitor-porchlogic",
+      "name": "PorchLogic",
+      "careers_url": "https://porchlogic.example/careers"
+    },
+    {
+      "entity_id": "competitor-circuit-haven",
+      "name": "Circuit Haven",
+      "careers_url": "https://circuithaven.example/careers"
+    },
+    {
+      "entity_id": "competitor-roofline-tech",
+      "name": "Roofline Tech",
+      "careers_url": "https://rooflinetech.example/careers"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "project_id": "sample-competitor-workbook",
+  "sample_profile_id": "sample-competitor-workbook",
+  "client_name": "Meridian Private Markets",
+  "client_full_name": "Meridian Private Markets",
+  "industry": "Private markets investment management",
+  "geography": "United States and United Kingdom",
+  "audience": "Investment, operations, and corporate talent",
+  "report_title": "Meridian Private Markets Competitor Messaging Workbook",
+  "report_date": "2026-06-18",
+  "domain": "meridianprivate.example",
+  "workbook_entities": [
+    "Meridian Private Markets",
+    "Atlas Equity",
+    "Keystone Growth",
+    "Prairie Capital",
+    "Crescent Partners",
+    "Fieldstone Alternatives",
+    "Summit Harbor",
+    "Blue Ridge Markets"
+  ],
+  "competitors": [
+    {
+      "entity_id": "competitor-atlas-equity",
+      "name": "Atlas Equity"
+    },
+    {
+      "entity_id": "competitor-keystone-growth",
+      "name": "Keystone Growth"
+    },
+    {
+      "entity_id": "competitor-prairie-capital",
+      "name": "Prairie Capital"
+    },
+    {
+      "entity_id": "competitor-crescent-partners",
+      "name": "Crescent Partners"
+    },
+    {
+      "entity_id": "competitor-fieldstone-alternatives",
+      "name": "Fieldstone Alternatives"
+    },
+    {
+      "entity_id": "competitor-summit-harbor",
+      "name": "Summit Harbor"
+    },
+    {
+      "entity_id": "competitor-blue-ridge-markets",
+      "name": "Blue Ridge Markets"
+    }
+  ]
+}
