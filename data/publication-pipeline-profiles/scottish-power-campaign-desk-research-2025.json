@@ -1,0 +1,23 @@
+{
+  "project_id": "scottish-power-dei-campaign-2025",
+  "reference_profile_id": "scottish-power-dei-campaign-2025",
+  "client_name": "Scottish Power",
+  "client_full_name": "Scottish Power",
+  "industry": "Energy and utilities",
+  "geography": "United Kingdom",
+  "audience": "Women in engineering and energy roles",
+  "report_title": "Scottish Power DEI Campaign Desk Research and Competitor Audit",
+  "report_date": "2026-06-18",
+  "domain": "scottishpower.com",
+  "campaign_goal": "Increase representation and applications from women in engineering and energy roles",
+  "target_population": "Women in engineering and energy roles",
+  "channel_scope": [
+    "careers site",
+    "paid social",
+    "organic social",
+    "events",
+    "partnerships",
+    "awards"
+  ],
+  "geography_scope": "United Kingdom"
+}

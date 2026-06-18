@@ -212,6 +212,14 @@ Generalized pipeline id:
 
 - `publication-pipeline.campaign-desk-research-comp-audit`
 
+Status:
+
+- Implemented as
+  `./eba dev demo --fixture campaign-desk-research-comp-audit` with a tracked
+  Scottish Power reference profile, research source roster, desk-research
+  evidence pack, campaign case matrix, channel tactic opportunity map,
+  campaign recommendation readout, L4 view, and arbitrary-profile leakage tests.
+
 Additional intake fields:
 
 - `campaign_goal`: representation, applications, perception, retention, or

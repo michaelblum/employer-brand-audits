@@ -83,6 +83,11 @@ workbench implementation, and checked-in Playwright snippets.
   competitor-audit ADR-002 manifest from the tracked HarbourVest reference
   profile. It models deck extraction, DEI activations, inclusion philosophies,
   partner organizations, coverage gaps, benchmark sources, and deck/L4 views.
+- `./eba dev demo --fixture campaign-desk-research-comp-audit` generates a
+  deterministic campaign desk-research ADR-002 manifest from the tracked
+  Scottish Power reference profile. It models research source groups,
+  labor-market stats, policy/context signals, campaign case studies, channel
+  tactics, recommendations, and L4 views.
 - `scripts/publication_pipeline_fixture.py --project-profile <profile.json>`
   generates the generic EVP client immersion and competitor messaging audit
   shape for an arbitrary company profile: client plus competitors, report
