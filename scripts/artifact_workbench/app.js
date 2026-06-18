@@ -765,15 +765,17 @@
         html: htmlRenderer(),
         onHover: ({ displayRect }) => {
           if (!displayRect) return;
-          hideHoverMarker();
+          hideImageHoverMarker();
           interactionOverlay().placeOverlayBox({
             overlayEl: $("markdown-marker"),
             displayRect,
           });
+          placeDocumentHoverMarker(displayRect);
         },
         onLeave: () => {
           if (!app.activeMarker && app.pendingAnchor?.type !== "html_element") {
             $("markdown-marker").hidden = true;
+            hideDocumentHoverMarker();
           }
         },
         onSelect: ({ anchor, displayRect }) => {
@@ -1144,6 +1146,7 @@
     }
 
     function placeMarkerForRect(rect) {
+      hideDocumentHoverMarker();
       window.ArtifactPrimitives.imageViewer.placeHoverMarker({
         markerEl: $("hover-marker"),
         imageEl: $("artifact-image"),
@@ -1152,12 +1155,29 @@
       });
     }
 
-    function hideHoverMarker() {
+    function hideImageHoverMarker() {
       window.ArtifactPrimitives.imageViewer.hideHoverMarker($("hover-marker"));
+    }
+
+    function hideDocumentHoverMarker() {
+      window.ArtifactPrimitives.imageViewer.hideHoverMarker($("document-hover-marker"));
+    }
+
+    function hideHoverMarker() {
+      hideImageHoverMarker();
+      hideDocumentHoverMarker();
     }
 
     function resetHoverMarker() {
       window.ArtifactPrimitives.imageViewer.resetHoverMarker($("hover-marker"));
+      window.ArtifactPrimitives.imageViewer.resetHoverMarker($("document-hover-marker"));
+    }
+
+    function placeDocumentHoverMarker(displayRect) {
+      const marker = $("document-hover-marker");
+      marker.style.left = `${displayRect.x + displayRect.width / 2}px`;
+      marker.style.top = `${displayRect.y + displayRect.height / 2}px`;
+      window.ArtifactPrimitives.imageViewer.showHoverMarker(marker);
     }
 
     function placeMarkerForAnchor(anchor) {
@@ -1167,22 +1187,24 @@
         return;
       }
       if (anchor?.type === "text_range") {
-        hideHoverMarker();
+        hideImageHoverMarker();
         const displayRect = displayRectForAnchor(anchor);
         if (!displayRect) return;
         interactionOverlay().placeOverlayBox({
           overlayEl: $("markdown-marker"),
           displayRect,
         });
+        placeDocumentHoverMarker(displayRect);
       }
       if (anchor?.type === "html_element") {
-        hideHoverMarker();
+        hideImageHoverMarker();
         const displayRect = displayRectForAnchor(anchor);
         if (!displayRect) return;
         interactionOverlay().placeOverlayBox({
           overlayEl: $("markdown-marker"),
           displayRect,
         });
+        placeDocumentHoverMarker(displayRect);
       }
     }
 

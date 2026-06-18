@@ -37,6 +37,9 @@ workbench implementation, and checked-in Playwright snippets.
 - URL-stage support files such as `page_screenshot` and `capture_log` project as
   file resources for provenance/debugging, not as workbench-visible sidebar
   artifacts.
+- Generated URL-stage web-snapshot proxy targets stay transparent until
+  hover/focus-visible, then show an animated chase-gradient border without
+  changing target geometry or screenshot pixels.
 - `workbench_bounded_input.py` owns bounded workflow-input projection
   definitions and saved-state sanitization helpers. Projection code delegates
   definition creation there; the workbench server delegates bounded-input state

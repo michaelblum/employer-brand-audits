@@ -82,12 +82,14 @@ async (page) => {
         && stage
         && target
         && image
-        && styleText.includes(".web-target:hover,.web-target:focus{outline:0;background:transparent;}")
+        && styleText.includes("@keyframes web-target-chase-border")
+        && styleText.includes(".web-target:hover::before,.web-target:focus-visible::before")
+        && styleText.includes("conic-gradient(from var(--web-target-chase-angle)")
         && /targets/.test(readout)
         && /\d+ x \d+ px/.test(readout);
     }, null, { timeout: 5000 });
 
-    await page.evaluate(() => {
+    const hoverProbe = await page.evaluate(() => {
       const frame = document.querySelector("[data-html-frame]");
       const doc = frame.contentDocument;
       const targets = [...doc.querySelectorAll(".web-target[data-web-target-id]")];
@@ -100,13 +102,42 @@ async (page) => {
         }
       }) || targets[0];
       const rect = target.getBoundingClientRect();
-      target.dispatchEvent(new frame.contentWindow.MouseEvent("mousemove", {
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + Math.min(8, rect.width / 2),
-        clientY: rect.top + Math.min(8, rect.height / 2),
-      }));
+      const frameRect = frame.getBoundingClientRect();
+      const scaleX = frame.offsetWidth ? frameRect.width / frame.offsetWidth : 1;
+      const scaleY = frame.offsetHeight ? frameRect.height / frame.offsetHeight : 1;
+      return {
+        x: frameRect.left + ((rect.left + Math.min(8, rect.width / 2)) * scaleX),
+        y: frameRect.top + ((rect.top + Math.min(8, rect.height / 2)) * scaleY),
+      };
     });
+    await page.mouse.move(hoverProbe.x, hoverProbe.y);
+
+    await page.waitForFunction(() => {
+      const frame = document.querySelector("[data-html-frame]");
+      const doc = frame?.contentDocument;
+      const target = [...(doc?.querySelectorAll(".web-target[data-web-target-id]") || [])].find((candidate) => {
+        try {
+          const metadata = JSON.parse(candidate.getAttribute("data-web-target") || "{}");
+          return ["button", "input", "link"].includes(metadata.target_kind);
+        } catch (_error) {
+          return false;
+        }
+      }) || doc?.querySelector(".web-target[data-web-target-id]");
+      if (!target) return false;
+      const pseudo = frame.contentWindow.getComputedStyle(target, "::before");
+      const marker = document.querySelector("#document-hover-marker");
+      return pseudo.opacity === "1"
+        && pseudo.animationName === "web-target-chase-border"
+        && marker
+        && marker.hidden === false
+        && marker.classList.contains("is-visible")
+        && marker.textContent.trim() === "💡";
+    }, null, { timeout: 3000 });
+
+    const lightbulbGlowObserved = await page.waitForFunction(() => {
+      const marker = document.querySelector("#document-hover-marker");
+      return marker?.classList.contains("has-glow");
+    }, null, { timeout: 1000 }).then(() => true);
 
     await page.waitForFunction(() => {
       const marker = document.querySelector("#markdown-marker");
@@ -141,7 +172,7 @@ async (page) => {
         && document.querySelector("#primary-comment-action")?.textContent?.trim();
     }, null, { timeout: 3000 });
 
-    const result = await page.evaluate((modelValue) => {
+    const result = await page.evaluate(({ modelValue, glowObserved }) => {
       const frame = document.querySelector("[data-html-frame]");
       const doc = frame?.contentDocument;
       const targets = [...(doc?.querySelectorAll(".web-target[data-web-target-id]") || [])];
@@ -173,11 +204,16 @@ async (page) => {
           height: Math.round(markerRect.height),
         } : null,
         popoverOpened: popoverOpen,
+        lightbulbVisible: document.querySelector("#document-hover-marker")?.hidden === false,
+        lightbulbGlowObserved: Boolean(glowObserved),
+        lightbulbText: document.querySelector("#document-hover-marker")?.textContent?.trim() || "",
+        hoverAnimationName: target ? frame.contentWindow.getComputedStyle(target, "::before").animationName : "",
+        hoverOverlayOpacity: target ? frame.contentWindow.getComputedStyle(target, "::before").opacity : "",
         previewPadding: previewStyle.padding,
         readout: document.querySelector("#artifact-readout")?.textContent?.trim(),
         status: "passed",
       };
-    }, model);
+    }, { modelValue: model, glowObserved: lightbulbGlowObserved });
 
     if (runtimeErrors.length) {
       throw new Error(`Workbench runtime errors: ${runtimeErrors.join(" | ")}`);
