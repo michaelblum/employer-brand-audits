@@ -15,6 +15,7 @@ from scripts.url_stage_capture import (
     build_web_snapshot_data,
     build_web_snapshot_html,
     build_web_snapshot_html_from_data,
+    capture_url_stage,
     safe_stage_output_dir,
     slugify_stage_name,
     write_url_stage_manifest,
@@ -345,8 +346,38 @@ class UrlStageCaptureTests(unittest.TestCase):
         from scripts.eba_cli import validation_commands
 
         self.assertIn([sys.executable, "tests/test_url_stage_capture.py"], validation_commands())
+        self.assertIn(["node", "--check", "scripts/playwright-snippets/settle-page.js"], validation_commands())
+        self.assertIn(["node", "--check", "scripts/playwright-snippets/hide-obscuring-elements.js"], validation_commands())
+        self.assertIn(["node", "--check", "scripts/playwright-snippets/restore-page.js"], validation_commands())
+        self.assertIn(["node", "--check", "scripts/playwright-snippets/extract-visible-text.js"], validation_commands())
         self.assertIn(["node", "--check", "scripts/playwright-snippets/extract-web-blueprint.js"], validation_commands())
         self.assertIn(["node", "--check", "scripts/playwright-snippets/artifact-workbench-web-snapshot-check.js"], validation_commands())
+
+    def test_settle_page_snippet_bounds_animation_waits(self) -> None:
+        snippet = (REPO_ROOT / "scripts" / "playwright-snippets" / "settle-page.js").read_text(encoding="utf-8")
+
+        self.assertIn("maxWaitMs", snippet)
+        self.assertIn("Promise.race", snippet)
+        self.assertNotIn("Promise.allSettled(animations.map((animation) => animation.finished", snippet)
+
+    def test_settle_page_snippet_actively_freezes_capture_motion(self) -> None:
+        snippet = (REPO_ROOT / "scripts" / "playwright-snippets" / "settle-page.js").read_text(encoding="utf-8")
+
+        self.assertIn("__ebaCaptureStabilizerStyle", snippet)
+        self.assertIn("animation-duration: 0.001s", snippet)
+        self.assertIn("transition-duration: 0s", snippet)
+        self.assertIn("scroll-behavior: auto", snippet)
+        self.assertIn("animation.pause()", snippet)
+        self.assertIn("video.pause()", snippet)
+        self.assertIn("__ebaPausedMedia", snippet)
+
+    def test_restore_page_snippet_removes_capture_stabilization(self) -> None:
+        snippet = (REPO_ROOT / "scripts" / "playwright-snippets" / "restore-page.js").read_text(encoding="utf-8")
+
+        self.assertIn("__ebaCaptureStabilizerStyle", snippet)
+        self.assertIn("style.remove()", snippet)
+        self.assertIn("__ebaPausedMedia", snippet)
+        self.assertIn("item.el.play()", snippet)
 
     def test_stage_url_parser_is_registered(self) -> None:
         from scripts.eba_cli import build_parser
@@ -358,6 +389,108 @@ class UrlStageCaptureTests(unittest.TestCase):
         self.assertEqual(args.url, "https://example.com/jobs")
         self.assertEqual(args.name, "example-jobs")
         self.assertTrue(args.no_browser)
+
+    def test_capture_url_stage_writes_snapshot_when_optional_page_steps_fail(self) -> None:
+        import scripts.url_stage_capture as capture
+
+        root = Path(tempfile.mkdtemp(prefix=".url-stage-test-", dir=REPO_ROOT / "artifacts"))
+        original_run_step = capture.run_step
+        original_png_dimensions = capture.png_dimensions
+        try:
+            def fake_run_step(label, cmd, log_path, stdout_path=None, check=True, timeout_seconds=None):  # type: ignore[no-untyped-def]
+                if label in {
+                    "settle URL stage",
+                    "hide obscuring elements",
+                    "extract web blueprint",
+                    "write page snapshot",
+                    "extract visible text",
+                    "restore page",
+                }:
+                    raise RuntimeError(f"simulated {label} failure")
+                if label == "write full-page screenshot":
+                    root.joinpath("page.full-page.png").write_bytes(b"png fixture")
+                return capture.subprocess.CompletedProcess(cmd, 0, stdout="### Result\n{}\n", stderr="")
+
+            capture.run_step = fake_run_step  # type: ignore[assignment]
+            capture.png_dimensions = lambda path: {"width": 1200, "height": 900}  # type: ignore[assignment]
+
+            manifest_path = capture_url_stage(
+                "https://example.com/jobs",
+                slug="resilient-careers",
+                output_dir=root,
+            )
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            data = json.loads(root.joinpath("web-snapshot-data.json").read_text(encoding="utf-8"))
+            html = root.joinpath("web-snapshot.html").read_text(encoding="utf-8")
+
+            self.assertEqual(manifest["status"], "passed")
+            self.assertEqual(data["source_url"], "https://example.com/jobs")
+            self.assertEqual(data["visual"]["image"]["dimensions"], {"width": 1200, "height": 900})
+            self.assertIn("page.full-page.png", html)
+        finally:
+            capture.run_step = original_run_step  # type: ignore[assignment]
+            capture.png_dimensions = original_png_dimensions  # type: ignore[assignment]
+            for child in sorted(root.glob("*"), reverse=True):
+                if child.is_file():
+                    child.unlink()
+            root.rmdir()
+
+    def test_capture_url_stage_falls_back_to_viewport_screenshot_when_full_page_fails(self) -> None:
+        import scripts.url_stage_capture as capture
+
+        root = Path(tempfile.mkdtemp(prefix=".url-stage-test-", dir=REPO_ROOT / "artifacts"))
+        original_run_step = capture.run_step
+        original_png_dimensions = capture.png_dimensions
+        try:
+            def fake_run_step(label, cmd, log_path, stdout_path=None, check=True, timeout_seconds=None):  # type: ignore[no-untyped-def]
+                if label == "write full-page screenshot":
+                    raise RuntimeError("simulated full-page screenshot failure")
+                if label == "write viewport screenshot fallback":
+                    root.joinpath("page.full-page.png").write_bytes(b"png fixture")
+                if label == "extract web blueprint":
+                    return capture.subprocess.CompletedProcess(
+                        cmd,
+                        0,
+                        stdout=(
+                            "### Result\n"
+                            + json.dumps(
+                                {
+                                    "schema_version": "url_stage_blueprint.v0",
+                                    "url": "https://example.com/jobs",
+                                    "title": "Careers",
+                                    "viewport": {"width": 1365, "height": 900, "devicePixelRatio": 1},
+                                    "document": {"width": 1365, "height": 900},
+                                    "elements": [],
+                                }
+                            )
+                            + "\n"
+                        ),
+                        stderr="",
+                    )
+                return capture.subprocess.CompletedProcess(cmd, 0, stdout="### Result\n{}\n", stderr="")
+
+            capture.run_step = fake_run_step  # type: ignore[assignment]
+            capture.png_dimensions = lambda path: {"width": 1365, "height": 900}  # type: ignore[assignment]
+
+            manifest_path = capture_url_stage(
+                "https://example.com/jobs",
+                slug="viewport-fallback",
+                output_dir=root,
+            )
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(manifest["status"], "passed")
+            self.assertEqual(manifest["screenshot"]["dimensions"], {"width": 1365, "height": 900})
+            self.assertTrue(root.joinpath("page.full-page.png").exists())
+        finally:
+            capture.run_step = original_run_step  # type: ignore[assignment]
+            capture.png_dimensions = original_png_dimensions  # type: ignore[assignment]
+            for child in sorted(root.glob("*"), reverse=True):
+                if child.is_file():
+                    child.unlink()
+            root.rmdir()
 
 
 if __name__ == "__main__":

@@ -27,6 +27,11 @@ workbench implementation, and checked-in Playwright snippets.
   boundary into `artifacts/url-stage/<slug>/latest/manifest.json`. It writes a
   disk screenshot, one canonical `web-snapshot-data.json`, a capture log, and a
   same-origin synthetic `web-snapshot.html`.
+- URL-stage capture treats the screenshot as the proof boundary. Page settling,
+  obscuring-element hiding, page snapshotting, visible-text extraction, and
+  blueprint extraction are bounded best-effort steps; full-page screenshot
+  failure falls back to a viewport screenshot before the capture is considered
+  failed.
 - URL-stage projection emits the staged page as `type: html`,
   `kind: web_snapshot` plus one supporting `kind: web_snapshot_data` JSON
   artifact; the app shell must not need URL-stage-specific component
@@ -81,6 +86,9 @@ workbench implementation, and checked-in Playwright snippets.
 - Keep URL-stage capture fixtures deterministic and local. Public URLs may be
   used manually, but validation should rely on the checked-in
   `scripts/playwright-fixtures/url-stage-basic.html` fixture.
+- Keep public-site capture resilient to real-world page behavior such as
+  infinite animations, slow semantic extraction, sticky overlays, and oversized
+  full-page screenshots.
 - URL-stage `web-snapshot-data.json` should carry data and projection
   descriptors, not executable transformation code. User-facing UI views are a
   curated subset of machine projections.
