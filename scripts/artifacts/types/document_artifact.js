@@ -50,12 +50,14 @@
     });
   }
 
-  ROOT.types.document = {
+  const component = {
     capabilities: {},
     kind: "document",
     matches: isDocumentArtifact,
+    order: 30,
     readout,
     stagePlan,
     toolbarPlan,
   };
+  ROOT.types.document = typeof ROOT.registerType === "function" ? ROOT.registerType(component) : component;
 }());

@@ -80,15 +80,17 @@
     });
   }
 
-  ROOT.types.html = {
+  const component = {
     bindInspector,
     capabilities: {
       htmlElementAnnotations: true,
     },
     kind: "html",
     matches: isHtmlArtifact,
+    order: 20,
     readout,
     stagePlan,
     toolbarPlan,
   };
+  ROOT.types.html = typeof ROOT.registerType === "function" ? ROOT.registerType(component) : component;
 }());

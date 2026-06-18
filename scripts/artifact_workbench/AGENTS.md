@@ -50,6 +50,9 @@ and app shell JavaScript.
   to one artifact type or fixture.
 - Workbench assets must remain compatible with the server asset manifest and
   stale-server detection.
+- `index.html` keeps the artifact type script placeholder; the workbench server
+  injects concrete type scripts from `scripts/artifacts/types/manifest.json`.
+  Do not hardcode concrete artifact type modules in the app shell or index.
 
 ## Work Guidance
 

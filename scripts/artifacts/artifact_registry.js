@@ -1,18 +1,37 @@
 (function () {
   const ROOT = window.Artifacts = window.Artifacts || {};
   const PRIMITIVES = window.ArtifactPrimitives = window.ArtifactPrimitives || {};
+  const registeredTypes = ROOT.registeredTypes || [];
+  ROOT.registeredTypes = registeredTypes;
+  let fallbackKind = ROOT.fallbackArtifactKind || null;
+
+  function typeOrder(component = {}) {
+    return Number.isFinite(component.order) ? component.order : 1000;
+  }
 
   function components() {
-    return [
-      ROOT.types?.markdown,
-      ROOT.types?.html,
-      ROOT.types?.document,
-      ROOT.types?.image,
-    ].filter(Boolean);
+    return registeredTypes.slice().sort((left, right) => {
+      const orderDelta = typeOrder(left) - typeOrder(right);
+      if (orderDelta !== 0) return orderDelta;
+      return String(left.kind || "").localeCompare(String(right.kind || ""));
+    });
+  }
+
+  function registerType(component = {}) {
+    if (!component.kind) throw new Error("Artifact type registration requires kind");
+    if (typeof component.matches !== "function") throw new Error(`Artifact type ${component.kind} requires matches`);
+    if (typeof component.stagePlan !== "function") throw new Error(`Artifact type ${component.kind} requires stagePlan`);
+    if (typeof component.readout !== "function") throw new Error(`Artifact type ${component.kind} requires readout`);
+    if (typeof component.toolbarPlan !== "function") throw new Error(`Artifact type ${component.kind} requires toolbarPlan`);
+    const index = registeredTypes.findIndex((registered) => registered.kind === component.kind);
+    if (index >= 0) registeredTypes.splice(index, 1, component);
+    else registeredTypes.push(component);
+    if (component.fallback) fallbackKind = ROOT.fallbackArtifactKind = component.kind;
+    return component;
   }
 
   function fallbackComponent() {
-    return ROOT.types?.image;
+    return components().find((component) => component.kind === fallbackKind) || components()[0];
   }
 
   function resolveArtifactComponent(artifact = {}, options = {}) {
@@ -37,11 +56,14 @@
     return resolveArtifactComponent(context.artifact, context).toolbarPlan(context);
   }
 
+  ROOT.registerType = registerType;
   ROOT.registry = {
     artifactReadout,
     artifactRenderKind,
     artifactStagePlan,
     artifactToolbarPlan,
+    registeredArtifactTypes: components,
+    registerType,
     resolveArtifactComponent,
   };
   PRIMITIVES.artifactRegistry = ROOT.registry;

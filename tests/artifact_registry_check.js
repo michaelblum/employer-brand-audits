@@ -8,11 +8,16 @@ require(path.join(__dirname, "../scripts/artifact_primitives/html_renderer.js"))
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_renderer.js"));
 require(path.join(__dirname, "../scripts/artifact_primitives/markdown_interactions.js"));
 require(path.join(__dirname, "../scripts/artifacts/core/artifact_common.js"));
+require(path.join(__dirname, "../scripts/artifacts/artifact_registry.js"));
+
+assert.equal(typeof window.Artifacts.registerType, "function");
+assert.equal(typeof window.Artifacts.registry.registeredArtifactTypes, "function");
+assert.deepEqual(window.Artifacts.registry.registeredArtifactTypes(), []);
+
 require(path.join(__dirname, "../scripts/artifacts/types/image_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/markdown_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/html_artifact.js"));
 require(path.join(__dirname, "../scripts/artifacts/types/document_artifact.js"));
-require(path.join(__dirname, "../scripts/artifacts/artifact_registry.js"));
 
 const registry = window.Artifacts.registry;
 
@@ -21,6 +26,12 @@ assert.equal(typeof registry.artifactRenderKind, "function");
 assert.equal(typeof registry.artifactStagePlan, "function");
 assert.equal(typeof registry.artifactReadout, "function");
 assert.equal(typeof registry.artifactToolbarPlan, "function");
+assert.deepEqual(registry.registeredArtifactTypes().map((component) => component.kind), [
+  "markdown",
+  "html",
+  "document",
+  "image",
+]);
 
 assert.equal(registry.resolveArtifactComponent({ type: "image" }).kind, "image");
 assert.equal(registry.resolveArtifactComponent({ type: "markdown" }).kind, "markdown");

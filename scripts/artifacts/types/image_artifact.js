@@ -74,16 +74,19 @@
     return scope.done;
   }
 
-  ROOT.types.image = {
+  const component = {
     bindControls,
     capabilities: {
       imageRegionAnnotations: true,
       imageZoom: true,
     },
+    fallback: true,
     kind: "image",
     matches: (artifact = {}) => String(artifact.type || "").toLowerCase() === "image",
+    order: 100,
     readout,
     stagePlan,
     toolbarPlan,
   };
+  ROOT.types.image = typeof ROOT.registerType === "function" ? ROOT.registerType(component) : component;
 }());

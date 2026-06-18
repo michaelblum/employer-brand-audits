@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from scripts.artifact_type_manifest import artifact_type_script_paths
     from scripts.easy_audit_fixture import generate_easy_audit_fixture
     from scripts.eba_control_plane import (
         ControlPlaneError,
@@ -22,6 +23,7 @@ try:
     from scripts.eba_signature import append_signature_footer, current_eba_signature, signature_payload
     from scripts.url_stage_capture import DEFAULT_OUTPUT_ROOT, capture_url_stage, slugify_stage_name
 except ModuleNotFoundError:
+    from artifact_type_manifest import artifact_type_script_paths
     from easy_audit_fixture import generate_easy_audit_fixture
     from eba_control_plane import (
         ControlPlaneError,
@@ -63,6 +65,7 @@ COMPILE_TARGETS = [
     "scripts/workbench_projection.py",
     "scripts/workbench_projection_shape_check.py",
     "scripts/url_stage_capture.py",
+    "scripts/artifact_type_manifest.py",
     "scripts/eba_cli.py",
     "scripts/eba_commit_msg_hook.py",
     "scripts/eba_signature.py",
@@ -309,10 +312,7 @@ def validation_commands() -> list[list[str]]:
         ["node", "--check", "scripts/artifacts/core/artifact_common.js"],
         ["node", "--check", "scripts/artifacts/core/bounded_input_controls.js"],
         ["node", "--check", "scripts/artifacts/core/workflow_pairing.js"],
-        ["node", "--check", "scripts/artifacts/types/image_artifact.js"],
-        ["node", "--check", "scripts/artifacts/types/markdown_artifact.js"],
-        ["node", "--check", "scripts/artifacts/types/html_artifact.js"],
-        ["node", "--check", "scripts/artifacts/types/document_artifact.js"],
+        *[["node", "--check", script_path] for script_path in artifact_type_script_paths()],
         ["node", "--check", "scripts/artifacts/artifact_registry.js"],
         ["node", "--check", "scripts/artifact_primitives/artifact_renderer.js"],
         ["node", "--check", "scripts/artifacts/navigation/artifact_navigator.js"],

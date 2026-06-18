@@ -17,6 +17,11 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 try:
+    from artifact_type_manifest import (
+        ARTIFACT_TYPE_MANIFEST,
+        artifact_type_asset_entries,
+        artifact_type_asset_urls,
+    )
     from workbench_bounded_input import (
         bounded_input_key as bounded_input_overlay_key,
         bounded_input_state,
@@ -24,6 +29,11 @@ try:
     )
     from workbench_projection import project_workbench_manifest
 except ModuleNotFoundError:
+    from scripts.artifact_type_manifest import (
+        ARTIFACT_TYPE_MANIFEST,
+        artifact_type_asset_entries,
+        artifact_type_asset_urls,
+    )
     from scripts.workbench_bounded_input import (
         bounded_input_key as bounded_input_overlay_key,
         bounded_input_state,
@@ -49,9 +59,19 @@ WORKBENCH_CONTEXT_PATH = "/api/workbench-context"
 MAX_MUTATION_BODY_BYTES = 1024 * 1024
 SERVER_SOURCE_FILES = [
     Path(__file__).resolve(),
+    Path(__file__).resolve().parent / "artifact_type_manifest.py",
     Path(__file__).resolve().parent / "workbench_bounded_input.py",
     Path(__file__).resolve().parent / "workbench_projection.py",
 ]
+
+
+def artifact_type_workbench_assets() -> dict[str, tuple[Path, str]]:
+    return {
+        url: (path, content_type)
+        for url, path, content_type in artifact_type_asset_entries()
+    }
+
+
 WORKBENCH_ASSETS = {
     "/assets/artifact-workbench.css": (WORKBENCH_DIR / "styles.css", "text/css"),
     "/assets/artifact-workbench.js": (WORKBENCH_DIR / "app.js", "text/javascript"),
@@ -94,26 +114,12 @@ WORKBENCH_ASSETS = {
         ARTIFACTS_DIR / "core" / "workflow_pairing.js",
         "text/javascript",
     ),
-    "/assets/artifacts/types/image_artifact.js": (
-        ARTIFACTS_DIR / "types" / "image_artifact.js",
-        "text/javascript",
-    ),
-    "/assets/artifacts/types/markdown_artifact.js": (
-        ARTIFACTS_DIR / "types" / "markdown_artifact.js",
-        "text/javascript",
-    ),
-    "/assets/artifacts/types/html_artifact.js": (
-        ARTIFACTS_DIR / "types" / "html_artifact.js",
-        "text/javascript",
-    ),
-    "/assets/artifacts/types/document_artifact.js": (
-        ARTIFACTS_DIR / "types" / "document_artifact.js",
-        "text/javascript",
-    ),
+    "/assets/artifacts/types/manifest.json": (ARTIFACT_TYPE_MANIFEST, "application/json"),
     "/assets/artifacts/artifact_registry.js": (
         ARTIFACTS_DIR / "artifact_registry.js",
         "text/javascript",
     ),
+    **artifact_type_workbench_assets(),
     "/assets/artifact-primitives/artifact_renderer.js": (
         ARTIFACT_PRIMITIVES_DIR / "artifact_renderer.js",
         "text/javascript",
@@ -259,7 +265,12 @@ def build_workbench_asset_manifest() -> dict[str, Any]:
 
 
 def read_workbench_html() -> str:
-    return WORKBENCH_INDEX.read_text(encoding="utf-8")
+    html = WORKBENCH_INDEX.read_text(encoding="utf-8")
+    type_scripts = "\n".join(
+        f'  <script src="{url}" defer></script>'
+        for url in artifact_type_asset_urls()
+    )
+    return html.replace("  <!-- artifact-type-scripts -->", type_scripts)
 
 
 def parse_args() -> argparse.Namespace:
