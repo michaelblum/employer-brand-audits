@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from .base_evp import PIPELINE_TEMPLATE_ID, generate_publication_pipeline_fixture
+from .base_evp import (
+    PIPELINE_TEMPLATE_ID,
+    generate_publication_pipeline_fixture,
+    main,
+)
 from .campaign_desk_research import CAMPAIGN_DESK_RESEARCH_TEMPLATE_ID, generate_campaign_desk_research_fixture
 from .competitor_workbook import COMPETITOR_WORKBOOK_TEMPLATE_ID, generate_competitor_messaging_workbook_fixture
 from .core import (
@@ -11,7 +15,6 @@ from .core import (
     evidence_items_from_capture_pack,
     load_kilos_terms,
     load_project_profile,
-    main,
     source_artifacts_from_url_stage_manifest,
     source_roster_from_capture_pack,
 )

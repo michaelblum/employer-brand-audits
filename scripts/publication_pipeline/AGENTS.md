@@ -7,9 +7,9 @@ pipeline archetypes.
 
 ## Ownership
 
-- Owns publication sample-profile loading, guarded output preparation, record
-  generation, manifest construction, demo recipes, and publication-specific
-  workbench grouping metadata.
+- Owns publication sample-profile loading, guarded output preparation,
+  archetype-specific record generation, manifest construction, demo recipes,
+  and publication composite-group metadata written into manifests.
 - `scripts/publication_pipeline_fixture.py` remains a compatibility wrapper for
   direct CLI execution and existing imports.
 - `data/AGENTS.md` owns checked-in sample profile data.
@@ -23,10 +23,18 @@ pipeline archetypes.
   files and in reference-reader tests that assert structural facts.
 - Generated default artifacts must not contain reference-client,
   reference-competitor, source-label, or URL labels.
-- Recursive output cleanup must go through `prepare_output_dir()` and must
-  reject paths outside repo `artifacts/` before deletion.
-- Keep public pipeline families addressable through one module per archetype,
-  even when shared implementation remains in `core.py`.
+- Recursive output cleanup must go through `prepare_output_dir()`. It must
+  reject paths outside repo `artifacts/`, refuse non-empty arbitrary artifact
+  directories that lack `.publication-fixture-output`, and only recursively
+  clear marker-owned outputs or a generator's own default output directory.
+- Keep public pipeline families addressable through one module per archetype.
+  Archetype loaders, record builders, view-body builders, manifest builders,
+  and generators belong in those modules; `core.py` is for shared primitives
+  such as IO, output preparation, profile normalization, URL-stage import,
+  generic evidence helpers, HTML rendering, and manifest helpers.
+- Publication view bundle grouping must be declared in generated manifest
+  artifact facets; generic workbench projection code must consume only that
+  manifest metadata.
 
 ## Work Guidance
 
@@ -34,7 +42,8 @@ pipeline archetypes.
   expanding `core.py`.
 - Keep demo recipe copy in `demo_recipes.py`, not `eba_cli.py`.
 - Keep publication-specific projection grouping metadata in
-  `projection_groups.py`, not generic workbench projection code.
+  `projection_groups.py` for manifest generation, not generic workbench
+  projection code.
 - Keep direct script compatibility through `scripts/publication_pipeline_fixture.py`.
 
 ## Verification

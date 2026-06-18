@@ -7,9 +7,9 @@ workbench implementation, and checked-in Playwright snippets.
 
 ## Ownership
 
-- Owns `eba_cli.py`, `eba_control_plane.py`, capture/smoke scripts, projection
-  scripts, bounded-input helpers, workbench server/gate scripts, and child
-  script folders.
+- Owns `eba_cli.py`, `eba_control_plane.py`, fixture and validation
+  registries, capture/smoke scripts, projection scripts, bounded-input
+  helpers, workbench server/gate scripts, and child script folders.
 - Does not own MCP imaging internals or repo-level tests.
 
 ## Local Contracts
@@ -67,8 +67,12 @@ workbench implementation, and checked-in Playwright snippets.
   `scripts/publication_pipeline_fixture.py` is a compatibility wrapper for
   existing imports and direct CLI execution.
 - Publication fixture generators must prepare output through the package-owned
-  cleanup guard and reject output directories outside repo `artifacts/` before
-  any recursive deletion.
+  cleanup guard. Recursive deletion is allowed only for marker-owned fixture
+  outputs or each generator's own default output directory; arbitrary non-empty
+  directories under `artifacts/` must be refused before deletion.
+- ADR-002 manifests may declare generic composite grouping metadata on artifact
+  facets. `workbench_projection.py` consumes those declarations generically and
+  must not import publication-pipeline-specific grouping code.
 - `./eba dev demo --fixture publication-pipeline` generates a deterministic
   publication-pipeline ADR-002 manifest from tracked KILOS data and fixture
   records using a fictional sample profile by default. It must not depend on
@@ -125,6 +129,9 @@ workbench implementation, and checked-in Playwright snippets.
 
 - Keep command routes typed, small, and honest; do not add routes that are not
   wired or validated.
+- Register fixture generators in `fixture_registry.py` and validation target
+  lists in `validation_registry.py`; do not grow `eba_cli.py` with every fixture
+  family.
 - `./eba sig`, `./eba dev trace`, `./eba dev gh`, and `./eba dev hooks` own the
   repo-private provenance signature surface; keep GitHub prose and commit
   message signing automatic where possible.
@@ -177,8 +184,8 @@ workbench implementation, and checked-in Playwright snippets.
 - `scripts/artifact_primitives/AGENTS.md` - lower-level workbench renderer and
   interaction primitives.
 - `scripts/publication_pipeline/AGENTS.md` - publication pipeline fixture
-  package, archetype entrypoints, sample-profile loading, guarded output
-  cleanup, demo recipes, and publication grouping metadata.
+  package, archetype entrypoints, sample-profile loading, marker-owned output
+  cleanup, demo recipes, and manifest-declared publication grouping metadata.
 - `scripts/playwright-snippets/AGENTS.md` - checked-in snippets for Playwright
   CLI `run-code`.
 - `scripts/artifact_workbench/AGENTS.md` - browser-loaded workbench app

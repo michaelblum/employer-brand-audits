@@ -227,62 +227,46 @@ Expected: all tests pass except the projection grouping assertion until Task 2 l
 ## Task 2: Publication View Bundle Projection
 
 **Files:**
+- Modify: `scripts/publication_pipeline/projection_groups.py`
+- Modify: `scripts/publication_pipeline/base_evp.py`
 - Modify: `scripts/workbench_projection.py`
-- Modify: `tests/test_publication_pipeline_fixture.py`
+- Modify: `tests/test_publication_pipeline_structure.py`
 
-- [ ] **Step 1: Add publication grouping constants and helpers**
+- [ ] **Step 1: Declare publication grouping metadata from the manifest producer**
 
-In `scripts/workbench_projection.py`, add this near `URL_STAGE_SUPPORT_RESOURCE_SLOTS`:
-
-```python
-PUBLICATION_VIEW_KINDS = {
-    "report_docx": {
-        "label": "Report DOCX View",
-        "slot": "publication.report_docx.bundle",
-        "group_kind": "publication_report_docx_bundle",
-    },
-    "audit_deck": {
-        "label": "Audit Deck View",
-        "slot": "publication.audit_deck.bundle",
-        "group_kind": "publication_audit_deck_bundle",
-    },
-    "data_workbook": {
-        "label": "Data Workbook View",
-        "slot": "publication.data_workbook.bundle",
-        "group_kind": "publication_data_workbook_bundle",
-    },
-    "l4_publication": {
-        "label": "L4 Publication View",
-        "slot": "publication.l4_publication.bundle",
-        "group_kind": "publication_l4_publication_bundle",
-    },
-}
-```
-
-Add:
+Keep publication view kind metadata in
+`scripts/publication_pipeline/projection_groups.py` and have manifest builders
+write it onto view artifacts:
 
 ```python
-def publication_view_group_config(artifact: dict[str, Any]) -> dict[str, Any] | None:
-    kind = str(artifact.get("kind") or artifact.get("type") or "")
-    return PUBLICATION_VIEW_KINDS.get(kind)
+manifest_artifact(
+    "p4-report-docx",
+    4,
+    "report_docx",
+    ...,
+    composite_group=publication_composite_group("report_docx"),
+)
 ```
 
-- [ ] **Step 2: Generalize `audit_report_artifact_groups` without breaking report grouping**
+- [ ] **Step 2: Generalize `audit_report_artifact_groups` without publication imports**
 
-Inside `audit_report_artifact_groups`, replace the `report_artifact_ids` block with logic that builds one group per matching layer-4 view artifact. For legacy report artifacts, keep the current `audit_report_bundle` behavior. For publication view kinds, use the matching `group_kind`, `slot`, and label from `PUBLICATION_VIEW_KINDS`.
+Inside `audit_report_artifact_groups`, read
+`artifact["facets"]["composite_group"]` when present. For legacy report
+artifacts, keep the current `audit_report_bundle` behavior. The generic
+projection module must not import `publication_pipeline.projection_groups`.
 
-Use this shape for publication groups:
+Use this shape for manifest-declared groups:
 
 ```python
 groups.append(
     {
-        "id": f"composite:publication-view:{step_id}:{artifact_id}",
-        "kind": config["group_kind"],
+        "id": f"composite:manifest-declared:{step_id}:{artifact_id}",
+        "kind": config["kind"],
         "label": f"{config['label']} bundle",
         "artifact_ids": group_artifact_ids,
-        "edge_ids": [f"edge:composite:publication-view:{step_id}:{artifact_id}:{item_id}" for item_id in group_artifact_ids],
+        "edge_ids": [f"edge:composite:manifest-declared:{step_id}:{artifact_id}:{item_id}" for item_id in group_artifact_ids],
         "source": {
-            "kind": "publication_view_step",
+            "kind": "manifest_declared_composite_group",
             "step_id": step_id,
             "artifact_ids": [artifact_id],
         },
@@ -305,39 +289,35 @@ Expected: publication groups exist and existing easy-audit report grouping still
 ## Task 3: Fixture Command Surface And Validation
 
 **Files:**
+- Modify: `scripts/fixture_registry.py`
+- Modify: `scripts/validation_registry.py`
 - Modify: `scripts/eba_cli.py`
 - Modify: `tests/test_publication_pipeline_fixture.py`
 
-- [ ] **Step 1: Register the new fixture and validation commands**
+- [ ] **Step 1: Register the new fixture and validation commands through registries**
 
-Modify `scripts/eba_cli.py` imports:
+Add publication fixture generators to `scripts/fixture_registry.py`; keep
+`scripts/eba_cli.py` importing the registry rather than individual fixture
+families.
+
+Add compile targets and focused tests to `scripts/validation_registry.py`; keep
+`scripts/eba_cli.py` importing `COMPILE_TARGETS` and `validation_commands`
+from the registry.
+
+For example, fixture registration belongs in:
 
 ```python
-from scripts.publication_pipeline_fixture import generate_publication_pipeline_fixture
+FIXTURE_GENERATORS = {
+    "publication-pipeline": generate_publication_pipeline_fixture,
+}
 ```
 
-and fallback import:
+Validation targets belong in:
 
 ```python
-from publication_pipeline_fixture import generate_publication_pipeline_fixture
-```
-
-Add to `COMPILE_TARGETS`:
-
-```python
-"scripts/publication_pipeline_fixture.py",
-```
-
-Add to `FIXTURE_GENERATORS`:
-
-```python
-"publication-pipeline": generate_publication_pipeline_fixture,
-```
-
-Add to `validation_commands()` after `tests/test_easy_audit_fixture.py`:
-
-```python
-[sys.executable, "tests/test_publication_pipeline_fixture.py"],
+COMPILE_TARGETS = [
+    "scripts/publication_pipeline_fixture.py",
+]
 ```
 
 - [ ] **Step 2: Add CLI route test**
@@ -347,7 +327,9 @@ Append this test to `tests/test_publication_pipeline_fixture.py`:
 ```python
     def test_publication_pipeline_fixture_is_registered_in_command_surface(self) -> None:
         from scripts.eba_cli import FIXTURE_GENERATORS, validation_commands
+        from scripts.fixture_registry import FIXTURE_GENERATORS as REGISTRY_FIXTURES
 
+        self.assertIs(FIXTURE_GENERATORS, REGISTRY_FIXTURES)
         self.assertIn("publication-pipeline", FIXTURE_GENERATORS)
         compile_command = validation_commands()[0]
         self.assertIn("scripts/publication_pipeline_fixture.py", compile_command)
@@ -483,7 +465,9 @@ Add `evidence_items_from_capture_pack(capture_pack)` that enumerates `capture_pa
 
 - [ ] **Step 3: Wire importer tests into validation**
 
-Add `tests/test_publication_capture_pack.py` to `validation_commands()` after `tests/test_publication_pipeline_fixture.py`, then run:
+Add `tests/test_publication_capture_pack.py` to
+`scripts/validation_registry.py` after
+`tests/test_publication_pipeline_fixture.py`, then run:
 
 ```bash
 python3 tests/test_publication_capture_pack.py

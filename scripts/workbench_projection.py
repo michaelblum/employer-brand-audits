@@ -12,13 +12,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 try:
-    from publication_pipeline.projection_groups import publication_view_group_config
     from workbench_bounded_input import (
         bounded_input_overlay_definition as workflow_input_overlay,
         bounded_input_overlay_definitions_for_step as workflow_input_overlays_for_step,
     )
 except ModuleNotFoundError:
-    from scripts.publication_pipeline.projection_groups import publication_view_group_config
     from scripts.workbench_bounded_input import (
         bounded_input_overlay_definition as workflow_input_overlay,
         bounded_input_overlay_definitions_for_step as workflow_input_overlays_for_step,
@@ -289,6 +287,19 @@ def collect_artifact_lineage_ids(
     return [artifact_id for artifact_id in artifact_order if artifact_id in seen]
 
 
+def declared_composite_group_config(artifact: dict[str, Any]) -> dict[str, str] | None:
+    facets = artifact.get("facets") if isinstance(artifact.get("facets"), dict) else {}
+    config = facets.get("composite_group") if isinstance(facets.get("composite_group"), dict) else None
+    if config is None:
+        return None
+    kind = str(config.get("kind") or "").strip()
+    label = str(config.get("label") or "").strip()
+    slot = str(config.get("slot") or "").strip()
+    if not kind or not label or not slot:
+        return None
+    return {"kind": kind, "label": label, "slot": slot}
+
+
 def audit_report_artifact_groups(
     workflow_steps: list[dict[str, Any]],
     artifacts: list[dict[str, Any]],
@@ -308,28 +319,28 @@ def audit_report_artifact_groups(
         report_artifact_ids = []
         for artifact_id in step_artifact_ids:
             artifact = artifacts_by_id[artifact_id]
-            publication_config = publication_view_group_config(artifact)
-            if publication_config is not None:
+            composite_config = declared_composite_group_config(artifact)
+            if composite_config is not None:
                 group_artifact_ids = collect_artifact_lineage_ids([artifact_id], artifact_order, artifacts_by_id)
                 if not group_artifact_ids:
                     continue
-                group_id = f"composite:publication-view:{step_id}:{artifact_id}"
+                group_id = f"composite:manifest-declared:{step_id}:{artifact_id}"
                 groups.append(
                     {
                         "id": group_id,
-                        "kind": publication_config["group_kind"],
-                        "label": f"{publication_config['label']} bundle",
+                        "kind": composite_config["kind"],
+                        "label": f"{composite_config['label']} bundle",
                         "artifact_ids": group_artifact_ids,
                         "edge_ids": [
                             f"edge:{group_id}:{item_id}"
                             for item_id in group_artifact_ids
                         ],
                         "source": {
-                            "kind": "publication_view_step",
+                            "kind": "manifest_declared_composite_group",
                             "step_id": step_id,
                             "artifact_ids": [artifact_id],
                         },
-                        "slot": publication_config["slot"],
+                        "slot": composite_config["slot"],
                     }
                 )
                 continue
@@ -1183,6 +1194,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
         if workbench_type == "markdown":
             capabilities.append("edit")
 
+        authored_facets = artifact.get("facets") if isinstance(artifact.get("facets"), dict) else {}
         facets = {
             "host": host,
             "artifact_type": workbench_type,
@@ -1190,6 +1202,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
             "slot": slot,
             "layer": artifact.get("layer"),
         }
+        facets.update(authored_facets)
         if workbench_type == "markdown" and file_path and markdown_has_mermaid(file_path, manifest_dir):
             capabilities.append("render")
             facets["diagram_kind"] = "mermaid"
