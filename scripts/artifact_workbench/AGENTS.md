@@ -19,9 +19,9 @@ and app shell JavaScript.
 - The workspace and artifact toolbar are shell-owned mount points. The selected
   artifact component owns type-specific stage, readout, controls, and control
   binding inside those mount points through `scripts/artifacts/`.
-- The app shell owns selected-artifact zoom state and generic wheel/resize
-  routing, but selected artifact components own concrete zoom hooks and default
-  zoom policy.
+- The app shell owns selected-artifact zoom state through explicit get/set
+  helpers and generic wheel/resize routing, but selected artifact components
+  own concrete zoom hooks and default zoom policy.
 - HTML artifacts use the shared document stage and annotation editor; the shell
   may route saved `html_element` anchors to the marker/popover, but HTML
   identity extraction and inspector binding stay with the HTML type/primitive.

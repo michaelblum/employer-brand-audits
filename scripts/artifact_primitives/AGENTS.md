@@ -29,8 +29,11 @@ images, documents, HTML, interaction overlays, and reusable target-link effects.
   iframe-to-workbench rect mapping; the workbench app shell still owns editor
   state, overlay placement, and persistence.
 - `zoom_surface.js` owns reusable artifact zoom defaults, stage-fit/smart-fit
-  calculations, clamping, display formatting, transform-based scaling, and
-  centered-state calculation for non-image zoom surfaces.
+  calculations, clamping, display formatting, image width scaling,
+  transform-based scaling, and centered-state calculation for zoom-capable
+  artifact surfaces.
+- `image_viewer.js` owns image annotation geometry and marker/popover placement;
+  do not put zoom math or zoom state there.
 - Interaction overlay primitives expose subtype models and state helpers.
   `annotation` is the comment-like subtype; `bounded_input` is the typed
   workflow-input subtype anchored with `workflow_input` step/input ids.

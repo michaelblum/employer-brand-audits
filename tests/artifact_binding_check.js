@@ -13,15 +13,15 @@ let unbound = false;
 let mountedPlan = null;
 let boundPayload = null;
 let syncedPayload = null;
+let capabilityPayload = null;
+const resolvePayloads = [];
 
 const components = {
   image: {
     kind: "image",
-    capabilities: () => ({
-      artifactZoom: true,
-      imageRegionAnnotations: true,
-      imageZoom: true,
-    }),
+    capabilities: () => {
+      throw new Error("binding should use the registry capability resolver");
+    },
     bindControls: (payload) => {
       boundPayload = payload;
       return () => {
@@ -39,9 +39,20 @@ const components = {
 };
 
 const registry = {
-  resolveArtifactComponent: (artifact) => (
-    artifact.type === "image" ? components.image : components.document
-  ),
+  resolveArtifactComponent: (artifact, options) => {
+    resolvePayloads.push({ artifact, options });
+    return artifact.type === "image" ? components.image : components.document;
+  },
+  artifactCapabilities: (artifact, options) => {
+    capabilityPayload = { artifact, options };
+    return artifact.type === "image"
+      ? {
+        artifactZoom: true,
+        imageRegionAnnotations: true,
+        imageZoom: true,
+      }
+      : {};
+  },
   artifactToolbarPlan: (payload) => ({
     kind: payload.artifact.type,
     readout: [
@@ -77,6 +88,7 @@ const binding = bindingModule.createArtifactBinding({
     image: () => imageEl,
   },
   documentRenderer: () => ({ kind: "document-renderer" }),
+  html: () => ({ kind: "html" }),
   markdown: () => ({ kind: "markdown" }),
   getContext: () => ({
     artifactDocumentTheme: "dark",
@@ -93,11 +105,19 @@ const binding = bindingModule.createArtifactBinding({
 });
 
 assert.equal(binding.selectedComponent().kind, "image");
+assert.equal(resolvePayloads.at(-1).artifact, imageArtifact);
+assert.deepEqual(resolvePayloads.at(-1).options.document, { kind: "document-renderer" });
+assert.deepEqual(resolvePayloads.at(-1).options.html, { kind: "html" });
+assert.equal(resolvePayloads.at(-1).options.markdownMode, undefined);
 assert.deepEqual(binding.capabilities(), {
   artifactZoom: true,
   imageRegionAnnotations: true,
   imageZoom: true,
 });
+assert.equal(capabilityPayload.artifact, imageArtifact);
+assert.equal(capabilityPayload.options.markdownMode, "preview");
+assert.deepEqual(capabilityPayload.options.html, { kind: "html" });
+assert.deepEqual(capabilityPayload.options.document, { kind: "document-renderer" });
 assert.equal(binding.supports("artifactZoom"), true);
 assert.equal(binding.supports("imageZoom"), true);
 assert.equal(binding.supports("markdownEditing"), false);
@@ -127,6 +147,7 @@ const readOnlyBinding = bindingModule.createArtifactBinding({
     image: () => imageEl,
   },
   documentRenderer: () => ({ kind: "document-renderer" }),
+  html: () => ({ kind: "html" }),
   markdown: () => ({ kind: "markdown" }),
   getContext: () => ({
     controlPolicy: "read-only",

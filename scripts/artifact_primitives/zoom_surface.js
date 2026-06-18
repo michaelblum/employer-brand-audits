@@ -28,7 +28,16 @@
     };
   }
 
-  function contentSize({ contentWidth, contentHeight } = {}) {
+  function imageSize(imageEl) {
+    const width = Number(imageEl?.naturalWidth || 0);
+    const height = Number(imageEl?.naturalHeight || 0);
+    if (!width || !height) return null;
+    return { width, height };
+  }
+
+  function contentSize({ contentWidth, contentHeight, imageEl } = {}) {
+    const naturalImageSize = imageSize(imageEl);
+    if (naturalImageSize) return naturalImageSize;
     return {
       width: Math.max(1, Number(contentWidth || 1)),
       height: Math.max(1, Number(contentHeight || 1)),
@@ -75,13 +84,15 @@
     const scale = zoomPercent / 100;
     const mode = options.mode || "manual";
     if (options.zoomInputEl) options.zoomInputEl.value = formatZoomPercent(zoomPercent);
-    if (options.targetEl?.style) {
+    if (options.imageEl?.style && size.width && size.height) {
+      options.imageEl.style.width = `${Math.max(1, size.width * scale)}px`;
+    } else if (options.targetEl?.style) {
       options.targetEl.style.width = `${size.width}px`;
       options.targetEl.style.height = `${size.height}px`;
       options.targetEl.style.transformOrigin = "top left";
       options.targetEl.style.transform = `scale(${scale})`;
     }
-    if (options.wrapEl?.style) {
+    if (options.wrapEl?.style && !options.imageEl) {
       options.wrapEl.style.width = `${Math.max(1, size.width * scale)}px`;
       options.wrapEl.style.height = `${Math.max(1, size.height * scale)}px`;
     }

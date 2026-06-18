@@ -281,6 +281,22 @@ assert.deepEqual(navigator.artifactSummaryModel(context), {
   health: "1 warning · 3 complete",
 });
 
+assert.deepEqual(
+  navigator.artifactSummaryModel({
+    ...context,
+    artifacts: [
+      { id: "bad", type: "json", status: "error" },
+      { id: "warn", type: "json", status: "warning" },
+      { id: "unknown", type: "json" },
+      { id: "done", type: "json", status: "complete" },
+      { id: "future", type: "json", status: "deferred" },
+    ],
+    projectedArtifactsById: {},
+    projectedStepsById: {},
+  }).health,
+  "1 error · 1 warning · 1 unknown · 1 complete · 1 deferred",
+);
+
 const unfilteredHtml = navigator.renderSidebarHtml({
   ...context,
   activeIndex: 1,

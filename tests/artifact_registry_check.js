@@ -40,23 +40,29 @@ assert.equal(registry.resolveArtifactComponent({ type: "markdown" }).kind, "mark
 assert.equal(registry.resolveArtifactComponent({ type: "html" }).kind, "html");
 assert.equal(registry.resolveArtifactComponent({ type: "json" }).kind, "document");
 assert.equal(registry.resolveArtifactComponent({ type: "unknown" }).kind, "image");
-assert.deepEqual(registry.resolveArtifactComponent({ type: "image" }).capabilities, {
+assert.equal(
+  registry.resolveArtifactComponent({ type: "image" }),
+  registry.registeredArtifactTypes().find((component) => component.kind === "image"),
+);
+assert.equal(typeof registry.resolveArtifactComponent({ type: "html" }).capabilities, "function");
+assert.equal(typeof registry.artifactCapabilities, "function");
+assert.deepEqual(registry.artifactCapabilities({ type: "image" }), {
   artifactZoom: true,
   imageRegionAnnotations: true,
   imageZoom: true,
 });
-assert.deepEqual(registry.resolveArtifactComponent({ type: "markdown" }).capabilities, {
+assert.deepEqual(registry.artifactCapabilities({ type: "markdown" }), {
   markdownEditing: true,
   textRangeAnnotations: true,
 });
-assert.deepEqual(registry.resolveArtifactComponent({ type: "html" }).capabilities, {
+assert.deepEqual(registry.artifactCapabilities({ type: "html" }), {
   htmlElementAnnotations: true,
 });
-assert.deepEqual(registry.resolveArtifactComponent({ type: "html", kind: "web_snapshot" }).capabilities, {
+assert.deepEqual(registry.artifactCapabilities({ type: "html", kind: "web_snapshot" }), {
   artifactZoom: true,
   htmlElementAnnotations: true,
 });
-assert.deepEqual(registry.resolveArtifactComponent({ type: "json" }).capabilities, {});
+assert.deepEqual(registry.artifactCapabilities({ type: "json" }), {});
 
 assert.equal(registry.artifactRenderKind({ type: "markdown" }), "markdown");
 assert.equal(registry.artifactRenderKind({ type: "html" }), "html");

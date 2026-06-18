@@ -502,9 +502,13 @@
       counts[label] = (counts[label] || 0) + 1;
     }
     const priority = ["error", "failed", "warning", "unknown", "complete"];
+    const statusRank = (label) => {
+      const rank = priority.indexOf(label);
+      return rank >= 0 ? rank : priority.length;
+    };
     return Object.keys(counts)
       .sort((left, right) => {
-        const priorityDelta = priority.indexOf(left) - priority.indexOf(right);
+        const priorityDelta = statusRank(left) - statusRank(right);
         if (priorityDelta !== 0) return priorityDelta;
         return left.localeCompare(right);
       })

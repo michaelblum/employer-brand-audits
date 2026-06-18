@@ -48,7 +48,7 @@
   }
 
   function applyZoom(options = {}) {
-    return options.imageViewer.applyZoom({
+    return options.zoom.applyZoom({
       ...imageZoomOptions(options),
       value: options.value,
       mode: options.mode,
@@ -56,18 +56,18 @@
   }
 
   function stageFitZoom(options = {}) {
-    return options.imageViewer.smartFitZoom(imageZoomOptions(options));
+    return options.zoom.stageFitZoom(imageZoomOptions(options));
   }
 
   function smartFit(options = {}) {
-    return options.imageViewer.smartFit({
+    return options.zoom.smartFit({
       ...imageZoomOptions(options),
       currentZoomMode: options.state?.zoomMode,
     });
   }
 
   function updateZoomSurface(options = {}) {
-    options.imageViewer.updateAlignment({
+    options.zoom.updateAlignment({
       ...imageZoomOptions(options),
       zoomPercent: options.state?.zoomPercent || 100,
     });

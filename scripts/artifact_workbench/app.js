@@ -15,8 +15,6 @@
       editing: null,
       activeMarker: null,
       sidebarVisible: true,
-      zoomPercent: 100,
-      zoomMode: "stage-fit",
       artifactZoomState: {},
       markdownMode: "preview",
       markdownContent: {},
@@ -425,17 +423,14 @@
       return zoomSurface()?.defaultZoomState?.(item) || { zoomMode: "stage-fit", zoomPercent: 100 };
     }
 
-    function zoomStateForArtifact(item = artifact()) {
+    function getZoomStateForArtifact(item = artifact()) {
       const savedState = app.artifactZoomState[item.id];
-      const state = savedState
+      return savedState
         ? {
           zoomMode: savedState.zoomMode || "manual",
           zoomPercent: Number(savedState.zoomPercent || 100),
         }
         : defaultZoomState(item);
-      app.zoomMode = state.zoomMode;
-      app.zoomPercent = state.zoomPercent;
-      return state;
     }
 
     function setZoomStateForArtifact(item = artifact(), state = {}) {
@@ -444,8 +439,6 @@
         zoomPercent: Number(state.zoomPercent || 100),
       };
       app.artifactZoomState[item.id] = nextState;
-      app.zoomMode = nextState.zoomMode;
-      app.zoomPercent = nextState.zoomPercent;
       return nextState;
     }
 
@@ -462,7 +455,7 @@
           zoomInputEl: $("zoom-input"),
         },
         viewerConfig: app.viewerConfig,
-        state: zoomStateForArtifact(item),
+        state: getZoomStateForArtifact(item),
         ...extras,
       };
     }
@@ -546,7 +539,7 @@
     function artifactControlActions() {
       return {
         applyZoom: (value, options = {}) => {
-          const state = zoomStateForArtifact();
+          const state = getZoomStateForArtifact();
           applyZoom(options.relative ? state.zoomPercent + value : value);
         },
         revertMarkdownArtifact,
@@ -577,8 +570,7 @@
             markdownMode: app.markdownMode,
             controlPolicy: app.context?.artifact_control_policy,
             mermaidSourceVisibility: app.context?.mermaid_source_visibility,
-            zoomMode: app.zoomMode,
-            zoomPercent: app.zoomPercent,
+            ...getZoomStateForArtifact(),
             documentContentById: app.documentContent,
           }),
           actions: artifactControlActions,
@@ -588,7 +580,6 @@
     }
 
     function updateArtifactToolbar(item = artifact()) {
-      zoomStateForArtifact(item);
       workbenchArtifactBinding().updateToolbar(item);
     }
 
@@ -601,7 +592,7 @@
 
     function applyCurrentZoom(item = artifact()) {
       if (!supportsArtifactZoom(item)) return;
-      const state = zoomStateForArtifact(item);
+      const state = getZoomStateForArtifact(item);
       if (state.zoomMode === "stage-fit") {
         applyZoom(stageFitZoom(), "stage-fit");
       } else if (state.zoomMode === "actual-size") {
@@ -1524,7 +1515,7 @@
       window.addEventListener("resize", () => {
         if (!supportsArtifactZoom()) {
           updateMooringOverlays();
-        } else if (zoomStateForArtifact().zoomMode === "stage-fit") {
+        } else if (getZoomStateForArtifact().zoomMode === "stage-fit") {
           applyCurrentZoom();
         } else {
           updateZoomSurface();
@@ -1536,7 +1527,7 @@
       $("stage").addEventListener("wheel", (event) => {
         if (!event.ctrlKey || !supportsArtifactZoom()) return;
         event.preventDefault();
-        const state = zoomStateForArtifact();
+        const state = getZoomStateForArtifact();
         applyZoom(state.zoomPercent + (event.deltaY < 0 ? 5 : -5));
       }, { passive: false });
       window.addEventListener("mousemove", moveDrag);

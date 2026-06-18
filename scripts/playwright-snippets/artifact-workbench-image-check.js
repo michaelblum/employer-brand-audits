@@ -31,10 +31,21 @@ async (page) => {
       && markdownWrap
       && markdownWrap.hidden
       && !stage?.classList.contains("markdown-stage")
-      && imageControls === null
+      && imageControls !== null
       && markdownControls === null
       && /\d+ x \d+ px/.test(readout);
   }, null, { timeout: 5000 });
+
+  const beforeZoom = await page.evaluate(() => ({
+    imageWidth: parseFloat(document.querySelector("#artifact-image")?.style.width || "0"),
+    zoomInput: document.querySelector("#zoom-input")?.value || "",
+  }));
+  await page.click("#zoom-in");
+  await page.waitForFunction((before) => {
+    const imageWidth = parseFloat(document.querySelector("#artifact-image")?.style.width || "0");
+    const zoomInput = document.querySelector("#zoom-input")?.value || "";
+    return imageWidth > before.imageWidth && zoomInput !== before.zoomInput;
+  }, beforeZoom, { timeout: 3000 });
 
   return await page.evaluate(() => {
     const image = document.querySelector("#artifact-image");
@@ -52,6 +63,8 @@ async (page) => {
       markdownControlsMounted: Boolean(markdownControls),
       imageNaturalWidth: image?.naturalWidth,
       imageNaturalHeight: image?.naturalHeight,
+      imageRenderedWidth: image?.style.width,
+      zoomInput: document.querySelector("#zoom-input")?.value,
       readout: document.querySelector("#artifact-readout")?.textContent?.trim(),
     };
   });

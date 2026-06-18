@@ -45,10 +45,10 @@ workbench implementation, and checked-in Playwright snippets.
   input control value resolution, HTML rendering, and control event wiring.
   The workbench app shell still owns overlay persistence, sync calls, and
   lifecycle scheduling.
-- `scripts/artifact_primitives/zoom_surface.js` owns reusable zoom defaults,
-  fit calculations, and transform-based zoom application for non-image
-  surfaces. `scripts/artifacts/core/zoom_controls.js` owns the shared browser
-  toolbar controls for artifact zoom.
+- `scripts/artifact_primitives/zoom_surface.js` owns reusable artifact zoom
+  defaults, fit calculations, clamping, image width scaling, and
+  transform-based zoom application. `scripts/artifacts/core/zoom_controls.js`
+  owns the shared browser toolbar controls for artifact zoom.
 - Artifact type modules load through `scripts/artifacts/types/manifest.json`.
   Server assets, rendered workbench HTML, and validation commands should read
   that manifest instead of hard-coding concrete type script files.

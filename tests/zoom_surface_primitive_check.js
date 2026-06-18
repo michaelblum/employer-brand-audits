@@ -98,6 +98,45 @@ assert.equal(wrapStyle.width, "500px");
 assert.equal(wrapStyle.height, "300px");
 assert.equal(classNames.has("centered"), true);
 
+const imageStyle = {};
+const imageEl = { naturalWidth: 1000, naturalHeight: 600, style: imageStyle };
+const imageWrapStyle = {};
+const imageWrapClassNames = new Set();
+const imageWrapEl = {
+  classList: {
+    toggle(name, enabled) {
+      if (enabled) imageWrapClassNames.add(name);
+      else imageWrapClassNames.delete(name);
+    },
+  },
+  style: imageWrapStyle,
+};
+const imageZoomInputEl = {};
+
+assert.equal(
+  zoom.stageFitZoom({
+    imageEl,
+    stageEl,
+    viewerConfig: { actualSizePercent: 100 },
+  }),
+  50,
+);
+assert.deepEqual(
+  zoom.applyZoom({
+    imageEl,
+    wrapEl: imageWrapEl,
+    stageEl,
+    zoomInputEl: imageZoomInputEl,
+    viewerConfig: { maxZoomOutPercent: 10, maxZoomInPercent: 400 },
+    value: 50,
+    mode: "stage-fit",
+  }),
+  { zoomPercent: 50, zoomMode: "stage-fit" },
+);
+assert.equal(imageZoomInputEl.value, "50%");
+assert.equal(imageStyle.width, "500px");
+assert.equal(imageWrapClassNames.has("centered"), true);
+
 assert.deepEqual(
   zoom.smartFit({
     contentWidth: 1000,
