@@ -24,8 +24,8 @@ from .core import (
     write_json,
     write_text,
 )
+from .html_views import publication_table_body
 from .projection_groups import publication_composite_group
-from .segment_tvp import segment_tvp_table_body
 
 
 KILOS_METHODOLOGY_OUTPUT_DIR = REPO_ROOT / "artifacts" / "kilos-methodology" / "latest"
@@ -152,7 +152,7 @@ def kilos_scorecard_tables() -> dict[str, Any]:
 
 def kilos_snippet_body(browser_record: dict[str, Any], mapping_record: dict[str, Any]) -> str:
     rows = [[pillar["name"], pillar["id"], str(len(pillar.get("factors") or []))] for pillar in browser_record.get("pillars") or []]
-    return segment_tvp_table_body("KILOS Browser", rows) + segment_tvp_table_body("Mapping Workbook", [[key, str(value), ""] for key, value in mapping_record.get("pillar_row_counts", {}).items()])
+    return publication_table_body("KILOS Browser", rows) + publication_table_body("Mapping Workbook", [[key, str(value), ""] for key, value in mapping_record.get("pillar_row_counts", {}).items()])
 
 
 def kilos_l4_body(browser_record: dict[str, Any], mapping_record: dict[str, Any], deck_record: dict[str, Any]) -> str:

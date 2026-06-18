@@ -32,6 +32,9 @@ pipeline archetypes.
   and generators belong in those modules; `core.py` is for shared primitives
   such as IO, output preparation, profile normalization, URL-stage import,
   generic evidence helpers, HTML rendering, and manifest helpers.
+- Keep reusable view/table rendering and workbook-style entity/profile helpers
+  in neutral helper modules such as `html_views.py` and `workbook_shared.py`.
+  Archetype modules must not import shared behavior from sibling archetypes.
 - Publication view bundle grouping must be declared in generated manifest
   artifact facets; generic workbench projection code must consume only that
   manifest metadata.
@@ -40,6 +43,8 @@ pipeline archetypes.
 
 - Prefer adding archetype-specific code to the nearest archetype module before
   expanding `core.py`.
+- Prefer neutral helper modules for behavior reused by multiple archetypes;
+  avoid making one archetype module the dependency owner for another.
 - Keep demo recipe copy in `demo_recipes.py`, not `eba_cli.py`.
 - Keep publication-specific projection grouping metadata in
   `projection_groups.py` for manifest generation, not generic workbench

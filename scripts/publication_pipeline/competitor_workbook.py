@@ -15,56 +15,29 @@ from .core import (
     CREATED_AT,
     REPO_ROOT,
     is_default_output_dir,
-    load_project_profile,
     manifest_artifact,
     manifest_step,
     prepare_output_dir,
     render_publication_html,
     slugify,
-    source_urls_from_entity,
     write_json,
     write_text,
 )
+from .html_views import publication_table_body
 from .projection_groups import publication_composite_group
-from .segment_tvp import segment_tvp_table_body
+from .workbook_shared import (
+    load_competitor_workbook_profile as shared_load_competitor_workbook_profile,
+    workbook_entities,
+    workbook_partner_orgs,
+    workbook_source_roster,
+)
 
 
 COMPETITOR_WORKBOOK_OUTPUT_DIR = REPO_ROOT / "artifacts" / "competitor-messaging-workbook" / "latest"
 
 
 def load_competitor_workbook_profile(path: Path | None = None) -> dict[str, Any]:
-    if path is None:
-        path = COMPETITOR_WORKBOOK_DEFAULT_PROFILE_PATH
-    profile = load_project_profile(path)
-    if "workbook_entities" not in profile:
-        profile["workbook_entities"] = [profile.get("client_full_name") or profile.get("client_name") or "Client"] + [
-            competitor.get("name")
-            for competitor in profile.get("competitors") or []
-            if isinstance(competitor, dict)
-        ]
-    return profile
-
-
-def workbook_entities(profile: dict[str, Any]) -> list[dict[str, Any]]:
-    names = list(profile.get("workbook_entities") or [])
-    if not names:
-        names = [profile.get("client_full_name") or profile.get("client_name") or "Client"]
-    entities = []
-    for index, name_value in enumerate(names[:8]):
-        name = str(name_value or f"Entity {index + 1}")
-        role = "client" if index == 0 else "competitor"
-        entities.append(
-            {
-                "entity_id": f"{role}-{slugify(name)}",
-                "name": name,
-                "role": role,
-                "column_letter": chr(ord("C") + index),
-                "careers_url": f"https://{slugify(name)}.example/careers",
-                "dei_url": "" if index == 5 else f"https://{slugify(name)}.example/diversity",
-                "headline": f"{name} careers headline",
-            }
-        )
-    return entities
+    return shared_load_competitor_workbook_profile(path)
 
 
 def workbook_intake(profile: dict[str, Any]) -> dict[str, Any]:
@@ -95,26 +68,6 @@ def workbook_intake(profile: dict[str, Any]) -> dict[str, Any]:
             "effective_range_required": True,
             "manual_review_gates": ["workbook header map", "cell lineage", "partner activation dedupe", "coverage summary"],
         },
-    }
-
-
-def workbook_source_roster(profile: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "project_id": str(profile.get("project_id") or f"{slugify(str(profile.get('client_name') or 'client'))}-competitor-workbook"),
-        "entities": [
-            {
-                "entity_id": entity["entity_id"],
-                "name": entity["name"],
-                "role": entity["role"],
-                "column_letter": entity["column_letter"],
-                "source_urls": {
-                    "careers_url": entity["careers_url"],
-                    "dei_url": entity["dei_url"] or "not_found",
-                },
-                "headline": entity["headline"],
-            }
-            for entity in workbook_entities(profile)
-        ],
     }
 
 
@@ -189,22 +142,6 @@ def workbook_wide_matrix_cells(profile: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             )
     return cells
-
-
-def workbook_partner_orgs(profile: dict[str, Any]) -> list[dict[str, Any]]:
-    focus_values = ["gender", "ethnicity", "LGBTQ+", "socioeconomic", "disability", "caregivers"]
-    return [
-        {
-            "partner_org_id": f"partner:{index:02d}",
-            "name": f"Partner Network {index:02d}",
-            "primary_geography": "Global" if index % 3 == 0 else "United States",
-            "dei_focus": focus_values[index % len(focus_values)],
-            "organisation_type": "network" if index % 2 else "benchmark",
-            "source_sheet": "Partner orgs",
-            "source_range": f"A{index + 7}:D{index + 7}",
-        }
-        for index in range(1, 31)
-    ]
 
 
 def workbook_partner_activations(profile: dict[str, Any]) -> list[dict[str, Any]]:
@@ -291,7 +228,7 @@ def workbook_view_body(matrix_record: dict[str, Any], analysis_record: dict[str,
         [str(item.get("partner_org_id") or ""), str(item.get("entity_id") or ""), str(item.get("source_cell") or "")]
         for item in matrix_record.get("partner_activations") or []
     ]
-    return segment_tvp_table_body("Workbook Evidence Matrix", rows[:30]) + segment_tvp_table_body("Partner Activation Matrix", partner_rows[:30])
+    return publication_table_body("Workbook Evidence Matrix", rows[:30]) + publication_table_body("Partner Activation Matrix", partner_rows[:30])
 
 
 def workbook_l4_body(profile: dict[str, Any], matrix_record: dict[str, Any], analysis_record: dict[str, Any]) -> str:
@@ -299,7 +236,7 @@ def workbook_l4_body(profile: dict[str, Any], matrix_record: dict[str, Any], ana
       <h2>Competitor Messaging Workbook Readout</h2>
       <p>{escape(str(profile.get("client_full_name") or profile.get("client_name") or "Client"))} has {len(matrix_record.get("evidence_items") or [])} sparse evidence cells normalized from {len(matrix_record.get("wide_matrix_cells") or [])} dense matrix potentials.</p>
     </section>
-{segment_tvp_table_body("Coverage Findings", [[str(item.get("headline") or ""), str(item.get("summary") or ""), ", ".join(item.get("supporting_evidence_ids") or [])] for item in analysis_record.get("findings") or []])}
+{publication_table_body("Coverage Findings", [[str(item.get("headline") or ""), str(item.get("summary") or ""), ", ".join(item.get("supporting_evidence_ids") or [])] for item in analysis_record.get("findings") or []])}
 """
 
 

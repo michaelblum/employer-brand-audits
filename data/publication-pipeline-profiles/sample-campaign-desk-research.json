@@ -19,5 +19,90 @@
     "partnerships",
     "awards"
   ],
-  "geography_scope": "United Kingdom"
+  "geography_scope": "United Kingdom",
+  "desk_research_source_groups": {
+    "global_uk_gender": [
+      "UK Workforce Observatory",
+      "Global Equity Monitor",
+      "Inclusive Labor Index",
+      "Women at Work Barometer",
+      "Diversity Outcomes Review",
+      "Future Talent Gap Report",
+      "Economic Inclusion Lab"
+    ],
+    "energy_engineering": [
+      "Energy Talent Skills Forum",
+      "Engineering Futures Council",
+      "Utilities Workforce Review",
+      "Technical Careers Institute"
+    ],
+    "dei_practice": [
+      "Inclusive Engineering Network",
+      "Workplace Belonging Standard",
+      "Power Sector Inclusion Forum",
+      "Gender Equity Practice Hub"
+    ]
+  },
+  "campaign_case_studies": [
+    {
+      "case_id": "case:helioworks-energy",
+      "organization": "HelioWorks Energy",
+      "campaign_name": "Field Futures"
+    },
+    {
+      "case_id": "case:circuitline-utilities",
+      "organization": "CircuitLine Utilities",
+      "campaign_name": "Powering Tomorrow Together"
+    },
+    {
+      "case_id": "case:tidalcore-renewables",
+      "organization": "TidalCore Renewables",
+      "campaign_name": "Make Waves In Engineering"
+    },
+    {
+      "case_id": "case:brightpath-infrastructure",
+      "organization": "BrightPath Infrastructure",
+      "campaign_name": "Built By Us"
+    },
+    {
+      "case_id": "case:meadowvolt-networks",
+      "organization": "MeadowVolt Networks",
+      "campaign_name": "Switch On Your Future"
+    },
+    {
+      "case_id": "case:anchorwind-services",
+      "organization": "AnchorWind Services",
+      "campaign_name": "Lead From The Field"
+    },
+    {
+      "case_id": "case:copperleaf-power",
+      "organization": "Copperleaf Power",
+      "campaign_name": "Power Paths"
+    },
+    {
+      "case_id": "case:cedarrail-transit",
+      "organization": "CedarRail Transit",
+      "campaign_name": "Routes Into Engineering"
+    },
+    {
+      "case_id": "case:lumenfield-engineering",
+      "organization": "LumenField Engineering",
+      "campaign_name": "Visible Engineers"
+    },
+    {
+      "case_id": "case:harborarc-mobility",
+      "organization": "HarborArc Mobility",
+      "campaign_name": "Move The System"
+    },
+    {
+      "case_id": "case:summitloop-infrastructure",
+      "organization": "SummitLoop Infrastructure",
+      "campaign_name": "Peak Potential"
+    },
+    {
+      "case_id": "case:wavelength-grid-services",
+      "organization": "Wavelength Grid Services",
+      "campaign_name": "Signal Your Strength"
+    }
+  ]
 }

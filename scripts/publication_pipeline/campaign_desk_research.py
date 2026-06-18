@@ -18,18 +18,55 @@ from .core import (
     manifest_artifact,
     manifest_step,
     prepare_output_dir,
-    project_profile_entities,
     render_publication_html,
     slugify,
-    source_urls_from_entity,
     write_json,
     write_text,
 )
+from .html_views import publication_table_body
 from .projection_groups import publication_composite_group
-from .segment_tvp import segment_tvp_table_body
 
 
 CAMPAIGN_DESK_RESEARCH_OUTPUT_DIR = REPO_ROOT / "artifacts" / "campaign-desk-research-comp-audit" / "latest"
+
+DEFAULT_CAMPAIGN_CASE_ORGANIZATIONS = [
+    "HelioWorks Energy",
+    "CircuitLine Utilities",
+    "TidalCore Renewables",
+    "BrightPath Infrastructure",
+    "MeadowVolt Networks",
+    "AnchorWind Services",
+    "Copperleaf Power",
+    "CedarRail Transit",
+    "LumenField Engineering",
+    "HarborArc Mobility",
+    "SummitLoop Infrastructure",
+    "Wavelength Grid Services",
+]
+
+DEFAULT_RESEARCH_SOURCE_GROUPS = {
+    "global_uk_gender": [
+        "UK Workforce Observatory",
+        "Global Equity Monitor",
+        "Inclusive Labor Index",
+        "Women at Work Barometer",
+        "Diversity Outcomes Review",
+        "Future Talent Gap Report",
+        "Economic Inclusion Lab",
+    ],
+    "energy_engineering": [
+        "Energy Talent Skills Forum",
+        "Engineering Futures Council",
+        "Utilities Workforce Review",
+        "Technical Careers Institute",
+    ],
+    "dei_practice": [
+        "Inclusive Engineering Network",
+        "Workplace Belonging Standard",
+        "Power Sector Inclusion Forum",
+        "Gender Equity Practice Hub",
+    ],
+}
 
 
 def load_campaign_profile(path: Path | None = None) -> dict[str, Any]:
@@ -65,24 +102,22 @@ def campaign_intake(profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def campaign_research_sources(profile: dict[str, Any]) -> dict[str, Any]:
-    groups = {
-        "global_uk_gender": ["ONS", "OECD", "United Nations", "PwC Women in Work", "McKinsey Diversity Matters", "WEF Global Gender Gap", "Oxera"],
-        "energy_engineering": ["Energy & Utility Skills", "Royal Academy of Engineering", "EngineeringUK", "IET"],
-        "dei_practice": ["Women's Engineering Society", "Great Place to Work", "POWERful Women", "UN Women"],
-    }
+    raw_groups = profile.get("desk_research_source_groups")
+    groups = raw_groups if isinstance(raw_groups, dict) else DEFAULT_RESEARCH_SOURCE_GROUPS
     sources = []
     for group, names in groups.items():
         for name in names:
+            source_name = str(name)
             sources.append(
                 {
-                    "source_id": f"source:{slugify(name)}",
-                    "source_name": name,
+                    "source_id": f"source:{slugify(source_name)}",
+                    "source_name": source_name,
                     "source_group": group,
                     "source_kind": "desk_research",
                     "authority_tier": "primary" if group != "dei_practice" else "practice",
                     "geography": str(profile.get("geography_scope") or "United Kingdom"),
                     "topic_tags": ["gender", "energy", "campaign"],
-                    "citation_url": f"https://sources.example/{slugify(name)}",
+                    "citation_url": f"https://sources.example/{slugify(source_name)}",
                     "deck_slide_refs": [3 + len(sources) % 14],
                     "evidence_uses": ["labor_market_stat", "policy_or_context_signal"],
                 }
@@ -135,33 +170,66 @@ def campaign_evidence_pack(profile: dict[str, Any], sources_record: dict[str, An
     }
 
 
+def campaign_case_profiles(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_cases = profile.get("campaign_case_studies")
+    if not isinstance(raw_cases, list) or not raw_cases:
+        raw_cases = [{"organization": name} for name in DEFAULT_CAMPAIGN_CASE_ORGANIZATIONS]
+    cases = []
+    for index, raw_case in enumerate(raw_cases[:12], start=1):
+        if isinstance(raw_case, dict):
+            case = dict(raw_case)
+        else:
+            case = {"organization": str(raw_case)}
+        organization = str(case.get("organization") or f"Sample Comparator {index}")
+        case["organization"] = organization
+        case.setdefault("case_id", f"case:{slugify(organization)}")
+        case.setdefault("campaign_name", f"{organization} inclusive talent campaign")
+        case.setdefault("role_family", "engineering")
+        case.setdefault("barrier_or_insight", "Representation, awareness, and confidence barriers")
+        case.setdefault("creative_strategy", "employee storytelling and proof-led creative")
+        case.setdefault("channels", ["careers_site", "paid_social", "events"])
+        case.setdefault("tactics", ["hero_video", "employee_story", "partner_amplification"])
+        case.setdefault("partner_orgs", ["sample industry network"])
+        case.setdefault("launch_moment", "campaign burst")
+        case.setdefault("proof_metrics", ["applications", "engagement"])
+        case.setdefault("source_ids", [f"source:{index:03d}"])
+        case.setdefault("lessons", ["make barriers visible", "show role models"])
+        cases.append(case)
+    return cases
+
+
 def campaign_case_matrix(profile: dict[str, Any]) -> dict[str, Any]:
-    names = ["BT", "National Grid", "SSEN", "SSE", "EDF", "E.ON", "bp", "Entain x McLaren", "McLaren", "JLR", "Network Rail", "ScotRail"]
     cases = [
         {
-            "case_id": f"case:{slugify(name)}",
-            "organization": name,
-            "campaign_name": f"{name} inclusive talent campaign",
+            "case_id": str(case["case_id"]),
+            "organization": str(case["organization"]),
+            "campaign_name": str(case["campaign_name"]),
             "target_population": str(profile.get("target_population") or "Women in engineering"),
-            "role_family": "engineering",
+            "role_family": str(case["role_family"]),
             "goal": str(profile.get("campaign_goal") or "increase applications"),
-            "barrier_or_insight": "Representation, awareness, and confidence barriers",
-            "creative_strategy": "employee storytelling and proof-led creative",
-            "channels": ["careers_site", "paid_social", "events"],
-            "tactics": ["hero_video", "employee_story", "partner_amplification"],
-            "partner_orgs": ["industry network"],
-            "launch_moment": "campaign burst",
-            "proof_metrics": ["applications", "engagement"],
-            "source_ids": [f"source:{index + 1:03d}"],
-            "lessons": ["make barriers visible", "show role models"],
+            "barrier_or_insight": str(case["barrier_or_insight"]),
+            "creative_strategy": str(case["creative_strategy"]),
+            "channels": list(case["channels"]),
+            "tactics": list(case["tactics"]),
+            "partner_orgs": list(case["partner_orgs"]),
+            "launch_moment": str(case["launch_moment"]),
+            "proof_metrics": list(case["proof_metrics"]),
+            "source_ids": list(case["source_ids"]),
+            "lessons": list(case["lessons"]),
         }
-        for index, name in enumerate(names)
+        for case in campaign_case_profiles(profile)
     ]
     return {"project_id": str(profile.get("project_id") or ""), "campaign_case_studies": cases}
 
 
-def campaign_channel_tactics(profile: dict[str, Any]) -> dict[str, Any]:
+def campaign_channel_tactics(profile: dict[str, Any], cases_record: dict[str, Any] | None = None) -> dict[str, Any]:
     families = ["hero video", "employee storytelling", "careers-site hub", "paid media", "organic social", "OOH", "niche placement", "ERG resharing", "always-on reactivation", "events", "awards", "partnerships"]
+    case_ids = [
+        str(case.get("case_id"))
+        for case in (cases_record or campaign_case_matrix(profile)).get("campaign_case_studies") or []
+        if isinstance(case, dict) and case.get("case_id")
+    ]
+    case_window = min(3, len(case_ids)) or 1
     tactics = [
         {
             "tactic_id": f"tactic:{slugify(name)}",
@@ -171,7 +239,7 @@ def campaign_channel_tactics(profile: dict[str, Any]) -> dict[str, Any]:
             "funnel_stage": ["awareness", "consideration", "conversion"][index % 3],
             "dependencies": ["source proof", "creative assets"],
             "proof_metric": "engagement",
-            "case_ids": [f"case:{slugify(case_name)}" for case_name in ["BT", "National Grid", "SSEN"][0 : 1 + index % 3]],
+            "case_ids": case_ids[0 : 1 + index % case_window],
             "recommendation_fit": "high" if index < 6 else "medium",
         }
         for index, name in enumerate(families)
@@ -205,7 +273,7 @@ def campaign_analysis_pack(profile: dict[str, Any], evidence_record: dict[str, A
 
 def campaign_recommendation_body(analysis_record: dict[str, Any]) -> str:
     rows = [[item["headline"], item["summary"], ", ".join(item["supporting_tactic_ids"])] for item in analysis_record.get("campaign_recommendations") or []]
-    return segment_tvp_table_body("Campaign Recommendation Readout", rows)
+    return publication_table_body("Campaign Recommendation Readout", rows)
 
 
 def campaign_l4_body(profile: dict[str, Any], analysis_record: dict[str, Any]) -> str:
@@ -273,7 +341,7 @@ def generate_campaign_desk_research_fixture(
     sources_record = campaign_research_sources(profile)
     evidence_record = campaign_evidence_pack(profile, sources_record)
     cases_record = campaign_case_matrix(profile)
-    tactics_record = campaign_channel_tactics(profile)
+    tactics_record = campaign_channel_tactics(profile, cases_record)
     analysis_record = campaign_analysis_pack(profile, evidence_record, cases_record, tactics_record)
 
     write_json(output_dir / "pipeline-intake.json", intake_record)

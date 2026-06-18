@@ -7,12 +7,6 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from .competitor_workbook import (
-    load_competitor_workbook_profile,
-    workbook_entities,
-    workbook_partner_orgs,
-    workbook_source_roster,
-)
 from .core import (
     CREATED_AT,
     DEI_COMPETITOR_AUDIT_DEFAULT_PROFILE_PATH,
@@ -28,15 +22,21 @@ from .core import (
     write_json,
     write_text,
 )
+from .html_views import publication_table_body
 from .projection_groups import publication_composite_group
-from .segment_tvp import segment_tvp_table_body
+from .workbook_shared import (
+    load_workbook_profile,
+    workbook_entities,
+    workbook_partner_orgs,
+    workbook_source_roster,
+)
 
 
 DEI_COMPETITOR_AUDIT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "dei-competitor-audit" / "latest"
 
 
 def load_dei_competitor_profile(path: Path | None = None) -> dict[str, Any]:
-    profile = load_competitor_workbook_profile(path or DEI_COMPETITOR_AUDIT_DEFAULT_PROFILE_PATH)
+    profile = load_workbook_profile(path, default_path=DEI_COMPETITOR_AUDIT_DEFAULT_PROFILE_PATH)
     profile.setdefault("dei_dimensions", ["gender", "ethnicity", "LGBTQ+", "socioeconomic", "disability", "age", "caregivers"])
     profile.setdefault("partner_org_sources", ["memberships", "external networks", "awards", "benchmarks"])
     profile.setdefault("withdrawal_watch", True)
@@ -223,22 +223,22 @@ def dei_analysis_pack(profile: dict[str, Any], matrix_record: dict[str, Any]) ->
 
 def dei_activation_body(matrix_record: dict[str, Any]) -> str:
     rows = [[item["activation_theme"], item["category"], ", ".join(item["supporting_evidence_ids"])] for item in matrix_record.get("dei_activations") or []]
-    return segment_tvp_table_body("DEI Activation Matrix", rows)
+    return publication_table_body("DEI Activation Matrix", rows)
 
 
 def dei_philosophy_body(matrix_record: dict[str, Any]) -> str:
     rows = [[item["entity_id"], item["philosophy_class"], ", ".join(item["supporting_evidence_ids"])] for item in matrix_record.get("inclusion_philosophies") or []]
-    return segment_tvp_table_body("Inclusion Philosophy Map", rows)
+    return publication_table_body("Inclusion Philosophy Map", rows)
 
 
 def dei_partner_body(matrix_record: dict[str, Any]) -> str:
     rows = [[item["name"], item["dei_focus"], item["source_range"]] for item in matrix_record.get("partner_orgs") or []]
-    return segment_tvp_table_body("Partner Organization Landscape", rows[:30])
+    return publication_table_body("Partner Organization Landscape", rows[:30])
 
 
 def dei_deck_body(matrix_record: dict[str, Any], analysis_record: dict[str, Any]) -> str:
     rows = [[item["headline"], item["finding_type"], ", ".join(item["supporting_evidence_ids"])] for item in analysis_record.get("findings") or []]
-    return segment_tvp_table_body("Competitor Audit Deck View", rows)
+    return publication_table_body("Competitor Audit Deck View", rows)
 
 
 def dei_l4_body(profile: dict[str, Any], matrix_record: dict[str, Any], analysis_record: dict[str, Any]) -> str:

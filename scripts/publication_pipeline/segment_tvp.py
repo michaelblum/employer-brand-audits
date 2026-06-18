@@ -24,10 +24,10 @@ from .core import (
     render_publication_html,
     slugify,
     support_ids,
-    table_rows,
     write_json,
     write_text,
 )
+from .html_views import publication_table_body
 from .projection_groups import publication_composite_group
 
 
@@ -372,14 +372,7 @@ def segment_tvp_analysis_pack(project_frame_record: dict[str, Any], roster_recor
 
 
 def segment_tvp_table_body(title: str, rows: list[list[str]]) -> str:
-    return f"""    <section>
-      <h2>{escape(title)}</h2>
-      <table>
-        <tr><th>Item</th><th>Detail</th><th>Evidence</th></tr>
-{table_rows(rows)}
-      </table>
-    </section>
-"""
+    return publication_table_body(title, rows)
 
 
 def segment_tvp_report_body(project_frame_record: dict[str, Any], roster_record: dict[str, Any], matrix_record: dict[str, Any], analysis_record: dict[str, Any]) -> str:

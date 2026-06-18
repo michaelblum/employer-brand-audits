@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import sys
 import tempfile
 import unittest
@@ -53,6 +55,18 @@ REFERENCE_LABELS = [
     "HerEnergy",
     "Strategies 4 Success",
     "Symphony Talent",
+    "BT",
+    "National Grid",
+    "SSEN",
+    "SSE",
+    "EDF",
+    "E.ON",
+    "bp",
+    "Entain x McLaren",
+    "McLaren",
+    "JLR",
+    "Network Rail",
+    "ScotRail",
 ]
 
 
@@ -70,7 +84,9 @@ class PublicationDefaultSampleTests(unittest.TestCase):
     def assert_default_output_uses_only_sample_labels(self, fixture_name: str, generator: Callable[[Path], Path]) -> None:
         generated_text = self.generated_text(fixture_name, generator)
         for label in REFERENCE_LABELS:
-            self.assertNotIn(label, generated_text, f"{fixture_name} leaked {label!r}")
+            with self.subTest(label=label):
+                pattern = re.compile(rf"(?<![A-Za-z0-9]){re.escape(label)}(?![A-Za-z0-9])")
+                self.assertIsNone(pattern.search(generated_text), f"{fixture_name} leaked {label!r}")
 
     def test_base_publication_default_output_uses_sample_profile(self) -> None:
         self.assert_default_output_uses_only_sample_labels(
@@ -101,6 +117,32 @@ class PublicationDefaultSampleTests(unittest.TestCase):
             "campaign-desk-research-comp-audit",
             generate_campaign_desk_research_fixture,
         )
+
+    def test_campaign_default_case_organizations_are_declared_sample_entities(self) -> None:
+        profile_path = REPO_ROOT / "data" / "publication-pipeline-profiles" / "sample-campaign-desk-research.json"
+        sample_profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile_cases = sample_profile.get("campaign_case_studies")
+        self.assertIsInstance(profile_cases, list)
+        self.assertGreaterEqual(len(profile_cases), 12)
+        declared_orgs = {
+            str(case.get("organization"))
+            for case in profile_cases
+            if isinstance(case, dict) and case.get("organization")
+        }
+        declared_orgs.add(str(sample_profile["client_full_name"]))
+
+        (REPO_ROOT / "artifacts").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest_path = generate_campaign_desk_research_fixture(Path(tmp) / "campaign-desk-research-comp-audit")
+            cases = json.loads((manifest_path.parent / "campaign-case-matrix.json").read_text(encoding="utf-8"))
+
+        generated_orgs = {
+            str(case.get("organization"))
+            for case in cases["campaign_case_studies"]
+            if isinstance(case, dict)
+        }
+        self.assertTrue(generated_orgs)
+        self.assertLessEqual(generated_orgs, declared_orgs)
 
 
 if __name__ == "__main__":

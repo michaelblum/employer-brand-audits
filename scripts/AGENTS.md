@@ -72,7 +72,9 @@ workbench implementation, and checked-in Playwright snippets.
   directories under `artifacts/` must be refused before deletion.
 - ADR-002 manifests may declare generic composite grouping metadata on artifact
   facets. `workbench_projection.py` consumes those declarations generically and
-  must not import publication-pipeline-specific grouping code.
+  must not import publication-pipeline-specific grouping code. Projection-owned
+  facets such as host, artifact type, artifact kind, slot, and layer remain
+  canonical; manifest-authored facets must be whitelisted before propagation.
 - `./eba dev demo --fixture publication-pipeline` generates a deterministic
   publication-pipeline ADR-002 manifest from tracked KILOS data and fixture
   records using a fictional sample profile by default. It must not depend on

@@ -106,6 +106,69 @@ class PublicationPipelineStructureTests(unittest.TestCase):
         self.assertEqual(groups[0]["slot"], "publication.custom.bundle")
         self.assertEqual(groups[0]["source"]["kind"], "manifest_declared_composite_group")
 
+    def test_manifest_authored_facets_cannot_overwrite_canonical_projection_facets(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            root = Path(tmp)
+            (root / "view.html").write_text("<h1>View</h1>", encoding="utf-8")
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "audit_id": "facet-whitelist-regression",
+                        "company": "Sample Co",
+                        "domain": "sample.example",
+                        "steps": [
+                            {
+                                "id": "p4-view",
+                                "name": "View",
+                                "artifact_ids": ["p4-view"],
+                            }
+                        ],
+                        "artifacts": [
+                            {
+                                "id": "p4-view",
+                                "layer": 4,
+                                "type": "html",
+                                "file_path": "view.html",
+                                "params": {"slot": "publication.safe"},
+                                "facets": {
+                                    "host": "evil.example",
+                                    "artifact_type": "image",
+                                    "artifact_kind": "screenshot",
+                                    "slot": "publication.evil",
+                                    "layer": 99,
+                                    "composite_group": {
+                                        "kind": "custom_publication_bundle",
+                                        "label": "Custom Publication View",
+                                        "slot": "publication.custom.bundle",
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            projection = workbench_projection.project_audit_manifest(manifest_path)
+
+        artifact = next(item for item in projection["artifacts"] if item["id"] == "p4-view")
+        self.assertEqual(
+            artifact["facets"],
+            {
+                "host": "sample.example",
+                "artifact_type": "html",
+                "artifact_kind": "html",
+                "slot": "publication.safe",
+                "layer": 4,
+                "composite_group": {
+                    "kind": "custom_publication_bundle",
+                    "label": "Custom Publication View",
+                    "slot": "publication.custom.bundle",
+                },
+            },
+        )
+
     def test_generic_projection_does_not_import_publication_grouping(self) -> None:
         source = inspect.getsource(workbench_projection)
 
@@ -163,6 +226,29 @@ class PublicationPipelineStructureTests(unittest.TestCase):
                 source = inspect.getsource(import_module(module_name))
                 for def_name in def_names:
                     self.assertIn(f"def {def_name}(", source)
+
+    def test_archetype_modules_do_not_import_shared_helpers_from_sibling_archetypes(self) -> None:
+        sibling_imports = {
+            "scripts.publication_pipeline.competitor_workbook": [
+                "from .segment_tvp import segment_tvp_table_body",
+            ],
+            "scripts.publication_pipeline.dei_competitor_audit": [
+                "from .competitor_workbook import",
+                "from .segment_tvp import segment_tvp_table_body",
+            ],
+            "scripts.publication_pipeline.campaign_desk_research": [
+                "from .segment_tvp import segment_tvp_table_body",
+            ],
+            "scripts.publication_pipeline.kilos_methodology": [
+                "from .segment_tvp import segment_tvp_table_body",
+            ],
+        }
+
+        for module_name, forbidden_imports in sibling_imports.items():
+            with self.subTest(module=module_name):
+                source = inspect.getsource(import_module(module_name))
+                for forbidden_import in forbidden_imports:
+                    self.assertNotIn(forbidden_import, source)
 
     def test_core_contains_only_shared_publication_primitives(self) -> None:
         import scripts.publication_pipeline.core as core

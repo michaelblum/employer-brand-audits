@@ -300,6 +300,15 @@ def declared_composite_group_config(artifact: dict[str, Any]) -> dict[str, str] 
     return {"kind": kind, "label": label, "slot": slot}
 
 
+def propagated_authored_artifact_facets(artifact: dict[str, Any]) -> dict[str, Any]:
+    facets = artifact.get("facets") if isinstance(artifact.get("facets"), dict) else {}
+    propagated: dict[str, Any] = {}
+    composite_group = facets.get("composite_group")
+    if isinstance(composite_group, dict):
+        propagated["composite_group"] = composite_group
+    return propagated
+
+
 def audit_report_artifact_groups(
     workflow_steps: list[dict[str, Any]],
     artifacts: list[dict[str, Any]],
@@ -1194,7 +1203,6 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
         if workbench_type == "markdown":
             capabilities.append("edit")
 
-        authored_facets = artifact.get("facets") if isinstance(artifact.get("facets"), dict) else {}
         facets = {
             "host": host,
             "artifact_type": workbench_type,
@@ -1202,7 +1210,7 @@ def project_audit_manifest(manifest_path: str | Path) -> dict[str, Any]:
             "slot": slot,
             "layer": artifact.get("layer"),
         }
-        facets.update(authored_facets)
+        facets.update(propagated_authored_artifact_facets(artifact))
         if workbench_type == "markdown" and file_path and markdown_has_mermaid(file_path, manifest_dir):
             capabilities.append("render")
             facets["diagram_kind"] = "mermaid"

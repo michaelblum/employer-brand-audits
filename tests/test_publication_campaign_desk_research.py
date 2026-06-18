@@ -13,6 +13,7 @@ from scripts.publication_pipeline_fixture import (
     CAMPAIGN_DESK_RESEARCH_TEMPLATE_ID,
     generate_campaign_desk_research_fixture,
 )
+from scripts.publication_pipeline.core import slugify
 from scripts.workbench_projection import project_audit_manifest
 
 
@@ -99,6 +100,32 @@ class CampaignDeskResearchPipelineTests(unittest.TestCase):
             self.assertTrue(set(recommendation["supporting_stat_or_signal_ids"]) & (stat_ids | signal_ids), recommendation)
             self.assertTrue(set(recommendation["supporting_case_ids"]).issubset(case_ids), recommendation)
             self.assertTrue(set(recommendation["supporting_tactic_ids"]).issubset(tactic_ids), recommendation)
+
+    def test_campaign_default_cases_and_tactics_derive_from_sample_profile_cases(self) -> None:
+        profile_path = REPO_ROOT / "data" / "publication-pipeline-profiles" / "sample-campaign-desk-research.json"
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile_cases = profile.get("campaign_case_studies")
+        self.assertIsInstance(profile_cases, list)
+        self.assertGreaterEqual(len(profile_cases), 12)
+        expected_case_ids = {
+            str(case.get("case_id") or f"case:{slugify(str(case.get('organization') or 'case'))}")
+            for case in profile_cases
+            if isinstance(case, dict)
+        }
+
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest_path = generate_campaign_desk_research_fixture(Path(tmp) / "campaign")
+            cases = json.loads((manifest_path.parent / "campaign-case-matrix.json").read_text(encoding="utf-8"))
+            tactics = json.loads((manifest_path.parent / "channel-tactic-opportunity-map.json").read_text(encoding="utf-8"))
+
+        generated_case_ids = {case["case_id"] for case in cases["campaign_case_studies"]}
+        tactic_case_ids = {
+            case_id
+            for tactic in tactics["channel_tactics"]
+            for case_id in tactic["case_ids"]
+        }
+        self.assertEqual(generated_case_ids, expected_case_ids)
+        self.assertLessEqual(tactic_case_ids, expected_case_ids)
 
     def test_campaign_projection_groups_l4_view(self) -> None:
         with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
