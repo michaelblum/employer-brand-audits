@@ -88,7 +88,10 @@ class UrlStageCaptureTests(unittest.TestCase):
         self.assertIn('data-web-target-id="target-1"', html)
         self.assertIn("left:20px;top:30px;width:200px;height:48px", html)
         self.assertIn("Apply now", html)
-        self.assertIn(".web-target:hover,.web-target:focus{outline:0;background:transparent;}", html)
+        self.assertIn("@property --web-target-chase-angle", html)
+        self.assertIn("@keyframes web-target-chase-border", html)
+        self.assertIn(".web-target:hover::before,.web-target:focus-visible::before", html)
+        self.assertIn("conic-gradient(from var(--web-target-chase-angle)", html)
 
     def test_web_snapshot_html_escapes_attacker_controlled_target_fields(self) -> None:
         target_map = {

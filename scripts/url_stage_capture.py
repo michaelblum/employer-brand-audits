@@ -424,10 +424,21 @@ def build_web_snapshot_html(target_map: dict[str, Any]) -> str:
         "<!doctype html>\n"
         '<html><head><meta charset="utf-8"><style>\n'
         "html,body{margin:0;background:#0f1115;}\n"
+        "@property --web-target-chase-angle{syntax:'<angle>';inherits:false;initial-value:0deg;}\n"
+        "@keyframes web-target-chase-border{to{--web-target-chase-angle:360deg;}}\n"
         ".web-snapshot-stage{position:relative;display:block;line-height:0;}\n"
         f".web-snapshot-stage img{{display:block;width:{width}px;height:{height}px;}}\n"
         ".web-target{position:absolute;border:0;background:transparent;padding:0;cursor:crosshair;}\n"
-        ".web-target:hover,.web-target:focus{outline:0;background:transparent;}\n"
+        ".web-target::before{content:\"\";position:absolute;inset:-3px;padding:2px;border-radius:8px;"
+        "background:conic-gradient(from var(--web-target-chase-angle),rgba(56,189,248,0.08) 0deg,"
+        "#38bdf8 40deg,#93c5fd 70deg,#22d3ee 94deg,rgba(56,189,248,0.08) 140deg,"
+        "rgba(56,189,248,0.08) 360deg);"
+        "-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);"
+        "-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;"
+        "filter:drop-shadow(0 0 5px rgba(56,189,248,0.45));}\n"
+        ".web-target:hover,.web-target:focus-visible{outline:0;background:transparent;}\n"
+        ".web-target:hover::before,.web-target:focus-visible::before{opacity:1;"
+        "animation:web-target-chase-border 3.9s linear infinite;}\n"
         "</style></head><body>\n"
         f'<div class="web-snapshot-stage" data-web-snapshot-stage="true" style="width:{width}px;height:{height}px">\n'
         f'<img src="{html.escape(image_path)}" width="{width}" height="{height}" alt="Captured web page snapshot">\n'

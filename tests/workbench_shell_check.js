@@ -18,6 +18,8 @@ const app = fs.readFileSync(
 assert.match(html, /<button class="overview-button" id="overview"/);
 assert.match(html, /<div class="toolbar-middle" id="toolbar-middle">/);
 assert.match(html, /<div class="artifact-title" id="artifact-title"><\/div>/);
+assert.match(html, /<div class="hover-marker" id="hover-marker" hidden>💡<\/div>/);
+assert.match(html, /<div class="hover-marker" id="document-hover-marker" hidden>💡<\/div>/);
 assert.match(html, /<div class="sibling-nav" id="sibling-nav" aria-label="Artifact navigation">/);
 assert.match(html, /<button class="icon-button" id="prev"/);
 assert.match(html, /<button class="icon-button" id="next"/);

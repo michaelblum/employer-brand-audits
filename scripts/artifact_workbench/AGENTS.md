@@ -25,6 +25,9 @@ and app shell JavaScript.
 - HTML artifacts use the shared document stage and annotation editor; the shell
   may route saved `html_element` anchors to the marker/popover, but HTML
   identity extraction and inspector binding stay with the HTML type/primitive.
+- Document-surface HTML/web-snapshot hover targets preserve the animated
+  lightbulb marker through `#document-hover-marker`; rectangular markers and
+  generated chase borders show target extent without replacing the lightbulb.
 - Bounded intake fields are rendered as `bounded_input` interaction overlays
   attached to projected workflow step/input ids. Persist them through the
   workbench state surface as overlay state plus an agent-readable
