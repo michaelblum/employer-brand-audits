@@ -138,6 +138,22 @@ assert.equal(imageStyle.width, "500px");
 assert.equal(imageWrapClassNames.has("centered"), true);
 
 assert.deepEqual(
+  zoom.applyZoom({
+    imageEl,
+    wrapEl: imageWrapEl,
+    stageEl,
+    zoomInputEl: imageZoomInputEl,
+    viewerConfig: { maxZoomOutPercent: 10, maxZoomInPercent: 400 },
+    value: 100,
+    mode: "actual-size",
+  }),
+  { zoomPercent: 100, zoomMode: "actual-size" },
+);
+assert.equal(imageZoomInputEl.value, "100%");
+assert.equal(imageStyle.width, "1000px");
+assert.equal(imageWrapClassNames.has("centered"), false);
+
+assert.deepEqual(
   zoom.smartFit({
     contentWidth: 1000,
     contentHeight: 600,

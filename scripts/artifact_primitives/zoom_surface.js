@@ -66,9 +66,10 @@
     return Math.min(maxZoom, Math.max(minZoom, next));
   }
 
-  function updateAlignment({ wrapEl, stageEl, contentWidth, contentHeight, zoomPercent } = {}) {
+  function updateAlignment(options = {}) {
+    const { wrapEl, stageEl, zoomPercent } = options;
     if (!wrapEl) return;
-    const size = contentSize({ contentWidth, contentHeight });
+    const size = contentSize(options);
     const stageSize = stageViewportSize(stageEl);
     const fitTolerance = 1;
     wrapEl.classList?.toggle?.(
