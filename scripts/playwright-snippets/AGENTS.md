@@ -22,6 +22,12 @@ for capture, page preparation, extraction, and workbench smoke checks.
 
 - Keep snippets deterministic and session-aware.
 - Prefer clear DOM queries and explicit error messages over broad timeouts.
+- Capture-prep snippets must bound waits internally; real public pages may have
+  infinite animations or scroll changes, and URL-stage capture should continue
+  to screenshot proof when prep cannot fully settle.
+- `settle-page.js` is also the capture-stabilization hook: it should actively
+  freeze CSS animations/transitions, disable smooth scrolling, and pause media
+  before screenshots. `restore-page.js` owns cleanup for those mutations.
 - Update the related workbench or capture tests when smoke semantics change.
 
 ## Verification

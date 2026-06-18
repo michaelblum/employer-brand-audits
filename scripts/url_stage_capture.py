@@ -32,6 +32,10 @@ TARGET_LABEL_MAX_LENGTH = 160
 TARGET_TEXT_MAX_LENGTH = 240
 SITE_FINGERPRINT_TARGET_LIMIT = 80
 SITE_FINGERPRINT_HEX_LENGTH = 16
+DEFAULT_STEP_TIMEOUT_SECONDS = 60
+OPTIONAL_STEP_TIMEOUT_SECONDS = 20
+SCREENSHOT_STEP_TIMEOUT_SECONDS = 90
+TIMEOUT_EXIT_CODE = 124
 
 
 def repo_relative(path: Path) -> str:
@@ -100,16 +104,25 @@ def run_step(
     log_path: Path,
     stdout_path: Path | None = None,
     check: bool = True,
+    timeout_seconds: int | None = DEFAULT_STEP_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str]:
     print(f"[url-stage] {label}")
     print("+ " + " ".join(str(part) for part in cmd))
-    completed = subprocess.run(
-        cmd,
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout or b"").decode("utf-8", "replace")
+        stderr = exc.stderr if isinstance(exc.stderr, str) else (exc.stderr or b"").decode("utf-8", "replace")
+        timeout_message = f"{label} timed out after {timeout_seconds} seconds"
+        stderr = (stderr + "\n" if stderr else "") + timeout_message + "\n"
+        completed = subprocess.CompletedProcess(cmd, TIMEOUT_EXIT_CODE, stdout=stdout, stderr=stderr)
     with log_path.open("a", encoding="utf-8") as handle:
         handle.write(f"\n## {label}\n")
         handle.write("+ " + " ".join(str(part) for part in cmd) + "\n")
@@ -130,6 +143,74 @@ def run_step(
     if check and (completed.returncode != 0 or cli_reported_error):
         raise RuntimeError(f"{label} failed with exit code {completed.returncode}")
     return completed
+
+
+def run_optional_step(
+    label: str,
+    cmd: list[str],
+    log_path: Path,
+    stdout_path: Path | None = None,
+    timeout_seconds: int | None = OPTIONAL_STEP_TIMEOUT_SECONDS,
+) -> subprocess.CompletedProcess[str] | None:
+    try:
+        return run_step(
+            label,
+            cmd,
+            log_path,
+            stdout_path=stdout_path,
+            check=True,
+            timeout_seconds=timeout_seconds,
+        )
+    except RuntimeError as exc:
+        print(f"[url-stage] continuing after optional step failure: {exc}", file=sys.stderr)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"\n[optional_failure] {exc}\n")
+        return None
+
+
+def fallback_blueprint(
+    url: str,
+    *,
+    width: int,
+    height: int,
+    screenshot_dimensions: dict[str, int],
+) -> dict[str, Any]:
+    return {
+        "schema_version": "url_stage_blueprint.v0",
+        "url": url,
+        "title": "",
+        "viewport": {"width": width, "height": height, "devicePixelRatio": 1},
+        "document": {
+            "width": max(1, int(screenshot_dimensions.get("width") or width)),
+            "height": max(1, int(screenshot_dimensions.get("height") or height)),
+        },
+        "elements": [],
+    }
+
+
+def capture_page_screenshot(
+    *,
+    session: str,
+    path: Path,
+    log_path: Path,
+) -> None:
+    try:
+        run_step(
+            "write full-page screenshot",
+            command_for(session, "screenshot", path, "--full-page"),
+            log_path,
+            timeout_seconds=SCREENSHOT_STEP_TIMEOUT_SECONDS,
+        )
+    except RuntimeError as exc:
+        print(f"[url-stage] full-page screenshot failed; trying viewport screenshot: {exc}", file=sys.stderr)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"\n[fallback] full-page screenshot failed; trying viewport screenshot: {exc}\n")
+        run_step(
+            "write viewport screenshot fallback",
+            command_for(session, "screenshot", path),
+            log_path,
+            timeout_seconds=SCREENSHOT_STEP_TIMEOUT_SECONDS,
+        )
 
 
 def screenshot_rect(document_rect: dict[str, Any], *, scale_x: float, scale_y: float) -> dict[str, int]:
@@ -527,42 +608,51 @@ def capture_url_stage(
             command_for(session, "resize", width, height),
             paths["capture_log"],
         )
-        run_step(
+        run_optional_step(
             "settle URL stage",
             command_for(session, "run-code", SETTLE_SNIPPET),
             paths["capture_log"],
         )
-        run_step(
+        run_optional_step(
             "hide obscuring elements",
             command_for(session, "run-code", HIDE_SNIPPET),
             paths["capture_log"],
         )
-        blueprint_result = run_step(
+        capture_page_screenshot(
+            session=session,
+            path=paths["page_screenshot"],
+            log_path=paths["capture_log"],
+        )
+        screenshot_dimensions = png_dimensions(paths["page_screenshot"])
+        blueprint_result = run_optional_step(
             "extract web blueprint",
             command_for(session, "run-code", BLUEPRINT_SNIPPET),
             paths["capture_log"],
         )
-        blueprint = parse_playwright_cli_result(blueprint_result.stdout)
+        blueprint = parse_playwright_cli_result(blueprint_result.stdout) if blueprint_result else None
         if not isinstance(blueprint, dict):
-            raise RuntimeError("extract web blueprint did not return an object")
-        run_step(
+            blueprint = fallback_blueprint(
+                url,
+                width=width,
+                height=height,
+                screenshot_dimensions=screenshot_dimensions,
+            )
+        page_snapshot_result = run_optional_step(
             "write page snapshot",
             command_for(session, "snapshot", paths["page_snapshot_tmp"]),
             paths["capture_log"],
         )
-        page_snapshot = paths["page_snapshot_tmp"].read_text(encoding="utf-8")
-        text_result = run_step(
+        page_snapshot = (
+            paths["page_snapshot_tmp"].read_text(encoding="utf-8")
+            if page_snapshot_result and paths["page_snapshot_tmp"].exists()
+            else ""
+        )
+        text_result = run_optional_step(
             "extract visible text",
             command_for(session, "run-code", TEXT_SNIPPET),
             paths["capture_log"],
         )
-        visible_text = parse_playwright_cli_result(text_result.stdout)
-        run_step(
-            "write full-page screenshot",
-            command_for(session, "screenshot", paths["page_screenshot"], "--full-page"),
-            paths["capture_log"],
-        )
-        screenshot_dimensions = png_dimensions(paths["page_screenshot"])
+        visible_text = parse_playwright_cli_result(text_result.stdout) if text_result else ""
         web_snapshot_data = build_web_snapshot_data(
             blueprint,
             screenshot_dimensions=screenshot_dimensions,
@@ -573,7 +663,7 @@ def capture_url_stage(
         write_json(paths["web_snapshot_data"], web_snapshot_data)
         paths["web_snapshot"].write_text(build_web_snapshot_html_from_data(web_snapshot_data), encoding="utf-8")
         paths["page_snapshot_tmp"].unlink(missing_ok=True)
-        run_step(
+        run_optional_step(
             "restore page",
             command_for(session, "run-code", RESTORE_SNIPPET),
             paths["capture_log"],
