@@ -66,6 +66,10 @@ workbench implementation, and checked-in Playwright snippets.
 - `./eba dev demo --fixture publication-pipeline` generates a deterministic
   publication-pipeline ADR-002 manifest from tracked KILOS data and fixture
   records. It must not depend on local-only `reference_publications/` files.
+- Publication-pipeline manifests start with `p0-pipeline-intake`, a
+  workbench-visible `pipeline_intake` artifact that records the client,
+  objective, source seeds, competitors, ontology, desired outputs, and review
+  requirements driving downstream records.
 - `scripts/publication_pipeline_fixture.py --project-profile <profile.json>`
   generates the generic EVP client immersion and competitor messaging audit
   shape for an arbitrary company profile: client plus competitors, report

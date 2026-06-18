@@ -77,6 +77,7 @@ class PublicationPipelineFixtureTests(unittest.TestCase):
         self.assertEqual(
             [step["id"] for step in manifest["steps"]],
             [
+                "p0-pipeline-intake",
                 "p0-project-frame",
                 "p0-source-roster",
                 "p1-capture-pack",
@@ -96,6 +97,7 @@ class PublicationPipelineFixtureTests(unittest.TestCase):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
             required_files = [
+                "pipeline-intake.json",
                 "project-frame.json",
                 "source-roster.json",
                 "capture-pack.json",
@@ -111,9 +113,26 @@ class PublicationPipelineFixtureTests(unittest.TestCase):
 
         artifacts_by_id = {artifact["id"]: artifact for artifact in manifest["artifacts"]}
         self.assertEqual(
+            artifacts_by_id["p0-project-frame"]["parent_ids"],
+            ["p0-pipeline-intake"],
+        )
+        self.assertEqual(
             artifacts_by_id["p4-l4-publication"]["parent_ids"],
             ["p3-analysis-pack", "p2-evidence-matrix", "p1-capture-pack"],
         )
+
+    def test_fixture_writes_pipeline_intake_contract(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
+            manifest_path = generate_publication_pipeline_fixture(Path(tmp) / "publication-pipeline")
+            intake = json.loads((manifest_path.parent / "pipeline-intake.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(intake["pipeline_id"], PIPELINE_TEMPLATE_ID)
+        self.assertEqual(intake["client"]["name"], "Northside Hospital")
+        self.assertEqual(intake["ontology"]["framework_id"], "KILOS")
+        self.assertIn("report_docx", intake["desired_outputs"])
+        self.assertIn("l4_publication", intake["desired_outputs"])
+        self.assertGreaterEqual(len(intake["competitors"]), 3)
+        self.assertTrue(intake["review_requirements"]["manual_review_gates"])
 
     def test_default_fixture_contains_reference_report_data_groups(self) -> None:
         with tempfile.TemporaryDirectory(dir=REPO_ROOT / "artifacts") as tmp:
@@ -245,6 +264,8 @@ class PublicationPipelineFixtureTests(unittest.TestCase):
         self.assertIn("publication.audit_deck.bundle", group_slots)
         self.assertIn("publication.data_workbook.bundle", group_slots)
         self.assertIn("publication.l4_publication.bundle", group_slots)
+        l4_group = next(group for group in projection["artifact_groups"] if group["slot"] == "publication.l4_publication.bundle")
+        self.assertIn("p0-pipeline-intake", l4_group["artifact_ids"])
 
     def test_publication_pipeline_fixture_is_registered_in_command_surface(self) -> None:
         from scripts.eba_cli import FIXTURE_GENERATORS, validation_commands
@@ -268,6 +289,7 @@ class PublicationPipelineFixtureTests(unittest.TestCase):
         )
 
         self.assertIn("Evidence Matrix", "\n".join(lines))
+        self.assertIn("pipeline intake", "\n".join(lines))
         self.assertIn("L4 Publication", "\n".join(lines))
         self.assertNotIn("Acme Robotics", "\n".join(lines))
 

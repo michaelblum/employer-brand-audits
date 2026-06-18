@@ -62,6 +62,9 @@ Status:
   `publication-pipeline.evp-client-immersion-competitor-audit` template.
 - Northside is a tracked reference profile under
   `data/publication-pipeline-profiles/`, not the pipeline shape.
+- The shared `p0-pipeline-intake` artifact now starts the ADR-002 manifest and
+  records the operator-facing client, source seed, competitor, ontology,
+  desired-output, and review-requirement contract.
 
 Why first:
 
@@ -72,7 +75,6 @@ Why first:
 Next implementation needs:
 
 - Keep the default reference profile fixture.
-- Add a first-class intake artifact before project frame.
 - Ensure arbitrary-profile output has no reference-profile labels.
 - Keep workbench demo and projection tests around the full record chain.
 

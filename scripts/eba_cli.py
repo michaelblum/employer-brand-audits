@@ -450,7 +450,7 @@ def demo_recipe_lines(*, fixture: str | None, manifest: Path) -> list[str]:
         or manifest.resolve() == publication_manifest.resolve()
     ):
         return [
-            "1. Confirm the workflow shows project frame, capture pack, evidence matrix, analysis pack, and four publication views.",
+            "1. Confirm the workflow shows pipeline intake, project frame, capture pack, evidence matrix, analysis pack, and four publication views.",
             "2. Open Evidence Matrix and confirm every KILOS-coded item has pillar/factor provenance.",
             "3. Open Analysis Pack and confirm findings link back to evidence ids.",
             "4. Open L4 Publication and confirm it is a view over the same upstream records, not a separate source.",

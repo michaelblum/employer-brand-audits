@@ -184,6 +184,103 @@ def project_profile_entities(profile: dict[str, Any]) -> list[dict[str, Any]]:
     return [client_entity, *competitors[:3]]
 
 
+def pipeline_intake_from_profile(
+    profile: dict[str, Any],
+    *,
+    url_stage_manifest_paths: list[Path] | None = None,
+) -> dict[str, Any]:
+    entities = project_profile_entities(profile)
+    client = entities[0] if entities else {}
+    competitors = entities[1:]
+    source_seeds = []
+    for entity in entities:
+        source_urls = source_urls_from_entity(entity)
+        for source_key in ("careers_url", "culture_url", "dei_url"):
+            source_url = str(source_urls.get(source_key) or "")
+            if source_url:
+                source_seeds.append(
+                    {
+                        "entity_id": str(entity.get("entity_id") or ""),
+                        "source_type": source_key.replace("_url", ""),
+                        "url": source_url,
+                    }
+                )
+        for source_url in source_urls.get("review_urls") or []:
+            source_seeds.append(
+                {
+                    "entity_id": str(entity.get("entity_id") or ""),
+                    "source_type": "review",
+                    "url": str(source_url),
+                }
+            )
+    for path in url_stage_manifest_paths or []:
+        source_seeds.append(
+            {
+                "source_type": "url_stage_manifest",
+                "path": str(path),
+            }
+        )
+    desired_outputs = [
+        "capture_pack",
+        "evidence_matrix",
+        "analysis_pack",
+        "report_docx",
+        "audit_deck",
+        "data_workbook",
+        "l4_publication",
+    ]
+    return {
+        "pipeline_id": PIPELINE_TEMPLATE_ID,
+        "pipeline_key": PIPELINE_KEY,
+        "client": {
+            "name": str(client.get("name") or profile.get("client_full_name") or profile.get("client_name") or "Client"),
+            "sector": str(profile.get("industry") or "Unspecified"),
+            "geography": str(profile.get("geography") or "United States"),
+            "domain": str(profile.get("domain") or f"{slugify(str(profile.get('client_name') or 'client'))}.example"),
+            "audience": str(profile.get("audience") or "Employer brand target talent"),
+        },
+        "objective": "Generate a source-backed EVP client immersion and competitor messaging audit from reusable intake records.",
+        "reference_artifacts": [
+            {
+                "reference_id": "evp-client-immersion-competitor-audit",
+                "kind": "report_shape",
+                "use": "section order, evidence density, and publication view coverage",
+            }
+        ],
+        "source_seeds": source_seeds,
+        "competitors": [
+            {
+                "entity_id": str(entity.get("entity_id") or ""),
+                "name": str(entity.get("name") or ""),
+                "source_urls": source_urls_from_entity(entity),
+            }
+            for entity in competitors
+        ],
+        "target_talent_segments": [str(profile.get("audience") or "Employer brand target talent")],
+        "ontology": {
+            "framework_id": "KILOS",
+            "framework_version": "1.0",
+            "evidence_rule": "Map every evidence item to a pillar/factor or mark it as non-KILOS context.",
+        },
+        "desired_outputs": desired_outputs,
+        "review_requirements": {
+            "minimum_evidence_items_per_entity": 10,
+            "source_count": len(source_seeds),
+            "screenshot_needs": "capture-stage screenshots stay on disk and are cited by source artifacts",
+            "manual_review_gates": [
+                "source roster completeness",
+                "capture quality",
+                "evidence lineage",
+                "first-pass publication layout",
+            ],
+        },
+    }
+
+
+def pipeline_intake(profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    return pipeline_intake_from_profile(profile or default_project_profile())
+
+
 def report_outline() -> dict[str, Any]:
     return {
         "pipeline_family": PIPELINE_KEY,
@@ -988,7 +1085,8 @@ def build_manifest(project_frame_record: dict[str, Any] | None = None, profile: 
             "publication_pipeline": PIPELINE_KEY,
         },
         "steps": [
-            manifest_step("p0-project-frame", 0, "Project frame", "Define the publication target and milestone scope.", ["p0-project-frame"], []),
+            manifest_step("p0-pipeline-intake", 0, "Pipeline intake", "Normalize the operator request and review requirements.", ["p0-pipeline-intake"], []),
+            manifest_step("p0-project-frame", 0, "Project frame", "Define the publication target and milestone scope.", ["p0-project-frame"], ["p0-pipeline-intake"]),
             manifest_step("p0-source-roster", 0, "Source roster", "List client and competitor sources.", ["p0-source-roster"], ["p0-project-frame"]),
             manifest_step("p1-capture-pack", 1, "Capture pack", "Stage source captures and excerpts.", ["p1-capture-pack"], ["p0-source-roster"]),
             manifest_step("p2-evidence-matrix", 2, "Evidence matrix", "Normalize evidence into KILOS-tagged records.", ["p2-evidence-matrix"], ["p1-capture-pack"]),
@@ -999,7 +1097,8 @@ def build_manifest(project_frame_record: dict[str, Any] | None = None, profile: 
             manifest_step("p4-l4-publication-view", 4, "L4 publication view", "Render the final publication surface.", ["p4-l4-publication"], ["p3-analysis-pack"]),
         ],
         "artifacts": [
-            manifest_artifact("p0-project-frame", 0, "publication_project", "p0-project-frame", [], "project-frame.json", "publication.project", "Publication project frame"),
+            manifest_artifact("p0-pipeline-intake", 0, "pipeline_intake", "p0-pipeline-intake", [], "pipeline-intake.json", "publication.pipeline_intake", "Operator-facing pipeline intake"),
+            manifest_artifact("p0-project-frame", 0, "publication_project", "p0-project-frame", ["p0-pipeline-intake"], "project-frame.json", "publication.project", "Publication project frame"),
             manifest_artifact("p0-source-roster", 0, "source_roster", "p0-source-roster", ["p0-project-frame"], "source-roster.json", "publication.source_roster", "Client and competitor source roster"),
             manifest_artifact("p1-capture-pack", 1, "capture_pack", "p1-capture-pack", ["p0-source-roster"], "capture-pack.json", "publication.capture_pack", "Capture pack with source artifacts and excerpts"),
             manifest_artifact("p2-evidence-matrix", 2, "evidence_matrix", "p2-evidence-matrix", ["p1-capture-pack"], "evidence-matrix.json", "publication.evidence_matrix", "KILOS-normalized evidence matrix"),
@@ -1035,6 +1134,7 @@ def generate_publication_pipeline_fixture(
         manifest_paths.append(url_stage_manifest_path)
     if url_stage_manifest_paths:
         manifest_paths.extend(url_stage_manifest_paths)
+    intake_record = pipeline_intake_from_profile(profile, url_stage_manifest_paths=manifest_paths)
     if manifest_paths:
         capture_pack_record = capture_pack_from_url_stage_manifests(
             [json.loads(path.read_text(encoding="utf-8")) for path in manifest_paths],
@@ -1044,6 +1144,7 @@ def generate_publication_pipeline_fixture(
         source_roster_record = source_roster_from_capture_pack(capture_pack_record)
     evidence_matrix_record = evidence_matrix_from_capture_pack(kilos_terms, capture_pack_record)
     analysis_pack_record = analysis_pack_from_records(project_frame_record, source_roster_record, evidence_matrix_record)
+    write_json(output_dir / "pipeline-intake.json", intake_record)
     write_json(output_dir / "project-frame.json", project_frame_record)
     write_json(output_dir / "source-roster.json", source_roster_record)
     write_json(output_dir / "capture-pack.json", capture_pack_record)
