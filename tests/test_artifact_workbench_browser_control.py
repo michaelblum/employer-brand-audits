@@ -7,6 +7,7 @@ import argparse
 import re
 import sys
 import tempfile
+import time
 import unittest
 import urllib.error
 from pathlib import Path
@@ -405,6 +406,22 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertEqual(args.index, 3)
         self.assertEqual(args.session, "eba-workbench")
 
+    def test_browser_command_timeout_returns_failure_and_logs_timeout(self) -> None:
+        started = time.monotonic()
+        with io.StringIO() as log:
+            result = gate.run_browser_command(
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+                log,
+                timeout_seconds=0.1,
+            )
+            log_text = log.getvalue()
+
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual(result.returncode, gate.BROWSER_COMMAND_TIMEOUT_EXIT_CODE)
+        self.assertIn("timed out after 0.1s", result.stderr)
+        self.assertIn("[timeout] command timed out after 0.1s", log_text)
+        self.assertIn("[exit_code] 124", log_text)
+
     def test_workbench_tab_cleanup_closes_blank_and_duplicate_workbench_tabs(self) -> None:
         commands: list[list[str]] = []
 
@@ -607,7 +624,114 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         )
         self.assertIn("--config", plan["open_command"])
 
-    def test_reused_browser_session_syncs_when_display_state_changes(self) -> None:
+    def test_default_managed_workbench_uses_real_headed_viewport(self) -> None:
+        commands: list[list[str]] = []
+        statuses = [
+            {
+                "session": "eba-workbench",
+                "alive": False,
+                "status": "not_found",
+            },
+            {
+                "session": "eba-workbench",
+                "alive": True,
+                "status": "open",
+            },
+        ]
+
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def fake_status(session: str) -> dict[str, object]:
+            self.assertEqual(session, "eba-workbench")
+            return statuses.pop(0)
+
+        def fake_run(command: list[str], log_handle: object) -> Result:
+            commands.append(command)
+            return Result()
+
+        def fake_metrics(session: str) -> dict[str, object]:
+            self.assertEqual(session, "eba-workbench")
+            return {
+                "innerWidth": 1512,
+                "innerHeight": 949,
+                "outerWidth": 1512,
+                "outerHeight": 949,
+                "screenX": 0,
+                "screenY": 33,
+                "devicePixelRatio": 1,
+                "screenAvailLeft": 0,
+                "screenAvailTop": 0,
+                "screenAvailWidth": 1512,
+                "screenAvailHeight": 949,
+            }
+
+        original_require_cli = gate.require_session_aware_cli
+        original_require_wrapper = gate.require_workbench_browser_wrapper
+        original_status = gate.browser_session_status
+        original_run = gate.run_browser_command
+        original_metrics = gate.browser_page_metrics
+        try:
+            gate.require_session_aware_cli = lambda: "playwright-cli"  # type: ignore[assignment]
+            gate.require_workbench_browser_wrapper = lambda: gate.BROWSER_WRAPPER  # type: ignore[assignment]
+            gate.browser_session_status = fake_status  # type: ignore[assignment]
+            gate.run_browser_command = fake_run  # type: ignore[assignment]
+            gate.browser_page_metrics = fake_metrics  # type: ignore[assignment]
+
+            with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+                root = Path(tmp)
+                result = gate.open_with_playwright(
+                    "http://127.0.0.1:8765/",
+                    {
+                        "artifact_root": root,
+                        "browser_log": root / "workbench-browser.log",
+                        "browser_state": root / "workbench-browser-state.json",
+                    },
+                    "chrome",
+                    None,
+                    session="eba-workbench",
+                    profile=REPO_ROOT / "chrome-profile" / "workbench",
+                )
+        finally:
+            gate.require_session_aware_cli = original_require_cli  # type: ignore[assignment]
+            gate.require_workbench_browser_wrapper = original_require_wrapper  # type: ignore[assignment]
+            gate.browser_session_status = original_status  # type: ignore[assignment]
+            gate.run_browser_command = original_run  # type: ignore[assignment]
+            gate.browser_page_metrics = original_metrics  # type: ignore[assignment]
+
+        self.assertFalse(result["reused"])
+        self.assertTrue(result["window_maximized"])
+        self.assertTrue(result["window_focused"])
+        self.assertFalse(result["viewport_synced"])
+        self.assertIsNone(result["viewport_target"])
+        self.assertFalse(any(command[2:3] == ["resize"] for command in commands), commands)
+        self.assertEqual(
+            commands,
+            [
+                [
+                    sys.executable,
+                    "scripts/playwright_cli_browser.py",
+                    "open",
+                    "http://127.0.0.1:8765/",
+                    "--session",
+                    "eba-workbench",
+                    "--browser",
+                    "chrome",
+                    "--persistent",
+                    "--profile",
+                    "chrome-profile/workbench",
+                    "--config",
+                    "scripts/playwright_cli_workbench_config.json",
+                ],
+                [sys.executable, "scripts/playwright_cli_browser.py", "tab-list", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "window-maximize", "--session", "eba-workbench"],
+                [sys.executable, "scripts/playwright_cli_browser.py", "window-focus", "--session", "eba-workbench"],
+            ],
+        )
+
+    def test_reused_browser_session_maximizes_without_resize_when_display_state_changes(self) -> None:
         commands: list[list[str]] = []
         statuses = [
             {
@@ -704,8 +828,8 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertFalse(result["resized"])
         self.assertTrue(result["window_maximized"])
         self.assertTrue(result["window_focused"])
-        self.assertTrue(result["viewport_synced"])
-        self.assertEqual(result["viewport_target"], (1484, 883))
+        self.assertFalse(result["viewport_synced"])
+        self.assertIsNone(result["viewport_target"])
         self.assertEqual(
             commands,
             [
@@ -728,15 +852,6 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                     sys.executable,
                     "scripts/playwright_cli_browser.py",
                     "window-maximize",
-                    "--session",
-                    "eba-workbench",
-                ],
-                [
-                    sys.executable,
-                    "scripts/playwright_cli_browser.py",
-                    "resize",
-                    "1484",
-                    "883",
                     "--session",
                     "eba-workbench",
                 ],
@@ -954,7 +1069,8 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
         self.assertTrue(result["replaced"])
         self.assertTrue(result["window_maximized"])
         self.assertTrue(result["window_focused"])
-        self.assertTrue(result["viewport_synced"])
+        self.assertFalse(result["viewport_synced"])
+        self.assertIsNone(result["viewport_target"])
         self.assertEqual(
             commands,
             [
@@ -976,7 +1092,6 @@ class ArtifactWorkbenchBrowserControlTests(unittest.TestCase):
                 ],
                 [sys.executable, "scripts/playwright_cli_browser.py", "tab-list", "--session", "eba-workbench"],
                 [sys.executable, "scripts/playwright_cli_browser.py", "window-maximize", "--session", "eba-workbench"],
-                [sys.executable, "scripts/playwright_cli_browser.py", "resize", "1484", "949", "--session", "eba-workbench"],
                 [sys.executable, "scripts/playwright_cli_browser.py", "window-focus", "--session", "eba-workbench"],
             ],
         )

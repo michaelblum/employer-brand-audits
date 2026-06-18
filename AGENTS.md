@@ -110,10 +110,12 @@ must not resize or reposition the browser window. Explicit human-visible summon
 paths such as `demo`, `reset`, and `refresh` may close and relaunch the managed
 `eba-workbench` browser session so the headed Chrome window is raised without
 accumulating duplicate windows or blank/duplicate workbench tabs. After a fresh
-launch, the demo/reset/refresh path may maximize the managed window and sync
-Playwright's fixed viewport to the current display's visible bounds. Capture and
-smoke flows keep their fixed deterministic viewport settings. Workbench `click`,
-`fill`, and `press` still require an active turn. Use
+launch, the demo/reset/refresh path may maximize the managed window; the
+default headed workbench uses the browser's native viewport instead of a fixed
+Playwright viewport. Capture and smoke flows keep their fixed deterministic
+viewport settings. Managed browser commands are bounded and should fail with a
+`workbench-browser.log` trail instead of hanging indefinitely. Workbench
+`click`, `fill`, and `press` still require an active turn. Use
 `./eba dev workbench context --json` for the current full workbench context,
 available workflow manifests, and session-local
 interaction overlays. Use `./eba dev workbench glance --json` for the fast

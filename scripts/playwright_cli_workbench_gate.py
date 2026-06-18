@@ -47,6 +47,9 @@ LOG_NAME = "workbench-server.log"
 STATE_NAME = "workbench-server-state.json"
 BROWSER_STATE_NAME = "workbench-browser-state.json"
 BROWSER_LOG_NAME = "workbench-browser.log"
+BROWSER_COMMAND_TIMEOUT_SECONDS = 30.0
+BROWSER_COMMAND_TERMINATE_GRACE_SECONDS = 3.0
+BROWSER_COMMAND_TIMEOUT_EXIT_CODE = 124
 DEFAULT_BROWSER_SESSION = "eba-workbench"
 DEFAULT_BROWSER_PROFILE = REPO_ROOT / "chrome-profile" / "workbench"
 DEFAULT_BROWSER_CONFIG = REPO_ROOT / "scripts" / "playwright_cli_workbench_config.json"
@@ -836,15 +839,62 @@ def browser_session_status(session: str) -> dict[str, Any]:
     return browser_session_status_from_list(completed.stdout, session=session)
 
 
-def run_browser_command(command: list[str], log_handle: Any) -> subprocess.CompletedProcess[str]:
+def format_timeout_seconds(timeout_seconds: float) -> str:
+    return f"{timeout_seconds:g}s"
+
+
+def stop_timed_out_process_group(
+    process: subprocess.Popen[str],
+) -> tuple[str, str]:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        return process.communicate(timeout=BROWSER_COMMAND_TERMINATE_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        return process.communicate()
+
+
+def run_browser_command(
+    command: list[str],
+    log_handle: Any,
+    *,
+    timeout_seconds: float = BROWSER_COMMAND_TIMEOUT_SECONDS,
+) -> subprocess.CompletedProcess[str]:
     log_handle.write("+ " + " ".join(command) + "\n")
     log_handle.flush()
-    completed = subprocess.run(
+    process = subprocess.Popen(
         command,
         cwd=REPO_ROOT,
         text=True,
-        capture_output=True,
-        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    timed_out = False
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+        returncode = process.returncode
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        stdout, stderr = stop_timed_out_process_group(process)
+        timeout_label = format_timeout_seconds(timeout_seconds)
+        message = f"command timed out after {timeout_label}"
+        stderr = (stderr or "")
+        if stderr and not stderr.endswith("\n"):
+            stderr += "\n"
+        stderr += message + "\n"
+        returncode = BROWSER_COMMAND_TIMEOUT_EXIT_CODE
+    completed = subprocess.CompletedProcess(
+        command,
+        returncode,
+        stdout=stdout or "",
+        stderr=stderr or "",
     )
     if completed.stdout:
         log_handle.write("\n[stdout]\n")
@@ -856,6 +906,10 @@ def run_browser_command(command: list[str], log_handle: Any) -> subprocess.Compl
         log_handle.write(completed.stderr)
         if not completed.stderr.endswith("\n"):
             log_handle.write("\n")
+    if timed_out:
+        log_handle.write(
+            f"\n[timeout] command timed out after {format_timeout_seconds(timeout_seconds)}\n"
+        )
     log_handle.write(f"\n[exit_code] {completed.returncode}\n")
     log_handle.flush()
     return completed
@@ -934,48 +988,6 @@ def browser_display_signature(metrics: dict[str, Any]) -> dict[str, float] | Non
         return None
 
 
-def viewport_target_from_metrics(metrics: dict[str, Any]) -> tuple[int, int] | None:
-    try:
-        avail_width = metric_number(metrics, "screenAvailWidth")
-        avail_height = metric_number(metrics, "screenAvailHeight")
-        if avail_width > 0 and avail_height > 0:
-            return int(round(avail_width)), int(round(avail_height))
-    except (KeyError, TypeError, ValueError):
-        pass
-    try:
-        return (
-            int(metric_number(metrics, "outerWidth")),
-            int(metric_number(metrics, "outerHeight")),
-        )
-    except (KeyError, TypeError, ValueError):
-        return None
-
-
-def viewport_sync_command(session: str, metrics: dict[str, Any]) -> list[str] | None:
-    try:
-        inner_width = int(metric_number(metrics, "innerWidth"))
-        inner_height = int(metric_number(metrics, "innerHeight"))
-    except (KeyError, TypeError, ValueError):
-        return None
-    target = viewport_target_from_metrics(metrics)
-    if target is None:
-        return None
-    target_width, target_height = target
-    if inner_width <= 0 or inner_height <= 0 or target_width <= 0 or target_height <= 0:
-        return None
-    if abs(inner_width - target_width) <= 1 and abs(inner_height - target_height) <= 1:
-        return None
-    return [
-        sys.executable,
-        relative_path(BROWSER_WRAPPER),
-        "resize",
-        str(target_width),
-        str(target_height),
-        "--session",
-        session,
-    ]
-
-
 def open_or_reuse_managed_workbench(
     plan: dict[str, Any],
     before: dict[str, Any],
@@ -1008,7 +1020,7 @@ def apply_explicit_initial_viewport_resize(
     return run_browser_command(plan["initial_resize_command"], log_handle)
 
 
-def sync_managed_workbench_viewport_to_display(
+def prepare_managed_workbench_window(
     *,
     session: str,
     plan: dict[str, Any],
@@ -1016,12 +1028,10 @@ def sync_managed_workbench_viewport_to_display(
     previous_browser_state: dict[str, Any],
     log_handle: Any,
 ) -> dict[str, Any]:
-    """Maximize/sync only when display state says the fixed viewport is stale."""
+    """Maximize only when display state says the headed workbench window is stale."""
     viewport_metrics = browser_page_metrics(session)
     display_signature = browser_display_signature(viewport_metrics)
-    viewport_target = None
     window_maximize_result = None
-    viewport_sync_result = None
     previous_signature = (
         previous_browser_state.get("display_signature")
         if isinstance(previous_browser_state, dict)
@@ -1043,22 +1053,12 @@ def sync_managed_workbench_viewport_to_display(
         if window_maximize_result.returncode == 0:
             viewport_metrics = browser_page_metrics(session)
             display_signature = browser_display_signature(viewport_metrics)
-        sync_command = viewport_sync_command(session, viewport_metrics)
-        viewport_target = viewport_target_from_metrics(viewport_metrics)
-        if sync_command is not None:
-            viewport_sync_result = run_browser_command(sync_command, log_handle)
-            if viewport_sync_result.returncode == 0:
-                viewport_metrics = browser_page_metrics(session)
-                display_signature = browser_display_signature(viewport_metrics)
-                viewport_target = viewport_target_from_metrics(viewport_metrics)
-    else:
-        viewport_target = viewport_target_from_metrics(viewport_metrics)
     return {
         "display_signature": display_signature,
         "viewport_metrics": viewport_metrics,
-        "viewport_target": viewport_target,
+        "viewport_target": None,
         "window_maximize_result": window_maximize_result,
-        "viewport_sync_result": viewport_sync_result,
+        "viewport_sync_result": None,
     }
 
 
@@ -1139,7 +1139,7 @@ def open_with_playwright(
             )
         resize_result = apply_explicit_initial_viewport_resize(plan, action, log_handle)
         if viewport_size is None and action_result.returncode == 0:
-            sync_state = sync_managed_workbench_viewport_to_display(
+            sync_state = prepare_managed_workbench_window(
                 session=session,
                 plan=plan,
                 action=action,
@@ -1164,10 +1164,6 @@ def open_with_playwright(
     if window_maximize_result is not None and window_maximize_result.returncode != 0:
         raise SystemExit(
             f"Workbench browser window maximize failed. See {relative_path(paths['browser_log'])}."
-        )
-    if viewport_sync_result is not None and viewport_sync_result.returncode != 0:
-        raise SystemExit(
-            f"Workbench browser viewport sync failed. See {relative_path(paths['browser_log'])}."
         )
     if window_focus_result is not None and window_focus_result.returncode != 0:
         raise SystemExit(

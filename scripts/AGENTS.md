@@ -65,7 +65,11 @@ workbench implementation, and checked-in Playwright snippets.
   message signing automatic where possible.
 - Route routine workbench browser behavior through named management helpers in
   `playwright_cli_workbench_gate.py`; keep tab cleanup, focus, maximize, and
-  viewport sync as separate operations so tests can guard their side effects.
+  explicit viewport resize as separate operations so tests can guard their side
+  effects. The default headed workbench uses the browser's native viewport;
+  fixed Playwright viewport sizes belong to explicit/capture paths. Managed
+  browser commands must be bounded and leave a `workbench-browser.log` trail on
+  timeout.
 - Keep fixture generation separate from generated runtime output.
 - The deterministic easy-audit fixture treats `l4-final-report` as the single
   L4 report artifact and projects it as HTML. Keep Mermaid/markdown smoke
