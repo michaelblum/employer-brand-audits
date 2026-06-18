@@ -22,7 +22,9 @@ try:
     )
     from scripts.eba_signature import append_signature_footer, current_eba_signature, signature_payload
     from scripts.publication_pipeline_fixture import (
+        COMPETITOR_WORKBOOK_TEMPLATE_ID,
         SEGMENT_TVP_TEMPLATE_ID,
+        generate_competitor_messaging_workbook_fixture,
         generate_publication_pipeline_fixture,
         generate_segment_tvp_audit_fixture,
     )
@@ -39,7 +41,9 @@ except ModuleNotFoundError:
     )
     from eba_signature import append_signature_footer, current_eba_signature, signature_payload
     from publication_pipeline_fixture import (
+        COMPETITOR_WORKBOOK_TEMPLATE_ID,
         SEGMENT_TVP_TEMPLATE_ID,
+        generate_competitor_messaging_workbook_fixture,
         generate_publication_pipeline_fixture,
         generate_segment_tvp_audit_fixture,
     )
@@ -85,6 +89,7 @@ FIXTURE_GENERATORS = {
     "easy-audit": generate_easy_audit_fixture,
     "publication-pipeline": generate_publication_pipeline_fixture,
     "segment-tvp-audit": generate_segment_tvp_audit_fixture,
+    "competitor-messaging-workbook": generate_competitor_messaging_workbook_fixture,
 }
 
 
@@ -316,6 +321,7 @@ def validation_commands() -> list[list[str]]:
         [sys.executable, "tests/test_publication_pipeline_fixture.py"],
         [sys.executable, "tests/test_publication_capture_pack.py"],
         [sys.executable, "tests/test_publication_segment_tvp.py"],
+        [sys.executable, "tests/test_publication_competitor_workbook.py"],
         [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
         [sys.executable, "tests/test_url_stage_capture.py"],
         [sys.executable, "scripts/workbench_projection_shape_check.py"],
@@ -471,6 +477,13 @@ def demo_recipe_lines(*, fixture: str | None, manifest: Path) -> list[str]:
             "2. Open Segment Source Roster and confirm role-family, job-posting, and social sources are represented.",
             "3. Open Social Platform Audit and confirm social observations cite upstream evidence ids.",
             "4. Open L4 Publication and confirm recommendations cite segment evidence records.",
+        ]
+    if fixture == "competitor-messaging-workbook" or manifest_template_id(manifest) == COMPETITOR_WORKBOOK_TEMPLATE_ID:
+        return [
+            "1. Confirm the workflow shows pipeline intake, source roster, Workbook Extraction, evidence matrix, analysis pack, Data Workbook, and L4 views.",
+            "2. Open Workbook Extraction and confirm sheet dimensions, effective ranges, and header maps are visible.",
+            "3. Open Data Workbook and confirm evidence cells and Partner Activation records retain source cells.",
+            "4. Open L4 Publication and confirm coverage findings cite workbook evidence ids.",
         ]
     if fixture == "easy-audit" or manifest.resolve() == (
         REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"

@@ -74,6 +74,11 @@ workbench implementation, and checked-in Playwright snippets.
   segment-specific TVP ADR-002 manifest from the tracked ADT reference profile
   and KILOS data. It must support arbitrary project profiles without inheriting
   ADT competitor labels, job URLs, or social-source defaults.
+- `./eba dev demo --fixture competitor-messaging-workbook` generates a
+  deterministic workbook-normalization ADR-002 manifest from the tracked
+  HarbourVest workbook reference profile. It models effective sheet ranges,
+  wide matrix cells, evidence cells, partner organizations, and partner
+  activations without depending on local-only workbook files at runtime.
 - `scripts/publication_pipeline_fixture.py --project-profile <profile.json>`
   generates the generic EVP client immersion and competitor messaging audit
   shape for an arbitrary company profile: client plus competitors, report

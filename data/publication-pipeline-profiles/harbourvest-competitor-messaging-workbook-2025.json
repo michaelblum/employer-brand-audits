@@ -1,0 +1,52 @@
+{
+  "project_id": "harbourvest-competitor-messaging-workbook-2025",
+  "reference_profile_id": "harbourvest-competitor-messaging-workbook-2025",
+  "client_name": "HarbourVest",
+  "client_full_name": "HarbourVest Partners",
+  "industry": "Private markets investment management",
+  "geography": "United States and United Kingdom",
+  "audience": "Investment, operations, and corporate talent",
+  "report_title": "HarbourVest Competitor Messaging Workbook",
+  "report_date": "2026-06-18",
+  "domain": "harbourvest.com",
+  "workbook_entities": [
+    "HarbourVest Partners",
+    "Adams Street Partners",
+    "Bain Capital",
+    "Blackstone",
+    "Carlyle Group",
+    "GCM Grosvenor",
+    "Hamilton Lane",
+    "Stepstone Group"
+  ],
+  "competitors": [
+    {
+      "entity_id": "competitor-adams-street",
+      "name": "Adams Street Partners"
+    },
+    {
+      "entity_id": "competitor-bain-capital",
+      "name": "Bain Capital"
+    },
+    {
+      "entity_id": "competitor-blackstone",
+      "name": "Blackstone"
+    },
+    {
+      "entity_id": "competitor-carlyle",
+      "name": "Carlyle Group"
+    },
+    {
+      "entity_id": "competitor-gcm-grosvenor",
+      "name": "GCM Grosvenor"
+    },
+    {
+      "entity_id": "competitor-hamilton-lane",
+      "name": "Hamilton Lane"
+    },
+    {
+      "entity_id": "competitor-stepstone",
+      "name": "Stepstone Group"
+    }
+  ]
+}

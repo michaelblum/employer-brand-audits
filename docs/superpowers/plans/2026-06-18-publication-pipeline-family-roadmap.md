@@ -152,6 +152,15 @@ Generalized pipeline ids:
 - `publication-pipeline.competitor-messaging-workbook`
 - `publication-pipeline.dei-competitor-audit`
 
+Status:
+
+- `publication-pipeline.competitor-messaging-workbook` is implemented as
+  `./eba dev demo --fixture competitor-messaging-workbook` with a tracked
+  HarbourVest workbook reference profile, workbook extraction metadata,
+  long-form evidence cells, partner organization and activation records,
+  analysis pack, workbook view, L4 readout, and arbitrary-profile leakage tests.
+- `publication-pipeline.dei-competitor-audit` remains next in this family.
+
 Additional intake fields:
 
 - `matrix_workbook`: workbook path or uploaded workbook artifact.
