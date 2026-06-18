@@ -274,6 +274,13 @@ Generalized pipeline id:
 
 - `publication-pipeline.kilos-methodology`
 
+Status:
+
+- Implemented as `./eba dev demo --fixture kilos-methodology` with tracked
+  KILOS framework data, ontology source roster, KILOS browser, mapping workbook,
+  methodology deck metadata, scorecard table metadata, report snippets, L4
+  view, and reference-reader tests for local-only KILOS materials when present.
+
 Additional intake fields:
 
 - `ontology_sources`: JSON, PPTX, and XLSX source paths.

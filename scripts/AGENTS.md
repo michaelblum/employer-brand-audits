@@ -88,6 +88,11 @@ workbench implementation, and checked-in Playwright snippets.
   Scottish Power reference profile. It models research source groups,
   labor-market stats, policy/context signals, campaign case studies, channel
   tactics, recommendations, and L4 views.
+- `./eba dev demo --fixture kilos-methodology` generates a deterministic KILOS
+  methodology ADR-002 manifest from tracked `data/kilos-framework.json` and
+  reference-modeled metadata. It preserves pillar/factor counts, survey-label
+  mappings, methodology deck metadata, scorecard table metadata, snippets, and
+  L4 views.
 - `scripts/publication_pipeline_fixture.py --project-profile <profile.json>`
   generates the generic EVP client immersion and competitor messaging audit
   shape for an arbitrary company profile: client plus competitors, report

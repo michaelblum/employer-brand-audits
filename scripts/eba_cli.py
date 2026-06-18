@@ -25,10 +25,12 @@ try:
         COMPETITOR_WORKBOOK_TEMPLATE_ID,
         CAMPAIGN_DESK_RESEARCH_TEMPLATE_ID,
         DEI_COMPETITOR_AUDIT_TEMPLATE_ID,
+        KILOS_METHODOLOGY_TEMPLATE_ID,
         SEGMENT_TVP_TEMPLATE_ID,
         generate_competitor_messaging_workbook_fixture,
         generate_campaign_desk_research_fixture,
         generate_dei_competitor_audit_fixture,
+        generate_kilos_methodology_fixture,
         generate_publication_pipeline_fixture,
         generate_segment_tvp_audit_fixture,
     )
@@ -48,10 +50,12 @@ except ModuleNotFoundError:
         COMPETITOR_WORKBOOK_TEMPLATE_ID,
         CAMPAIGN_DESK_RESEARCH_TEMPLATE_ID,
         DEI_COMPETITOR_AUDIT_TEMPLATE_ID,
+        KILOS_METHODOLOGY_TEMPLATE_ID,
         SEGMENT_TVP_TEMPLATE_ID,
         generate_competitor_messaging_workbook_fixture,
         generate_campaign_desk_research_fixture,
         generate_dei_competitor_audit_fixture,
+        generate_kilos_methodology_fixture,
         generate_publication_pipeline_fixture,
         generate_segment_tvp_audit_fixture,
     )
@@ -100,6 +104,7 @@ FIXTURE_GENERATORS = {
     "competitor-messaging-workbook": generate_competitor_messaging_workbook_fixture,
     "dei-competitor-audit": generate_dei_competitor_audit_fixture,
     "campaign-desk-research-comp-audit": generate_campaign_desk_research_fixture,
+    "kilos-methodology": generate_kilos_methodology_fixture,
 }
 
 
@@ -334,6 +339,7 @@ def validation_commands() -> list[list[str]]:
         [sys.executable, "tests/test_publication_competitor_workbook.py"],
         [sys.executable, "tests/test_publication_dei_competitor_audit.py"],
         [sys.executable, "tests/test_publication_campaign_desk_research.py"],
+        [sys.executable, "tests/test_publication_kilos_methodology.py"],
         [sys.executable, "tests/test_artifact_workbench_browser_control.py"],
         [sys.executable, "tests/test_url_stage_capture.py"],
         [sys.executable, "scripts/workbench_projection_shape_check.py"],
@@ -510,6 +516,13 @@ def demo_recipe_lines(*, fixture: str | None, manifest: Path) -> list[str]:
             "2. Open Campaign Case Matrix and confirm the twelve case studies retain source linkage.",
             "3. Open Channel Tactic map and confirm tactics connect to campaign cases and funnel stages.",
             "4. Open L4 Publication and confirm recommendations cite source, case, and tactic records.",
+        ]
+    if fixture == "kilos-methodology" or manifest_template_id(manifest) == KILOS_METHODOLOGY_TEMPLATE_ID:
+        return [
+            "1. Confirm the workflow shows pipeline intake, ontology source roster, KILOS Browser, Mapping Workbook, methodology deck, scorecard tables, snippets, and L4 views.",
+            "2. Open KILOS Browser and confirm the five pillars and factor counts are preserved.",
+            "3. Open Mapping Workbook and confirm mapped and non-KILOS rows remain explicit.",
+            "4. Open L4 Publication and confirm methodology copy is rendered from the same ontology records.",
         ]
     if fixture == "easy-audit" or manifest.resolve() == (
         REPO_ROOT / "artifacts" / "easy-audit" / "latest" / "manifest.json"
