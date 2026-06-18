@@ -79,6 +79,25 @@
     );
   }
 
+  function alignStageViewport(options = {}, size = contentSize(options), zoomPercent = 100) {
+    const { stageEl } = options;
+    if (!stageEl) return;
+    const stageSize = stageViewportSize(stageEl);
+    const renderedWidth = size.width * zoomPercent / 100;
+    const renderedHeight = size.height * zoomPercent / 100;
+    const scrollWidth = Math.max(Number(stageEl.scrollWidth || 0), renderedWidth);
+    const nextLeft = renderedWidth > stageSize.width + 1
+      ? Math.max(0, (scrollWidth - stageSize.width) / 2)
+      : 0;
+    const nextTop = renderedHeight <= stageSize.height + 1 ? 0 : Number(stageEl.scrollTop || 0);
+    if (typeof stageEl.scrollTo === "function") {
+      stageEl.scrollTo({ left: nextLeft, top: nextTop, behavior: "auto" });
+    } else {
+      stageEl.scrollLeft = nextLeft;
+      stageEl.scrollTop = nextTop;
+    }
+  }
+
   function applyZoom(options = {}) {
     const size = contentSize(options);
     const zoomPercent = clampZoom(options);
@@ -98,6 +117,7 @@
       options.wrapEl.style.height = `${Math.max(1, size.height * scale)}px`;
     }
     updateAlignment({ ...options, ...size, zoomPercent });
+    alignStageViewport(options, size, zoomPercent);
     return { zoomPercent, zoomMode: mode };
   }
 

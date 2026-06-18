@@ -36,6 +36,70 @@ async (page) => {
       && /\d+ x \d+ px/.test(readout);
   }, null, { timeout: 5000 });
 
+  const measureImageLayout = () => page.evaluate(() => {
+    const stage = document.querySelector("#stage");
+    const image = document.querySelector("#artifact-image");
+    const wrap = document.querySelector("#image-wrap");
+    const stageRect = stage?.getBoundingClientRect();
+    const imageRect = image?.getBoundingClientRect();
+    return {
+      centered: wrap?.classList.contains("centered"),
+      imageHeight: imageRect?.height,
+      imageWidth: imageRect?.width,
+      stageHeight: stageRect?.height,
+      stageWidth: stageRect?.width,
+      stageClientHeight: stage?.clientHeight,
+      stageClientWidth: stage?.clientWidth,
+      stageScrollHeight: stage?.scrollHeight,
+      stageScrollLeft: stage?.scrollLeft,
+      stageScrollTop: stage?.scrollTop,
+      stageScrollWidth: stage?.scrollWidth,
+      visibleCenterDelta: {
+        x: Math.abs((imageRect.left + imageRect.width / 2) - (stageRect.left + stageRect.width / 2)),
+        y: Math.abs((imageRect.top + imageRect.height / 2) - (stageRect.top + stageRect.height / 2)),
+      },
+      edgeSpace: {
+        top: imageRect.top - stageRect.top,
+        right: stageRect.right - imageRect.right,
+        bottom: stageRect.bottom - imageRect.bottom,
+        left: imageRect.left - stageRect.left,
+      },
+    };
+  });
+
+  const assertImageCentered = (layout, label) => {
+    const imageFitsStage = layout.imageWidth <= layout.stageWidth + 1
+      && layout.imageHeight <= layout.stageHeight + 1;
+    const imageFitsStageWidth = layout.imageWidth <= layout.stageWidth + 1;
+    if (imageFitsStage) {
+      if (!layout.centered) throw new Error(`${label} should have centered alignment: ${JSON.stringify(layout)}`);
+      if (layout.visibleCenterDelta.x > 2 || layout.visibleCenterDelta.y > 2) {
+        throw new Error(`${label} should be visibly centered: ${JSON.stringify(layout)}`);
+      }
+      if (layout.stageScrollWidth > layout.stageClientWidth + 1 || layout.stageScrollHeight > layout.stageClientHeight + 1) {
+        throw new Error(`${label} should not require stage scrollbars: ${JSON.stringify(layout)}`);
+      }
+    } else if (imageFitsStageWidth) {
+      if (layout.visibleCenterDelta.x > 2) {
+        throw new Error(`${label} should stay horizontally centered: ${JSON.stringify(layout)}`);
+      }
+      if (Math.abs(layout.edgeSpace.top) > 1) {
+        throw new Error(`${label} should top-align in the scrollable stage: ${JSON.stringify(layout)}`);
+      }
+    } else if (layout.imageWidth > layout.stageWidth + 1) {
+      const expectedScrollLeft = Math.max(0, (layout.stageScrollWidth - layout.stageClientWidth) / 2);
+      if (Math.abs(layout.stageScrollLeft - expectedScrollLeft) > 2) {
+        throw new Error(`${label} should center the horizontal overflow viewport: ${JSON.stringify({ ...layout, expectedScrollLeft })}`);
+      }
+      if (layout.visibleCenterDelta.x > 2) {
+        throw new Error(`${label} should show the center of the overflowing image: ${JSON.stringify(layout)}`);
+      }
+    }
+  };
+
+  const imageLayout = await measureImageLayout();
+  assertImageCentered(imageLayout, "Initial image");
+
   const beforeZoom = await page.evaluate(() => ({
     imageWidth: parseFloat(document.querySelector("#artifact-image")?.style.width || "0"),
     zoomInput: document.querySelector("#zoom-input")?.value || "",
@@ -47,7 +111,21 @@ async (page) => {
     return imageWidth > before.imageWidth && zoomInput !== before.zoomInput;
   }, beforeZoom, { timeout: 3000 });
 
-  return await page.evaluate(() => {
+  const zoomedLayout = await measureImageLayout();
+  assertImageCentered(zoomedLayout, "Zoomed image");
+
+  await page.fill("#zoom-input", "150%");
+  await page.dispatchEvent("#zoom-input", "change");
+  await page.waitForFunction(() => {
+    const stage = document.querySelector("#stage");
+    const image = document.querySelector("#artifact-image");
+    if (!stage || !image) return false;
+    return image.getBoundingClientRect().width > stage.getBoundingClientRect().width + 1;
+  }, null, { timeout: 3000 });
+  const overflowLayout = await measureImageLayout();
+  assertImageCentered(overflowLayout, "Overflow zoom image");
+
+  const finalState = await page.evaluate(() => {
     const image = document.querySelector("#artifact-image");
     const stage = document.querySelector("#stage");
     const imageControls = document.querySelector("#artifact-zoom-controls");
@@ -65,7 +143,16 @@ async (page) => {
       imageNaturalHeight: image?.naturalHeight,
       imageRenderedWidth: image?.style.width,
       zoomInput: document.querySelector("#zoom-input")?.value,
+      centered: document.querySelector("#image-wrap")?.classList.contains("centered"),
       readout: document.querySelector("#artifact-readout")?.textContent?.trim(),
     };
   });
+  return {
+    ...finalState,
+    layout: {
+      initial: imageLayout,
+      zoomed: zoomedLayout,
+      overflow: overflowLayout,
+    },
+  };
 }

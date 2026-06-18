@@ -153,6 +153,36 @@ assert.equal(imageZoomInputEl.value, "100%");
 assert.equal(imageStyle.width, "1000px");
 assert.equal(imageWrapClassNames.has("centered"), false);
 
+const overflowImageStyle = {};
+const overflowImageEl = { naturalWidth: 1000, naturalHeight: 600, style: overflowImageStyle };
+const overflowStageEl = {
+  clientWidth: 500,
+  clientHeight: 300,
+  scrollWidth: 1000,
+  scrollHeight: 600,
+  scrollLeft: 0,
+  scrollTop: 25,
+  scrollTo({ left, top }) {
+    this.scrollLeft = left;
+    this.scrollTop = top;
+  },
+};
+
+assert.deepEqual(
+  zoom.applyZoom({
+    imageEl: overflowImageEl,
+    wrapEl: imageWrapEl,
+    stageEl: overflowStageEl,
+    viewerConfig: { maxZoomOutPercent: 10, maxZoomInPercent: 400 },
+    value: 100,
+    mode: "actual-size",
+  }),
+  { zoomPercent: 100, zoomMode: "actual-size" },
+);
+assert.equal(overflowImageStyle.width, "1000px");
+assert.equal(overflowStageEl.scrollLeft, 250);
+assert.equal(overflowStageEl.scrollTop, 25);
+
 assert.deepEqual(
   zoom.smartFit({
     contentWidth: 1000,
